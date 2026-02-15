@@ -1,0 +1,19 @@
+{
+  "name": "CourierX - Premium International Logistics",
+  "short_name": "CourierX",
+  "description": "Send medicines, documents, and gifts internationally from India",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F5F0",
+  "theme_color": "#36454F",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["business", "logistics", "shipping"],
+  "lang": "en"
+}
