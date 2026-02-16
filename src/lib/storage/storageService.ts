@@ -217,7 +217,7 @@ export function generateFilePath(
  */
 export function validateFileType(
   file: File,
-  allowedTypes: string[]
+  allowedTypes: readonly string[]
 ): { valid: boolean; error?: string } {
   if (!allowedTypes.includes(file.type)) {
     return {
@@ -265,7 +265,7 @@ export async function uploadWithValidation({
   maxSizeMB = 5,
   upsert = false,
 }: UploadOptions & {
-  allowedTypes: string[];
+  allowedTypes: readonly string[];
   maxSizeMB?: number;
 }): Promise<UploadResult> {
   // Validate file type

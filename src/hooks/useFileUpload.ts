@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 interface UseFileUploadOptions {
   bucket: StorageBucket;
   category: string;
-  allowedTypes?: string[];
+  allowedTypes?: readonly string[];
   maxSizeMB?: number;
   onSuccess?: (url: string, path: string) => void;
   onError?: (error: string) => void;
