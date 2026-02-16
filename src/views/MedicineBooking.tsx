@@ -93,7 +93,11 @@ const STEPS = [
   { id: 5, title: 'Review', description: 'Confirm your booking' },
 ];
 
-const MedicineBooking = () => {
+interface MedicineBookingProps {
+  isAdminMode?: boolean;
+}
+
+const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
   const router = useRouter();
   const { user } = useAuth();
   const { deductFundsForShipment, refreshBalance } = useWallet();
