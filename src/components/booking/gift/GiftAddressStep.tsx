@@ -523,7 +523,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <Label className="text-base font-semibold">Recipient's Passport/ID</Label>
+                  <Label className="text-base font-semibold">Recipient&apos;s Passport/ID</Label>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Optional</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">

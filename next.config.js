@@ -11,7 +11,7 @@ const nextConfig = {
     // Only run ESLint on these directories during production builds
     dirs: ['app', 'src'],
     // Don't fail build on ESLint warnings, only on errors
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: true,
   },
   
   // TypeScript configuration

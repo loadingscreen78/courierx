@@ -23,7 +23,7 @@ interface DocumentUploadCardProps {
   onRemove: () => void;
 }
 
-const DocumentUploadCard = memo(({ 
+const DocumentUploadCard = memo(function DocumentUploadCard({ 
   title, 
   description, 
   file, 
