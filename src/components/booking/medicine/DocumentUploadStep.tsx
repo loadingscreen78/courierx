@@ -31,7 +31,7 @@ const DocumentUploadCard = memo(function DocumentUploadCard({
   accepts,
   onUpload, 
   onRemove 
-}: DocumentUploadCardProps) => {
+}: DocumentUploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
