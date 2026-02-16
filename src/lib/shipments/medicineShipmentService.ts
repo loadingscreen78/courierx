@@ -1,6 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Medicine } from '@/components/booking/medicine/MedicineCard';
 import { MedicineBookingData } from '@/views/MedicineBooking';
+import {
+  uploadWithValidation,
+  STORAGE_BUCKETS,
+  FILE_TYPES,
+} from '@/lib/storage/storageService';
 
 export interface CreateMedicineShipmentParams {
   bookingData: MedicineBookingData;
@@ -15,29 +20,38 @@ export interface MedicineShipmentResponse {
 }
 
 /**
- * Upload document to storage (Cloudflare R2)
- * TODO: Integrate Cloudflare R2 for document storage
- * For now, we'll store document metadata only
+ * Upload document to Supabase Storage
  */
 async function uploadDocument(
   file: File,
   shipmentId: string,
   documentType: string
-): Promise<{ path: string; error?: string }> {
+): Promise<{ path: string; url?: string; error?: string }> {
   try {
-    // TODO: Replace with Cloudflare R2 upload
-    // For now, just return a placeholder path
-    console.log('[Storage] Document upload skipped - will use Cloudflare R2 later');
-    console.log('[Storage] File:', file.name, 'Type:', documentType);
-    
-    // Return placeholder path for now
-    const fileName = `${documentType}_${Date.now()}_${file.name}`;
-    const placeholderPath = `pending-upload/${shipmentId}/${fileName}`;
-    
-    return { path: placeholderPath };
+    const timestamp = Date.now();
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = `${shipmentId}/${documentType}_${timestamp}_${sanitizedName}`;
+
+    console.log(`[Storage] Uploading ${documentType} to ${STORAGE_BUCKETS.SHIPMENT_DOCUMENTS}/${filePath}`);
+
+    const result = await uploadWithValidation({
+      bucket: STORAGE_BUCKETS.SHIPMENT_DOCUMENTS,
+      file,
+      path: filePath,
+      allowedTypes: [...FILE_TYPES.DOCUMENTS],
+      maxSizeMB: 10,
+    });
+
+    if (!result.success) {
+      console.error(`[Storage] Upload failed for ${documentType}:`, result.error);
+      return { path: '', error: result.error };
+    }
+
+    console.log(`[Storage] ${documentType} uploaded successfully:`, result.path);
+    return { path: result.path || filePath, url: result.url };
   } catch (err) {
     console.error('[Storage] Upload exception:', err);
-    return { path: '', error: 'Storage upload skipped - will use Cloudflare R2' };
+    return { path: '', error: err instanceof Error ? err.message : 'Upload failed' };
   }
 }
 
@@ -58,10 +72,10 @@ function calculateShippingCosts(medicines: Medicine[], country: string) {
   // Base shipping cost calculation (simplified)
   // In production, this would call a rate calculator API
   let baseShippingCost = 1500; // Base ₹1500
-  
+
   // Add weight-based cost (₹200 per kg)
   baseShippingCost += Math.ceil(totalWeight) * 200;
-  
+
   // Add destination-based cost
   const destinationMultiplier: Record<string, number> = {
     'United States': 1.5,
@@ -219,8 +233,8 @@ export async function createMedicineShipment({
 
     const documentRecords = [];
     for (const { file, type } of documentUploads) {
-      const { path, error } = await uploadDocument(file, shipment.id, type);
-      if (error) {
+      const { path, url, error } = await uploadDocument(file, shipment.id, type);
+      if (error || !path) {
         console.error(`[MedicineShipment] Document upload error (${type}):`, error);
         // Continue with other uploads
         continue;
@@ -231,6 +245,7 @@ export async function createMedicineShipment({
         document_type: type,
         file_name: file.name,
         file_path: path,
+        file_url: url || null,
         file_size: file.size,
         mime_type: file.type,
       });

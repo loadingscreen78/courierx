@@ -1,4 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
+import {
+  uploadWithValidation,
+  STORAGE_BUCKETS,
+  FILE_TYPES,
+} from '@/lib/storage/storageService';
 
 export interface GiftItem {
   id: string;
@@ -33,6 +38,8 @@ export interface GiftBookingData {
   };
   insurance: boolean;
   giftWrapping: boolean;
+  passportPhotoPage?: File | null;
+  passportAddressPage?: File | null;
 }
 
 interface CreateGiftShipmentParams {
@@ -68,7 +75,7 @@ export const createGiftShipment = async ({
     // Calculate shipping cost
     const baseAmount = calculateShippingCost(bookingData);
     let totalAmount = baseAmount;
-    
+
     // Add-ons
     if (bookingData.insurance) totalAmount += 150;
     if (bookingData.giftWrapping) totalAmount += 100;
@@ -132,6 +139,55 @@ export const createGiftShipment = async ({
       // Don't fail the whole operation, just log the error
     }
 
+    // Upload passport documents if provided
+    const passportUploads: Array<{ file: File; type: string }> = [];
+    if (bookingData.passportPhotoPage) {
+      passportUploads.push({ file: bookingData.passportPhotoPage, type: 'passport_photo_page' });
+    }
+    if (bookingData.passportAddressPage) {
+      passportUploads.push({ file: bookingData.passportAddressPage, type: 'passport_address_page' });
+    }
+
+    for (const { file, type } of passportUploads) {
+      try {
+        const timestamp = Date.now();
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `${shipment.id}/${type}_${timestamp}_${sanitizedName}`;
+
+        console.log(`[GiftShipmentService] Uploading ${type}...`);
+
+        const result = await uploadWithValidation({
+          bucket: STORAGE_BUCKETS.PASSPORT_DOCUMENTS,
+          file,
+          path: filePath,
+          allowedTypes: [...FILE_TYPES.DOCUMENTS],
+          maxSizeMB: 5,
+        });
+
+        if (result.success) {
+          console.log(`[GiftShipmentService] ${type} uploaded:`, result.path);
+
+          // Save document record
+          await supabase
+            .from('shipment_documents' as any)
+            .insert({
+              shipment_id: shipment.id,
+              document_type: type,
+              file_name: file.name,
+              file_path: result.path || filePath,
+              file_url: result.url || null,
+              file_size: file.size,
+              mime_type: file.type,
+            });
+        } else {
+          console.error(`[GiftShipmentService] ${type} upload failed:`, result.error);
+        }
+      } catch (uploadErr) {
+        console.error(`[GiftShipmentService] ${type} upload exception:`, uploadErr);
+        // Don't fail the whole operation for document upload errors
+      }
+    }
+
     return {
       success: true,
       shipmentId: shipment.id,
@@ -150,16 +206,16 @@ export const createGiftShipment = async ({
 const calculateShippingCost = (data: GiftBookingData): number => {
   const itemCount = data.items.length;
   const country = data.consigneeAddress.country;
-  
+
   // Check if GCC country (UAE, Saudi Arabia)
   const isGCC = country === 'AE' || country === 'SA';
-  
+
   // Base price
   const basePrice = isGCC ? 1450 : 1850;
-  
+
   // Add extra cost for more than 3 items
   const extraItemsCost = itemCount > 3 ? (itemCount - 3) * 100 : 0;
-  
+
   return basePrice + extraItemsCost;
 };
 

@@ -1,5 +1,5 @@
-// Wallet Service - Works with localStorage until Supabase tables are created
-// Once you run the migration, this will automatically use Supabase
+// Real-time Supabase Wallet Service
+// Uses Supabase database functions for all operations
 import { supabase } from '@/integrations/supabase/client';
 import { 
   LedgerEntry, 
@@ -9,195 +9,51 @@ import {
   MIN_BALANCE_REQUIRED,
 } from './types';
 
-const LEDGER_KEY = 'courierx_wallet_ledger';
-const RECEIPTS_KEY = 'courierx_wallet_receipts';
-
-// Check if Supabase tables exist
-let useSupabase = false;
-
-async function checkSupabaseTables(): Promise<boolean> {
-  try {
-    const { error } = await supabase.from('wallet_ledger').select('id').limit(1);
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-// Initialize - check if we can use Supabase
-checkSupabaseTables().then(result => {
-  useSupabase = result;
-  console.log('Wallet using:', useSupabase ? 'Supabase' : 'localStorage');
-});
-
-// LocalStorage helpers
-function getLocalEntries(userId: string): LedgerEntry[] {
-  if (typeof window === 'undefined') return [];
-  const data = localStorage.getItem(`${LEDGER_KEY}_${userId}`);
-  if (!data) return getInitialEntries(userId);
-  try {
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalEntries(userId: string, entries: LedgerEntry[]): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(`${LEDGER_KEY}_${userId}`, JSON.stringify(entries));
-  }
-}
-
-function getInitialEntries(userId: string): LedgerEntry[] {
-  const entries: LedgerEntry[] = [
-    {
-      id: 'txn_init_001',
-      userId,
-      type: 'credit',
-      amount: 5000,
-      description: 'Wallet recharge via UPI',
-      referenceId: 'PAY-INIT-001',
-      referenceType: 'payment',
-      createdAt: new Date('2024-12-10T10:30:00Z').toISOString(),
-    },
-    {
-      id: 'txn_init_002',
-      userId,
-      type: 'debit',
-      amount: 1850,
-      description: 'Medicine shipment to UAE',
-      referenceId: 'SHP-MED-001',
-      referenceType: 'shipment',
-      createdAt: new Date('2024-12-11T14:22:00Z').toISOString(),
-    },
-    {
-      id: 'txn_init_003',
-      userId,
-      type: 'debit',
-      amount: 950,
-      description: 'Document shipment to UK',
-      referenceId: 'SHP-DOC-002',
-      referenceType: 'shipment',
-      createdAt: new Date('2024-12-12T09:15:00Z').toISOString(),
-    },
-    {
-      id: 'txn_init_004',
-      userId,
-      type: 'refund',
-      amount: 300,
-      description: 'Partial refund - Shipment cancelled',
-      referenceId: 'SHP-DOC-002',
-      referenceType: 'refund',
-      createdAt: new Date('2024-12-13T16:45:00Z').toISOString(),
-    },
-  ];
-  saveLocalEntries(userId, entries);
-  return entries;
-}
-
-function generateId(): string {
-  return `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-// Get all ledger entries
+// Get all ledger entries from Supabase
 export async function getEntries(userId: string): Promise<LedgerEntry[]> {
-  if (useSupabase) {
-    const { data, error } = await supabase
-      .from('wallet_ledger')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (!error && data) {
-      return data.map((row: any) => ({
-        id: row.id,
-        userId: row.user_id,
-        type: row.transaction_type as TransactionType,
-        amount: parseFloat(row.amount),
-        description: row.description,
-        referenceId: row.reference_id,
-        referenceType: row.reference_type,
-        idempotencyKey: row.idempotency_key,
-        metadata: row.metadata,
-        createdAt: row.created_at,
-      }));
-    }
-  }
-  return getLocalEntries(userId);
-}
-
-// Add entry
-export async function addEntry(
-  userId: string,
-  type: TransactionType,
-  amount: number,
-  description: string,
-  options?: {
-    referenceId?: string;
-    referenceType?: 'payment' | 'shipment' | 'refund';
-    idempotencyKey?: string;
-    metadata?: Record<string, unknown>;
-  }
-): Promise<LedgerEntry | null> {
-  const entry: LedgerEntry = {
-    id: generateId(),
-    userId,
-    type,
-    amount: Math.abs(amount),
-    description,
-    referenceId: options?.referenceId,
-    referenceType: options?.referenceType,
-    idempotencyKey: options?.idempotencyKey,
-    metadata: options?.metadata,
-    createdAt: new Date().toISOString(),
-  };
-
-  if (useSupabase) {
-    const { data, error } = await supabase
-      .from('wallet_ledger')
-      .insert({
-        user_id: userId,
-        transaction_type: type,
-        amount: Math.abs(amount),
-        description,
-        reference_id: options?.referenceId,
-        reference_type: options?.referenceType,
-        idempotency_key: options?.idempotencyKey,
-        metadata: options?.metadata || {},
-      })
-      .select()
-      .single();
-    if (!error && data) {
-      return {
-        id: data.id,
-        userId: data.user_id,
-        type: data.transaction_type as TransactionType,
-        amount: parseFloat(data.amount),
-        description: data.description,
-        referenceId: data.reference_id,
-        referenceType: data.reference_type,
-        idempotencyKey: data.idempotency_key,
-        metadata: data.metadata,
-        createdAt: data.created_at,
-      };
-    }
-  }
-
-  // Use localStorage
-  const entries = getLocalEntries(userId);
-  
-  // Check idempotency
-  if (options?.idempotencyKey) {
-    const existing = entries.find(e => e.idempotencyKey === options.idempotencyKey);
-    if (existing) return existing;
+  const { data, error } = await supabase
+    .from('wallet_ledger')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+    
+  if (error) {
+    console.error('[Wallet] Error fetching entries:', error);
+    throw new Error(`Failed to fetch wallet entries: ${error.message}`);
   }
   
-  entries.unshift(entry);
-  saveLocalEntries(userId, entries);
-  return entry;
+  if (!data) return [];
+  
+  return data.map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    type: row.transaction_type as TransactionType,
+    amount: parseFloat(row.amount),
+    description: row.description,
+    referenceId: row.reference_id,
+    referenceType: row.reference_type,
+    idempotencyKey: row.idempotency_key,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+  }));
 }
 
-// Compute balance
+// Compute balance using Supabase function or fallback to manual calculation
 export async function computeBalance(userId: string): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc('get_wallet_balance', {
+      p_user_id: userId
+    });
+    
+    if (!error && data !== null) {
+      return parseFloat(data);
+    }
+  } catch (err) {
+    console.warn('[Wallet] Function call failed, using manual calculation:', err);
+  }
+  
+  // Fallback: compute from entries
+  console.log('[Wallet] Using manual balance calculation');
   const entries = await getEntries(userId);
   return entries.reduce((balance, entry) => {
     switch (entry.type) {
@@ -214,8 +70,22 @@ export async function computeBalance(userId: string): Promise<number> {
   }, 0);
 }
 
-// Compute available balance
+// Compute available balance using Supabase function or fallback
 export async function computeAvailableBalance(userId: string): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc('get_available_balance', {
+      p_user_id: userId
+    });
+    
+    if (!error && data !== null) {
+      return parseFloat(data);
+    }
+  } catch (err) {
+    console.warn('[Wallet] Function call failed, using fallback:', err);
+  }
+  
+  // Fallback to total balance
+  console.log('[Wallet] Using total balance as available balance');
   return computeBalance(userId);
 }
 
@@ -224,68 +94,375 @@ export function validateRecharge(amount: number): { valid: boolean; error?: stri
   if (amount < MIN_RECHARGE_AMOUNT) {
     return { valid: false, error: `Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}` };
   }
+  if (amount > 100000) {
+    return { valid: false, error: 'Maximum recharge amount is ₹1,00,000' };
+  }
   return { valid: true };
 }
 
 // Validate deduction
 export async function validateDeduction(userId: string, amount: number): Promise<{ valid: boolean; error?: string }> {
+  if (amount <= 0) {
+    return { valid: false, error: 'Amount must be greater than zero' };
+  }
+  
   const balance = await computeAvailableBalance(userId);
-  if (amount <= 0) return { valid: false, error: 'Amount must be greater than zero' };
-  if (balance < amount) return { valid: false, error: `Insufficient balance. Available: ₹${balance.toLocaleString('en-IN')}` };
-  if (balance - amount < MIN_BALANCE_REQUIRED) return { valid: false, error: `Minimum balance of ₹${MIN_BALANCE_REQUIRED} required` };
+  
+  if (balance < amount) {
+    return { 
+      valid: false, 
+      error: `Insufficient balance. Available: ₹${balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+    };
+  }
+  
+  if (balance - amount < MIN_BALANCE_REQUIRED) {
+    return { 
+      valid: false, 
+      error: `Minimum balance of ₹${MIN_BALANCE_REQUIRED} required after transaction` 
+    };
+  }
+  
   return { valid: true };
 }
 
-// Add funds
-export async function addFunds(userId: string, amount: number, paymentRef: string, description: string = 'Wallet recharge'): Promise<LedgerEntry | null> {
-  return addEntry(userId, 'credit', amount, description, {
-    referenceId: paymentRef,
-    referenceType: 'payment',
-    idempotencyKey: paymentRef,
-  });
+// Add funds directly to ledger (bypass function if it doesn't exist)
+export async function addFunds(
+  userId: string, 
+  amount: number, 
+  paymentRef: string, 
+  description: string = 'Wallet recharge'
+): Promise<LedgerEntry | null> {
+  try {
+    // Try using the Supabase function first
+    const { data: functionResult, error: functionError } = await supabase.rpc('add_wallet_funds', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_description: description,
+      p_reference_id: paymentRef,
+      p_idempotency_key: paymentRef
+    });
+    
+    if (!functionError && functionResult) {
+      // Fetch the created entry
+      const { data: entry, error: fetchError } = await supabase
+        .from('wallet_ledger')
+        .select('*')
+        .eq('id', functionResult)
+        .single();
+        
+      if (!fetchError && entry) {
+        return {
+          id: entry.id,
+          userId: entry.user_id,
+          type: entry.transaction_type as TransactionType,
+          amount: parseFloat(entry.amount),
+          description: entry.description,
+          referenceId: entry.reference_id,
+          referenceType: entry.reference_type,
+          idempotencyKey: entry.idempotency_key,
+          metadata: entry.metadata,
+          createdAt: entry.created_at,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Wallet] Function call failed, using direct insert:', err);
+  }
+  
+  // Fallback: Direct insert if function doesn't exist
+  console.log('[Wallet] Using direct insert for add funds');
+  
+  // Check for existing entry with same idempotency key
+  const { data: existing } = await supabase
+    .from('wallet_ledger')
+    .select('*')
+    .eq('idempotency_key', paymentRef)
+    .single();
+    
+  if (existing) {
+    console.log('[Wallet] Found existing entry with idempotency key');
+    return {
+      id: existing.id,
+      userId: existing.user_id,
+      type: existing.transaction_type as TransactionType,
+      amount: parseFloat(existing.amount),
+      description: existing.description,
+      referenceId: existing.reference_id,
+      referenceType: existing.reference_type,
+      idempotencyKey: existing.idempotency_key,
+      metadata: existing.metadata,
+      createdAt: existing.created_at,
+    };
+  }
+  
+  const { data, error } = await supabase
+    .from('wallet_ledger')
+    .insert({
+      user_id: userId,
+      transaction_type: 'credit',
+      amount: Math.abs(amount),
+      description,
+      reference_id: paymentRef,
+      reference_type: 'payment',
+      idempotency_key: paymentRef,
+    })
+    .select()
+    .single();
+    
+  if (error) {
+    console.error('[Wallet] Error adding funds:', error);
+    throw new Error(`Failed to add funds: ${error.message}`);
+  }
+  
+  if (!data) {
+    throw new Error('Failed to add funds: No data returned');
+  }
+  
+  return {
+    id: data.id,
+    userId: data.user_id,
+    type: data.transaction_type as TransactionType,
+    amount: parseFloat(data.amount),
+    description: data.description,
+    referenceId: data.reference_id,
+    referenceType: data.reference_type,
+    idempotencyKey: data.idempotency_key,
+    metadata: data.metadata,
+    createdAt: data.created_at,
+  };
 }
 
-// Deduct funds
-export async function deductFunds(userId: string, amount: number, shipmentId: string, description?: string): Promise<LedgerEntry | null> {
+// Deduct funds directly from ledger (bypass function if it doesn't exist)
+export async function deductFunds(
+  userId: string, 
+  amount: number, 
+  shipmentId: string, 
+  description?: string
+): Promise<LedgerEntry | null> {
   const validation = await validateDeduction(userId, amount);
-  if (!validation.valid) throw new Error(validation.error);
-  return addEntry(userId, 'debit', amount, description || 'Shipment booking', {
-    referenceId: shipmentId,
-    referenceType: 'shipment',
-    idempotencyKey: `debit_${shipmentId}`,
-  });
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+  
+  const idempotencyKey = `debit_${shipmentId}_${Date.now()}`;
+  
+  try {
+    // Try using the Supabase function first
+    const { data: functionResult, error: functionError } = await supabase.rpc('deduct_wallet_funds', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_description: description || 'Shipment booking',
+      p_shipment_id: shipmentId,
+      p_idempotency_key: idempotencyKey
+    });
+    
+    if (!functionError && functionResult) {
+      // Fetch the created entry
+      const { data: entry, error: fetchError } = await supabase
+        .from('wallet_ledger')
+        .select('*')
+        .eq('id', functionResult)
+        .single();
+        
+      if (!fetchError && entry) {
+        return {
+          id: entry.id,
+          userId: entry.user_id,
+          type: entry.transaction_type as TransactionType,
+          amount: parseFloat(entry.amount),
+          description: entry.description,
+          referenceId: entry.reference_id,
+          referenceType: entry.reference_type,
+          idempotencyKey: entry.idempotency_key,
+          metadata: entry.metadata,
+          createdAt: entry.created_at,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Wallet] Function call failed, using direct insert:', err);
+  }
+  
+  // Fallback: Direct insert
+  console.log('[Wallet] Using direct insert for deduct funds');
+  
+  const { data, error } = await supabase
+    .from('wallet_ledger')
+    .insert({
+      user_id: userId,
+      transaction_type: 'debit',
+      amount: Math.abs(amount),
+      description: description || 'Shipment booking',
+      reference_id: shipmentId,
+      reference_type: 'shipment',
+      idempotency_key: idempotencyKey,
+    })
+    .select()
+    .single();
+    
+  if (error) {
+    console.error('[Wallet] Error deducting funds:', error);
+    throw new Error(`Failed to deduct funds: ${error.message}`);
+  }
+  
+  if (!data) {
+    throw new Error('Failed to deduct funds: No data returned');
+  }
+  
+  return {
+    id: data.id,
+    userId: data.user_id,
+    type: data.transaction_type as TransactionType,
+    amount: parseFloat(data.amount),
+    description: data.description,
+    referenceId: data.reference_id,
+    referenceType: data.reference_type,
+    idempotencyKey: data.idempotency_key,
+    metadata: data.metadata,
+    createdAt: data.created_at,
+  };
 }
 
 // Process refund
-export async function processRefund(userId: string, amount: number, shipmentId: string, description?: string): Promise<LedgerEntry | null> {
-  return addEntry(userId, 'refund', amount, description || 'Refund processed', {
-    referenceId: shipmentId,
-    referenceType: 'refund',
-  });
+export async function processRefund(
+  userId: string, 
+  amount: number, 
+  shipmentId: string, 
+  description?: string
+): Promise<LedgerEntry | null> {
+  const { data, error } = await supabase
+    .from('wallet_ledger')
+    .insert({
+      user_id: userId,
+      transaction_type: 'refund',
+      amount: Math.abs(amount),
+      description: description || 'Refund processed',
+      reference_id: shipmentId,
+      reference_type: 'refund',
+    })
+    .select()
+    .single();
+    
+  if (error) {
+    console.error('[Wallet] Error processing refund:', error);
+    throw new Error(`Failed to process refund: ${error.message}`);
+  }
+  
+  if (!data) return null;
+  
+  return {
+    id: data.id,
+    userId: data.user_id,
+    type: data.transaction_type as TransactionType,
+    amount: parseFloat(data.amount),
+    description: data.description,
+    referenceId: data.reference_id,
+    referenceType: data.reference_type,
+    idempotencyKey: data.idempotency_key,
+    metadata: data.metadata,
+    createdAt: data.created_at,
+  };
 }
 
-// Get transaction history
-export async function getTransactionHistory(userId: string, filters?: TransactionFilters): Promise<LedgerEntry[]> {
-  let entries = await getEntries(userId);
-  if (filters?.type) entries = entries.filter(e => e.type === filters.type);
-  if (filters?.startDate) entries = entries.filter(e => new Date(e.createdAt) >= new Date(filters.startDate!));
-  if (filters?.endDate) entries = entries.filter(e => new Date(e.createdAt) <= new Date(filters.endDate!));
-  const offset = filters?.offset || 0;
-  const limit = filters?.limit || entries.length;
-  return entries.slice(offset, offset + limit);
+// Get transaction history with filters
+export async function getTransactionHistory(
+  userId: string, 
+  filters?: TransactionFilters
+): Promise<LedgerEntry[]> {
+  let query = supabase
+    .from('wallet_ledger')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  
+  if (filters?.type) {
+    query = query.eq('transaction_type', filters.type);
+  }
+  
+  if (filters?.startDate) {
+    query = query.gte('created_at', filters.startDate);
+  }
+  
+  if (filters?.endDate) {
+    query = query.lte('created_at', filters.endDate);
+  }
+  
+  if (filters?.limit) {
+    query = query.limit(filters.limit);
+  }
+  
+  if (filters?.offset) {
+    query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1);
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('[Wallet] Error fetching history:', error);
+    return [];
+  }
+  
+  if (!data) return [];
+  
+  return data.map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    type: row.transaction_type as TransactionType,
+    amount: parseFloat(row.amount),
+    description: row.description,
+    referenceId: row.reference_id,
+    referenceType: row.reference_type,
+    idempotencyKey: row.idempotency_key,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+  }));
 }
 
-// Receipt storage (localStorage only for now)
-export async function storeReceipt(userId: string, ledgerEntryId: string, receiptData: any): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  const receipts = JSON.parse(localStorage.getItem(`${RECEIPTS_KEY}_${userId}`) || '[]');
-  receipts.unshift({ id: `rcp_${Date.now()}`, ledger_entry_id: ledgerEntryId, ...receiptData, created_at: new Date().toISOString() });
-  localStorage.setItem(`${RECEIPTS_KEY}_${userId}`, JSON.stringify(receipts));
+// Store receipt in Supabase
+export async function storeReceipt(
+  userId: string, 
+  ledgerEntryId: string, 
+  receiptData: any
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('wallet_receipts')
+    .insert({
+      user_id: userId,
+      ledger_entry_id: ledgerEntryId,
+      receipt_number: receiptData.receiptNumber,
+      transaction_id: receiptData.transactionId,
+      amount: receiptData.amount,
+      gst_amount: receiptData.gstAmount,
+      total_amount: receiptData.totalAmount,
+      payment_method: receiptData.paymentMethod,
+      customer_name: receiptData.customerName,
+      customer_email: receiptData.customerEmail,
+    });
+    
+  if (error) {
+    console.error('[Wallet] Error storing receipt:', error);
+    return false;
+  }
+  
   return true;
 }
 
-export async function getReceiptByLedgerEntryId(userId: string, ledgerEntryId: string): Promise<any | null> {
-  if (typeof window === 'undefined') return null;
-  const receipts = JSON.parse(localStorage.getItem(`${RECEIPTS_KEY}_${userId}`) || '[]');
-  return receipts.find((r: any) => r.ledger_entry_id === ledgerEntryId) || null;
+// Get receipt by ledger entry ID
+export async function getReceiptByLedgerEntryId(
+  userId: string, 
+  ledgerEntryId: string
+): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('wallet_receipts')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('ledger_entry_id', ledgerEntryId)
+    .single();
+    
+  if (error) {
+    console.error('[Wallet] Error fetching receipt:', error);
+    return null;
+  }
+  
+  return data;
 }

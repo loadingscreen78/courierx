@@ -72,7 +72,8 @@ const Drafts = () => {
   }, [drafts]);
 
   const handleContinue = (draft: Draft) => {
-    router.push(getTypeRoute(draft.type));
+    const route = getTypeRoute(draft.type);
+    router.push(`${route}?draftId=${draft.id}`);
   };
 
   const handleDelete = (id: string) => {
@@ -99,7 +100,7 @@ const Drafts = () => {
               <p className="text-muted-foreground text-sm text-center max-w-sm">
                 When you start a booking and leave before completing, your progress will be saved here automatically.
               </p>
-              <Button 
+              <Button
                 className="mt-6"
                 onClick={() => router.push('/new-shipment')}
               >
@@ -112,7 +113,7 @@ const Drafts = () => {
             {drafts.map((draft) => {
               const progress = getProgressPercentage(draft);
               const typeColor = getTypeColor(draft.type);
-              
+
               return (
                 <Card key={draft.id} className="hover:border-primary/50 transition-colors">
                   <CardHeader className="pb-3">
@@ -172,7 +173,7 @@ const Drafts = () => {
                         </div>
                         <Progress value={progress} className="h-1.5" />
                       </div>
-                      
+
                       {/* Timestamps */}
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">

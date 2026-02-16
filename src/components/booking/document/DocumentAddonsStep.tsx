@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { DocumentBookingData } from '@/views/DocumentBooking';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -12,7 +13,7 @@ interface DocumentAddonsStepProps {
 const INSURANCE_PRICE = 100;
 const WATERPROOF_PRICE = 75;
 
-export const DocumentAddonsStep = ({ data, onUpdate }: DocumentAddonsStepProps) => {
+export const DocumentAddonsStep = memo(({ data, onUpdate }: DocumentAddonsStepProps) => {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -91,5 +92,6 @@ export const DocumentAddonsStep = ({ data, onUpdate }: DocumentAddonsStepProps) 
       </div>
     </div>
   );
-};
+});
 
+DocumentAddonsStep.displayName = 'DocumentAddonsStep';

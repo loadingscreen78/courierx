@@ -264,7 +264,7 @@ export const HSNCodePicker = ({ value, onSelect, showInitialHint = true }: HSNCo
           side="top" 
           className="bg-foreground text-background px-3 py-2 max-w-[200px] text-center"
         >
-          <p className="text-sm font-medium">Don't know your HSN code?</p>
+          <p className="text-sm font-medium">Don&apos;t know your HSN code?</p>
           <p className="text-xs opacity-80 mt-1">Click here to search and find the right code for your item</p>
         </TooltipContent>
       </Tooltip>

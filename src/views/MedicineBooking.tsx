@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useDraft } from '@/hooks/useDraft';
+import { formatRelativeTime } from '@/lib/drafts/draftService';
 import { AppLayout } from '@/components/layout';
 import { MedicineDetailsStep } from '@/components/booking/medicine/MedicineDetailsStep';
 import { AddressStep } from '@/components/booking/medicine/AddressStep';
@@ -21,7 +23,7 @@ import { toast } from 'sonner';
 export interface MedicineBookingData {
   // Multiple Medicines
   medicines: Medicine[];
-  
+
   // Addresses
   pickupAddress: {
     fullName: string;
@@ -43,12 +45,12 @@ export interface MedicineBookingData {
     zipcode: string;
     passportNumber: string;
   };
-  
+
   // Documents
   prescription: File | null;
   pharmacyBill: File | null;
   consigneeId: File | null;
-  
+
   // Add-ons
   insurance: boolean;
   specialPackaging: boolean;
@@ -95,8 +97,25 @@ const MedicineBooking = () => {
   const router = useRouter();
   const { user } = useAuth();
   const { deductFundsForShipment, refreshBalance } = useWallet();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [bookingData, setBookingData] = useState<MedicineBookingData>(initialBookingData);
+  const searchParams = useSearchParams();
+  const draftId = searchParams.get('draftId');
+
+  const {
+    data: bookingData,
+    currentStep,
+    lastSaved,
+    isSaving,
+    setData,
+    setStep,
+    saveNow,
+    discardDraft,
+  } = useDraft<MedicineBookingData>({
+    type: 'medicine',
+    initialData: initialBookingData,
+    totalSteps: STEPS.length,
+    draftId,
+  });
+
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { mediumTap, errorFeedback, successFeedback } = useHaptics();
@@ -123,14 +142,38 @@ const MedicineBooking = () => {
   const hasBlockingIssue = hasBlockingMedicine || isOverValueCap;
 
   const updateBookingData = useCallback((updates: Partial<MedicineBookingData>) => {
-    setBookingData(prev => ({ ...prev, ...updates }));
-    setValidationErrors([]);
-  }, []);
+    setData(prev => {
+      // Only update if values actually changed
+      const hasChanges = Object.keys(updates).some(key => {
+        const k = key as keyof MedicineBookingData;
+        const oldVal = prev[k];
+        const newVal = updates[k];
+
+        // Special handling for File objects
+        if (oldVal instanceof File && newVal instanceof File) {
+          return oldVal.name !== newVal.name || oldVal.size !== newVal.size;
+        }
+        if (oldVal instanceof File || newVal instanceof File) {
+          return oldVal !== newVal;
+        }
+
+        // For other values, use JSON comparison
+        return JSON.stringify(oldVal) !== JSON.stringify(newVal);
+      });
+
+      if (!hasChanges) return prev;
+
+      return { ...prev, ...updates };
+    });
+    // Only clear errors if there were errors
+    setValidationErrors(prev => prev.length > 0 ? [] : prev);
+  }, [setData]);
 
   const updateMedicines = useCallback((medicines: Medicine[]) => {
-    setBookingData(prev => ({ ...prev, medicines }));
-    setValidationErrors([]);
-  }, []);
+    setData(prev => ({ ...prev, medicines }));
+    // Only clear errors if there were errors
+    setValidationErrors(prev => prev.length > 0 ? [] : prev);
+  }, [setData]);
 
   const validateStep = (step: number): boolean => {
     const errors: string[] = [];
@@ -161,14 +204,14 @@ const MedicineBooking = () => {
             if (med.unitPrice <= 0) {
               errors.push(`Medicine #${index + 1}: Please enter valid unit price`);
             }
-            
+
             // Check supply and value limits
             const supply = med.dailyDosage > 0 ? Math.ceil(med.unitCount / med.dailyDosage) : 0;
             const value = med.unitCount * med.unitPrice;
             if (supply > 90) errors.push(`Medicine #${index + 1}: Supply exceeds 90 days`);
             if (value > 25000) errors.push(`Medicine #${index + 1}: Value exceeds ₹25,000`);
           });
-          
+
           if (isOverValueCap) errors.push('Total value of all medicines exceeds ₹25,000 CSB IV limit');
         }
         break;
@@ -200,15 +243,16 @@ const MedicineBooking = () => {
     if (validateStep(currentStep)) {
       mediumTap();
       playClick();
-      setCurrentStep(prev => Math.min(prev + 1, STEPS.length));
+      setStep(Math.min(currentStep + 1, STEPS.length));
     }
   };
 
   const handleBack = () => {
     mediumTap();
     playClick();
-    setCurrentStep(prev => Math.max(prev - 1, 1));
-    setValidationErrors([]);
+    setStep(Math.max(currentStep - 1, 1));
+    // Only clear errors if there were errors
+    setValidationErrors(prev => prev.length > 0 ? [] : prev);
   };
 
   const handleConfirmBooking = async () => {
@@ -223,7 +267,7 @@ const MedicineBooking = () => {
 
     try {
       console.log('[MedicineBooking] Submitting booking data...');
-      
+
       // Create shipment first
       const result = await createMedicineShipment({
         bookingData,
@@ -233,13 +277,13 @@ const MedicineBooking = () => {
       if (result.success && result.shipmentId) {
         // Deduct funds from wallet
         console.log('[MedicineBooking] Deducting funds from wallet...');
-        
+
         // Calculate total amount (same as in service)
         const baseAmount = 2000; // Simplified - should match actual calculation
         let totalAmount = baseAmount;
         if (bookingData.insurance) totalAmount += 150;
         if (bookingData.specialPackaging) totalAmount += 300;
-        
+
         const walletResult = await deductFundsForShipment(
           totalAmount,
           result.shipmentId,
@@ -257,10 +301,10 @@ const MedicineBooking = () => {
 
         // Refresh wallet balance
         await refreshBalance();
-        
+
         successFeedback();
         playSuccess();
-        
+
         toast.success('Booking Confirmed!', {
           description: `Tracking Number: ${result.trackingNumber}`,
         });
@@ -292,7 +336,7 @@ const MedicineBooking = () => {
     switch (currentStep) {
       case 1:
         return (
-          <MedicineDetailsStep 
+          <MedicineDetailsStep
             medicines={bookingData.medicines}
             onUpdateMedicines={updateMedicines}
             aggregatedSupplyDays={aggregatedSupplyDays}
@@ -301,28 +345,30 @@ const MedicineBooking = () => {
         );
       case 2:
         return (
-          <AddressStep 
-            data={bookingData} 
+          <AddressStep
+            data={bookingData}
             onUpdate={updateBookingData}
           />
         );
       case 3:
         return (
-          <DocumentUploadStep 
-            data={bookingData} 
+          <DocumentUploadStep
+            prescription={bookingData.prescription}
+            pharmacyBill={bookingData.pharmacyBill}
+            consigneeId={bookingData.consigneeId}
             onUpdate={updateBookingData}
           />
         );
       case 4:
         return (
-          <AddonsStep 
-            data={bookingData} 
+          <AddonsStep
+            data={bookingData}
             onUpdate={updateBookingData}
           />
         );
       case 5:
         return (
-          <ReviewStep 
+          <ReviewStep
             data={bookingData}
             aggregatedSupplyDays={aggregatedSupplyDays}
             aggregatedTotalValue={aggregatedTotalValue}
@@ -339,9 +385,9 @@ const MedicineBooking = () => {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => window.history.back()}
             className="btn-press"
           >
@@ -437,10 +483,16 @@ const MedicineBooking = () => {
           )}
         </div>
 
-        {/* Draft Save Notice */}
-        <p className="text-center text-xs text-muted-foreground">
-          Your progress is auto-saved as a draft for 30 days
-        </p>
+        {/* Auto-save indicator */}
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          {isSaving ? (
+            <span>Saving...</span>
+          ) : lastSaved ? (
+            <span>Draft saved {formatRelativeTime(lastSaved.toISOString())}</span>
+          ) : (
+            <span>Your progress is auto-saved as a draft for 30 days</span>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

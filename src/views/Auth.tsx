@@ -557,7 +557,10 @@ const Auth = () => {
             <ThemeToggle />
             {step !== 'panel-select' && (
               <button
-                onClick={() => { setStep('panel-select'); setSelectedPanel(null); }}
+                onClick={() => { 
+                  setStep('panel-select'); 
+                  setSelectedPanel(null);
+                }}
                 className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />

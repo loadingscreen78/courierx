@@ -19,7 +19,7 @@ export default function HomePage() {
     // Show loader long enough to see the full animation
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 6500);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, []);

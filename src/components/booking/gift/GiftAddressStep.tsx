@@ -149,12 +149,12 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   const backInputRef = useRef<HTMLInputElement>(null);
 
   // Get cities for selected state
-  const availableCities = data.pickupAddress.state 
-    ? CITIES_BY_STATE[data.pickupAddress.state] || [] 
+  const availableCities = data.pickupAddress.state
+    ? CITIES_BY_STATE[data.pickupAddress.state] || []
     : [];
 
   // Get selected country name
-  const selectedCountry = useMemo(() => 
+  const selectedCountry = useMemo(() =>
     COUNTRIES.find(c => c.code === data.consigneeAddress.country),
     [data.consigneeAddress.country]
   );
@@ -199,15 +199,17 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
 
   const handleFileUpload = (file: File | null, type: 'front' | 'back') => {
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onloadend = () => {
       if (type === 'front') {
         setPassportFront(file);
         setPassportFrontPreview(reader.result as string);
+        onUpdate({ passportPhotoPage: file });
       } else {
         setPassportBack(file);
         setPassportBackPreview(reader.result as string);
+        onUpdate({ passportAddressPage: file });
       }
     };
     reader.readAsDataURL(file);
@@ -219,10 +221,12 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       setPassportFront(null);
       setPassportFrontPreview(null);
       if (frontInputRef.current) frontInputRef.current.value = '';
+      onUpdate({ passportPhotoPage: null });
     } else {
       setPassportBack(null);
       setPassportBackPreview(null);
       if (backInputRef.current) backInputRef.current.value = '';
+      onUpdate({ passportAddressPage: null });
     }
   };
 
@@ -327,8 +331,8 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             </div>
             <div className="space-y-2">
               <Label>State *</Label>
-              <Select 
-                value={data.pickupAddress.state} 
+              <Select
+                value={data.pickupAddress.state}
                 onValueChange={(value) => {
                   updatePickupAddress('state', value);
                   updatePickupAddress('city', ''); // Reset city when state changes
@@ -346,8 +350,8 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             </div>
             <div className="space-y-2">
               <Label>City *</Label>
-              <Select 
-                value={data.pickupAddress.city} 
+              <Select
+                value={data.pickupAddress.city}
                 onValueChange={(value) => updatePickupAddress('city', value)}
                 disabled={!data.pickupAddress.state}
               >
@@ -558,7 +562,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                     </p>
                   </div>
                 </div>
-                
+
                 {/* Back page instruction */}
                 <div className="flex gap-3">
                   <div className="w-16 h-20 rounded-lg bg-background border border-border flex-shrink-0 overflow-hidden">
@@ -591,12 +595,12 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   <span className="w-5 h-5 rounded-full bg-coke-red/10 text-coke-red text-xs flex items-center justify-center font-semibold">1</span>
                   Photo Page (Page 2)
                 </Label>
-                
+
                 {passportFrontPreview ? (
                   <div className="relative rounded-xl overflow-hidden border border-green-500/50 bg-muted/30">
-                    <img 
-                      src={passportFrontPreview} 
-                      alt="Passport front" 
+                    <img
+                      src={passportFrontPreview}
+                      alt="Passport front"
                       className="w-full h-44 object-cover"
                     />
                     <div className="absolute top-2 right-2">
@@ -617,7 +621,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                     </div>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     onClick={() => { lightTap(); frontInputRef.current?.click(); }}
                     className="relative rounded-xl border-2 border-dashed border-border hover:border-coke-red/50 bg-muted/20 hover:bg-coke-red/5 transition-all cursor-pointer group"
                   >
@@ -662,12 +666,12 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   <span className="w-5 h-5 rounded-full bg-coke-red/10 text-coke-red text-xs flex items-center justify-center font-semibold">2</span>
                   Address Page (Last Page)
                 </Label>
-                
+
                 {passportBackPreview ? (
                   <div className="relative rounded-xl overflow-hidden border border-green-500/50 bg-muted/30">
-                    <img 
-                      src={passportBackPreview} 
-                      alt="Passport back" 
+                    <img
+                      src={passportBackPreview}
+                      alt="Passport back"
                       className="w-full h-44 object-cover"
                     />
                     <div className="absolute top-2 right-2">
@@ -688,7 +692,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                     </div>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     onClick={() => { lightTap(); backInputRef.current?.click(); }}
                     className="relative rounded-xl border-2 border-dashed border-border hover:border-coke-red/50 bg-muted/20 hover:bg-coke-red/5 transition-all cursor-pointer group"
                   >
@@ -727,7 +731,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <div className="flex items-start gap-2 mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <Info className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Tip:</span> Make sure the entire page is visible, text is readable, and there's no glare. Accepted formats: JPG, PNG, PDF (max 5MB each)
+                <span className="font-medium text-foreground">Tip:</span> Make sure the entire page is visible, text is readable, and there&apos;s no glare. Accepted formats: JPG, PNG, PDF (max 5MB each)
               </p>
             </div>
           </div>

@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useDraft } from '@/hooks/useDraft';
+import { formatRelativeTime } from '@/lib/drafts/draftService';
 import { AppLayout } from '@/components/layout';
 import { DocumentDetailsStep } from '@/components/booking/document/DocumentDetailsStep';
 import { DocumentAddressStep } from '@/components/booking/document/DocumentAddressStep';
@@ -25,7 +27,7 @@ export interface DocumentBookingData {
   length: number; // in cm
   width: number;  // in cm
   height: number; // in cm
-  
+
   // Addresses
   pickupAddress: {
     fullName: string;
@@ -46,7 +48,7 @@ export interface DocumentBookingData {
     country: string;
     zipcode: string;
   };
-  
+
   // Add-ons
   insurance: boolean;
   waterproofPackaging: boolean;
@@ -94,17 +96,45 @@ const DocumentBooking = () => {
   const router = useRouter();
   const { user } = useAuth();
   const { deductFundsForShipment, refreshBalance } = useWallet();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [bookingData, setBookingData] = useState<DocumentBookingData>(initialBookingData);
+  const searchParams = useSearchParams();
+  const draftId = searchParams.get('draftId');
+
+  const {
+    data: bookingData,
+    currentStep,
+    lastSaved,
+    isSaving,
+    setData,
+    setStep,
+    saveNow,
+    discardDraft,
+  } = useDraft<DocumentBookingData>({
+    type: 'document',
+    initialData: initialBookingData,
+    totalSteps: STEPS.length,
+    draftId,
+  });
+
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { mediumTap, errorFeedback, successFeedback } = useHaptics();
   const { playClick, playError, playSuccess } = useSoundEffects();
 
   const updateBookingData = useCallback((updates: Partial<DocumentBookingData>) => {
-    setBookingData(prev => ({ ...prev, ...updates }));
-    setValidationErrors([]);
-  }, []);
+    setData(prev => {
+      // Only update if values actually changed
+      const hasChanges = Object.keys(updates).some(key => {
+        const k = key as keyof DocumentBookingData;
+        return JSON.stringify(prev[k]) !== JSON.stringify(updates[k]);
+      });
+
+      if (!hasChanges) return prev;
+
+      return { ...prev, ...updates };
+    });
+    // Only clear errors if there were errors
+    setValidationErrors(prev => prev.length > 0 ? [] : prev);
+  }, [setData]);
 
   const validateStep = (step: number): boolean => {
     const errors: string[] = [];
@@ -141,15 +171,16 @@ const DocumentBooking = () => {
     if (validateStep(currentStep)) {
       mediumTap();
       playClick();
-      setCurrentStep(prev => Math.min(prev + 1, STEPS.length));
+      setStep(Math.min(currentStep + 1, STEPS.length));
     }
   };
 
   const handleBack = () => {
     mediumTap();
     playClick();
-    setCurrentStep(prev => Math.max(prev - 1, 1));
-    setValidationErrors([]);
+    setStep(Math.max(currentStep - 1, 1));
+    // Only clear errors if there were errors
+    setValidationErrors(prev => prev.length > 0 ? [] : prev);
   };
 
   const handleConfirmBooking = async () => {
@@ -164,7 +195,7 @@ const DocumentBooking = () => {
 
     try {
       console.log('[DocumentBooking] Submitting booking data...');
-      
+
       // Create shipment first
       const result = await createDocumentShipment({
         bookingData,
@@ -185,13 +216,13 @@ const DocumentBooking = () => {
         };
         const multiplier = packetMultiplier[bookingData.packetType] || 1.0;
         let totalAmount = Math.ceil(chargeableWeight * baseRatePerKg * multiplier);
-        
+
         if (bookingData.insurance) totalAmount += 100;
         if (bookingData.waterproofPackaging) totalAmount += 50;
-        
+
         // Deduct funds from wallet
         console.log('[DocumentBooking] Deducting funds from wallet...');
-        
+
         const walletResult = await deductFundsForShipment(
           totalAmount,
           result.shipmentId,
@@ -209,10 +240,10 @@ const DocumentBooking = () => {
 
         // Refresh wallet balance
         await refreshBalance();
-        
+
         successFeedback();
         playSuccess();
-        
+
         toast.success('Booking Confirmed!', {
           description: `Tracking Number: ${result.trackingNumber}`,
         });
@@ -320,9 +351,16 @@ const DocumentBooking = () => {
           )}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Your progress is auto-saved as a draft for 30 days
-        </p>
+        {/* Auto-save indicator */}
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          {isSaving ? (
+            <span>Saving...</span>
+          ) : lastSaved ? (
+            <span>Draft saved {formatRelativeTime(lastSaved.toISOString())}</span>
+          ) : (
+            <span>Your progress is auto-saved as a draft for 30 days</span>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

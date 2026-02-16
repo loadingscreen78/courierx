@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminRoute } from '@/components/admin/AdminRoute';
-import { MedicineBooking } from '@/views/MedicineBooking';
+import MedicineBooking from '@/views/MedicineBooking';
 
 export default function AdminMedicineBookingPage() {
   return (

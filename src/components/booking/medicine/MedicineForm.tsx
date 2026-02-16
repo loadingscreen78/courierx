@@ -1,15 +1,18 @@
-import { useState } from 'react';
-import { format, addMonths } from 'date-fns';
-import { Medicine } from './MedicineCard';
+import { useState, useMemo } from 'react';
+import { format, addMonths, isSameDay } from 'date-fns';
+import { Medicine, getDefaultExpiryDate } from './MedicineCard';
+import { ManufacturerSearch } from './ManufacturerSearch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertTriangle, CalendarIcon, Check, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertTriangle, CalendarIcon, Check, X, Info, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MedicineFormProps {
@@ -51,18 +54,29 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
   const [formData, setFormData] = useState<Medicine>(medicine);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sixMonthsFromNow = addMonths(today, 6);
-  const twelveMonthsFromNow = addMonths(today, 12);
+  // Recalculates automatically if today's date changes (component remount)
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const sixMonthsFromNow = useMemo(() => addMonths(today, 6), [today]);
+  const twelveMonthsFromNow = useMemo(() => addMonths(today, 12), [today]);
 
   // Check expiry warning (6-12 months)
-  const hasExpiryWarning = formData.expiryDate && 
-    formData.expiryDate >= sixMonthsFromNow && 
+  const hasExpiryWarning = formData.expiryDate &&
+    formData.expiryDate >= sixMonthsFromNow &&
     formData.expiryDate <= twelveMonthsFromNow;
 
-  const supplyDays = formData.dailyDosage > 0 
-    ? Math.ceil(formData.unitCount / formData.dailyDosage) 
+  // Expiry validation: valid if >= 6 months from today
+  const isExpiryValid = formData.expiryDate ? formData.expiryDate >= sixMonthsFromNow : false;
+  const isExpiryInvalid = formData.expiryDate ? formData.expiryDate < sixMonthsFromNow : false;
+
+  // Check if expiry is still at the auto-set default (same day as 6 months from now)
+  const isExpiryAutoSet = formData.expiryDate ? isSameDay(formData.expiryDate, getDefaultExpiryDate()) : false;
+
+  const supplyDays = formData.dailyDosage > 0
+    ? Math.ceil(formData.unitCount / formData.dailyDosage)
     : 0;
   const totalValue = formData.unitCount * formData.unitPrice;
   const isOver90Days = supplyDays > 90;
@@ -277,23 +291,51 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
       <div className="space-y-3">
         <Label className="text-sm font-semibold">Manufacturer Details *</Label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Manufacturer Name</Label>
-            <Input
-              placeholder="e.g., Sun Pharma"
+          {/* Conditional: autocomplete for Branded, plain input for Generic */}
+          {formData.category === 'branded' ? (
+            <ManufacturerSearch
               value={formData.manufacturerName}
-              onChange={(e) => updateField('manufacturerName', e.target.value)}
-              className="input-premium"
+              onSelect={(name, address) => {
+                setFormData(prev => ({
+                  ...prev,
+                  manufacturerName: name,
+                  ...(address ? { manufacturerAddress: address } : {}),
+                }));
+                setErrors([]);
+              }}
             />
-          </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Manufacturer Name</Label>
+              <Input
+                placeholder="e.g., Sun Pharma"
+                value={formData.manufacturerName}
+                onChange={(e) => updateField('manufacturerName', e.target.value)}
+                className="input-premium"
+              />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Manufacturer Address</Label>
             <Input
               placeholder="City, State"
               value={formData.manufacturerAddress}
               onChange={(e) => updateField('manufacturerAddress', e.target.value)}
-              className="input-premium"
+              className={cn(
+                'input-premium',
+                formData.category === 'branded' && formData.manufacturerAddress && 'border-emerald-500/30'
+              )}
+              readOnly={formData.category === 'branded' && !!formData.manufacturerAddress && formData.manufacturerAddress.length > 10}
             />
+            {formData.category === 'branded' && formData.manufacturerAddress && formData.manufacturerAddress.length > 10 && (
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                onClick={() => updateField('manufacturerAddress', '')}
+              >
+                Edit address manually
+              </button>
+            )}
           </div>
         </div>
 
@@ -341,19 +383,43 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
 
           {/* Expiry Date Picker */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Expiry Date *</Label>
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground">Expiry Date *</Label>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    Medicines must have at least 6 months of remaining shelf life.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-full justify-start text-left font-normal input-premium",
+                    "w-full justify-start text-left font-normal input-premium transition-colors",
                     !formData.expiryDate && "text-muted-foreground",
-                    hasExpiryWarning && "border-warning text-warning"
+                    isExpiryValid && "border-emerald-500 ring-1 ring-emerald-500/20",
+                    isExpiryInvalid && "border-destructive ring-1 ring-destructive/20 text-destructive",
+                    hasExpiryWarning && isExpiryValid && "border-warning text-warning ring-1 ring-warning/20"
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon className={cn(
+                    "mr-2 h-4 w-4",
+                    isExpiryValid && !hasExpiryWarning && "text-emerald-500",
+                    isExpiryInvalid && "text-destructive"
+                  )} />
                   {formData.expiryDate ? format(formData.expiryDate, "dd MMM yyyy") : "Select date"}
+                  {isExpiryValid && !hasExpiryWarning && (
+                    <ShieldCheck className="ml-auto h-4 w-4 text-emerald-500" />
+                  )}
+                  {isExpiryInvalid && (
+                    <AlertTriangle className="ml-auto h-4 w-4 text-destructive" />
+                  )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -362,12 +428,29 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
                   selected={formData.expiryDate || undefined}
                   onSelect={(date) => updateField('expiryDate', date || null)}
                   disabled={(date) => date < sixMonthsFromNow}
+                  defaultMonth={formData.expiryDate || sixMonthsFromNow}
                   initialFocus
                   className="p-3 pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
-            <p className="text-xs text-muted-foreground">Must be 6+ months from today</p>
+            {/* Auto-set badge */}
+            {isExpiryAutoSet && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-normal gap-1">
+                <ShieldCheck className="h-3 w-3" />
+                Auto-set to 6 months from today
+              </Badge>
+            )}
+            {/* Helper text with validation color */}
+            <p className={cn(
+              "text-xs",
+              isExpiryValid ? "text-emerald-500" : isExpiryInvalid ? "text-destructive" : "text-muted-foreground"
+            )}>
+              {isExpiryInvalid
+                ? "⚠ Expiry is below 6 months — not allowed"
+                : "Minimum 6 months shelf life required"
+              }
+            </p>
           </div>
         </div>
       </div>
@@ -432,7 +515,7 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
         <Alert className="border-warning bg-warning/10">
           <AlertTriangle className="h-4 w-4 text-warning" />
           <AlertDescription className="text-sm">
-            <strong>Controlled Substance Notice:</strong> This shipment requires special supervision. 
+            <strong>Controlled Substance Notice:</strong> This shipment requires special supervision.
             Additional documentation may be requested.
           </AlertDescription>
         </Alert>

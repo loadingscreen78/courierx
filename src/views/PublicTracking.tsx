@@ -512,7 +512,7 @@ const PublicTracking = () => {
                         <span className="font-semibold text-foreground">Search by Phone Number</span>
                       </div>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Enter the phone number used during booking. We'll send an OTP for verification.
+                        Enter the phone number used during booking. We&apos;ll send an OTP for verification.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-3">
                         <div className="flex-1 flex">

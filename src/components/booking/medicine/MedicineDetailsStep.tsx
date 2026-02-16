@@ -13,27 +13,33 @@ interface MedicineDetailsStepProps {
   aggregatedTotalValue: number;
 }
 
-const MedicineDetailsStepComponent = ({ 
+const MedicineDetailsStepComponent = ({
   medicines,
   onUpdateMedicines,
   aggregatedSupplyDays,
   aggregatedTotalValue
 }: MedicineDetailsStepProps) => {
-  // Initialize with a new medicine form if no medicines exist
-  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(() => {
+  // Store the new medicine being added so it persists across re-renders
+  const [initialMedicine] = useState<Medicine | null>(() => {
     if (medicines.length === 0) {
-      const newMedicine = createEmptyMedicine();
-      return newMedicine.id;
+      return createEmptyMedicine();
     }
     return null;
   });
+  const [newMedicine, setNewMedicine] = useState<Medicine | null>(initialMedicine);
+
+  // Initialize with a new medicine form if no medicines exist
+  const [editingMedicineId, setEditingMedicineId] = useState<string | null>(
+    initialMedicine?.id ?? null
+  );
   const [isAddingNew, setIsAddingNew] = useState(medicines.length === 0);
 
   const isOverValueCap = aggregatedTotalValue > 25000;
 
   const handleAddMedicine = () => {
-    const newMedicine = createEmptyMedicine();
-    setEditingMedicineId(newMedicine.id);
+    const medicine = createEmptyMedicine();
+    setNewMedicine(medicine);
+    setEditingMedicineId(medicine.id);
     setIsAddingNew(true);
   };
 
@@ -47,24 +53,28 @@ const MedicineDetailsStepComponent = ({
     }
     setEditingMedicineId(null);
     setIsAddingNew(false);
+    setNewMedicine(null);
   };
 
   const handleCancelEdit = () => {
     setEditingMedicineId(null);
     setIsAddingNew(false);
+    setNewMedicine(null);
   };
 
   const handleEditMedicine = (id: string) => {
     setEditingMedicineId(id);
     setIsAddingNew(false);
+    setNewMedicine(null);
   };
 
   const handleRemoveMedicine = (id: string) => {
     onUpdateMedicines(medicines.filter(m => m.id !== id));
   };
 
-  const editingMedicine = editingMedicineId 
-    ? medicines.find(m => m.id === editingMedicineId) || createEmptyMedicine()
+  // Use the stored newMedicine for adding, or find existing medicine for editing
+  const editingMedicine = editingMedicineId
+    ? (isAddingNew && newMedicine ? newMedicine : medicines.find(m => m.id === editingMedicineId)) || null
     : null;
 
   // Check if any medicine has blocking issues
@@ -150,7 +160,8 @@ const MedicineDetailsStepComponent = ({
       {/* Medicine Form (Add/Edit) */}
       {editingMedicineId && editingMedicine && (
         <MedicineForm
-          medicine={isAddingNew ? createEmptyMedicine() : editingMedicine}
+          key={editingMedicineId}
+          medicine={editingMedicine}
           onSave={handleSaveMedicine}
           onCancel={handleCancelEdit}
           isEditing={!isAddingNew}
@@ -175,7 +186,7 @@ const MedicineDetailsStepComponent = ({
       {hasAnyBlockingMedicine && !editingMedicineId && (
         <Alert variant="destructive">
           <AlertDescription>
-            One or more medicines exceed the 90-day supply limit or ₹25,000 value cap. 
+            One or more medicines exceed the 90-day supply limit or ₹25,000 value cap.
             Please edit or remove the affected medicines to proceed.
           </AlertDescription>
         </Alert>
@@ -186,7 +197,7 @@ const MedicineDetailsStepComponent = ({
         <Alert className="bg-accent/20 border-accent">
           <Info className="h-4 w-4" />
           <AlertDescription className="text-sm">
-            Ensure all medicine details match your prescription and pharmacy bill. 
+            Ensure all medicine details match your prescription and pharmacy bill.
             Mismatched information may delay or block your shipment.
           </AlertDescription>
         </Alert>

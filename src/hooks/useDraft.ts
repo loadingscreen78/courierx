@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Draft,
   saveDraft,
+  getDraft,
   getActiveDraft,
   deleteDraft,
   getAllDrafts,
@@ -32,45 +33,94 @@ export function useDraft<T>({
   initialData,
   totalSteps,
   autoSaveInterval = 5000,
-}: UseDraftOptions<T>): UseDraftReturn<T> {
+  draftId: propDraftId,
+}: UseDraftOptions<T> & { draftId?: string | null }): UseDraftReturn<T> {
   const [data, setDataState] = useState<T>(initialData);
   const [currentStep, setCurrentStep] = useState(1);
-  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(propDraftId || null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [initialized, setInitialized] = useState(false);
-  
+
   const dataRef = useRef(data);
   const stepRef = useRef(currentStep);
-  
+  const draftIdRef = useRef(draftId);
+
   // Keep refs updated
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
-  
+
   useEffect(() => {
     stepRef.current = currentStep;
   }, [currentStep]);
 
+  useEffect(() => {
+    draftIdRef.current = draftId;
+  }, [draftId]);
+
+  // Rehydrate Date objects from JSON strings after loading from localStorage
+  // JSON.stringify converts Date objects to ISO strings; this converts them back
+  const rehydrateDates = useCallback((obj: unknown): unknown => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'string') {
+      // Check if it looks like an ISO date string
+      const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+      if (isoDateRegex.test(obj)) {
+        const date = new Date(obj);
+        if (!isNaN(date.getTime())) return date;
+      }
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(item => rehydrateDates(item));
+    }
+    if (typeof obj === 'object') {
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        result[key] = rehydrateDates(value);
+      }
+      return result;
+    }
+    return obj;
+  }, []);
+
   // Load existing draft on mount
   useEffect(() => {
     if (initialized) return;
-    
-    const existingDraft = getActiveDraft<T>(type);
-    if (existingDraft) {
-      setDataState(existingDraft.data);
-      setCurrentStep(existingDraft.currentStep);
-      setDraftId(existingDraft.id);
-      setLastSaved(new Date(existingDraft.updatedAt));
-      setHasDraft(true);
+
+    // If propDraftId is provided, try to load that specific draft
+    if (propDraftId) {
+      const specificDraft = getDraft(propDraftId);
+      if (specificDraft && specificDraft.type === type) {
+        setDataState(rehydrateDates(specificDraft.data) as T);
+        setCurrentStep(specificDraft.currentStep);
+        setDraftId(specificDraft.id);
+        setLastSaved(new Date(specificDraft.updatedAt));
+        setHasDraft(true);
+      }
+    } else {
+      // Otherwise load the most recent draft of this type
+      const existingDraft = getActiveDraft<T>(type);
+      if (existingDraft) {
+        setDataState(rehydrateDates(existingDraft.data) as T);
+        setCurrentStep(existingDraft.currentStep);
+        setDraftId(existingDraft.id);
+        setLastSaved(new Date(existingDraft.updatedAt));
+        setHasDraft(true);
+      }
     }
     setInitialized(true);
-  }, [type, initialized]);
+  }, [type, initialized, propDraftId, rehydrateDates]);
 
   // Save function
   const saveNow = useCallback(() => {
-    setIsSaving(true);
+    // Don't save if not initialized or if data hasn't changed from initial
+    if (!initialized) return;
+
+    // Use a ref-based guard to avoid synchronous state flipping
+    // which causes re-renders and input blinking
     try {
       const draft = saveDraft(
         type,
@@ -78,36 +128,46 @@ export function useDraft<T>({
         stepRef.current,
         totalSteps,
         undefined,
-        draftId || undefined
+        draftIdRef.current || undefined
       );
-      setDraftId(draft.id);
+
+      // Update state only if it's a new draft ID
+      if (draft.id !== draftIdRef.current) {
+        setDraftId(draft.id);
+      }
+
       setLastSaved(new Date());
       setHasDraft(true);
-    } finally {
-      setIsSaving(false);
+    } catch (error) {
+      console.error('Failed to save draft:', error);
     }
-  }, [type, totalSteps, draftId]);
+  }, [type, totalSteps, initialized]);
 
   // Auto-save on data/step change (debounced)
   useEffect(() => {
     if (!initialized) return;
-    
+
+    // Skip if data equals initial data (deep comparison simplified)
+    if (JSON.stringify(data) === JSON.stringify(initialData) && !draftId) return;
+
     const timer = setTimeout(() => {
       saveNow();
     }, autoSaveInterval);
-    
+
     return () => clearTimeout(timer);
-  }, [data, currentStep, initialized, autoSaveInterval, saveNow]);
+  }, [data, currentStep, initialized, autoSaveInterval, saveNow, initialData, draftId]);
 
   // Save on page unload
   useEffect(() => {
     const handleBeforeUnload = () => {
-      saveDraft(type, dataRef.current, stepRef.current, totalSteps, undefined, draftId || undefined);
+      if (initialized) {
+        saveDraft(type, dataRef.current, stepRef.current, totalSteps, undefined, draftIdRef.current || undefined);
+      }
     };
-    
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [type, totalSteps, draftId]);
+  }, [type, totalSteps, initialized]);
 
   // Set data with function support
   const setData = useCallback((newData: T | ((prev: T) => T)) => {
@@ -134,6 +194,14 @@ export function useDraft<T>({
     setDraftId(null);
     setLastSaved(null);
     setHasDraft(false);
+    // Remove query param if present
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('draftId')) {
+        url.searchParams.delete('draftId');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
   }, [draftId, initialData]);
 
   return {
@@ -153,19 +221,19 @@ export function useDraft<T>({
 // Hook to get all drafts
 export function useAllDrafts() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
-  
+
   useEffect(() => {
     setDrafts(getAllDrafts());
   }, []);
-  
+
   const refresh = useCallback(() => {
     setDrafts(getAllDrafts());
   }, []);
-  
+
   const remove = useCallback((id: string) => {
     deleteDraft(id);
     setDrafts(getAllDrafts());
   }, []);
-  
+
   return { drafts, refresh, remove };
 }

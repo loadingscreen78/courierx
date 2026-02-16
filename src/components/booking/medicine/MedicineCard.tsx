@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, addMonths } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,13 @@ export interface Medicine {
   isControlled: boolean;
 }
 
+/** Helper to get the default expiry date (6 months from today at midnight) */
+export const getDefaultExpiryDate = (): Date => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return addMonths(today, 6);
+};
+
 export const createEmptyMedicine = (): Medicine => ({
   id: crypto.randomUUID(),
   medicineType: '',
@@ -36,7 +43,7 @@ export const createEmptyMedicine = (): Medicine => ({
   manufacturerAddress: '',
   mfgDate: null,
   batchNo: '',
-  expiryDate: null,
+  expiryDate: getDefaultExpiryDate(),
   hsnCode: '',
   isControlled: false,
 });
@@ -50,19 +57,19 @@ interface MedicineCardProps {
 }
 
 export const MedicineCard = ({ medicine, index, onEdit, onRemove, canRemove }: MedicineCardProps) => {
-  const supplyDays = medicine.dailyDosage > 0 
-    ? Math.ceil(medicine.unitCount / medicine.dailyDosage) 
+  const supplyDays = medicine.dailyDosage > 0
+    ? Math.ceil(medicine.unitCount / medicine.dailyDosage)
     : 0;
   const totalValue = medicine.unitCount * medicine.unitPrice;
   const isOver90Days = supplyDays > 90;
   const isOverValueCap = totalValue > 25000;
-  
+
   // Check expiry warning (6-12 months)
   const today = new Date();
   const sixMonthsFromNow = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
   const twelveMonthsFromNow = new Date(today.getFullYear(), today.getMonth() + 12, today.getDate());
-  const hasExpiryWarning = medicine.expiryDate && 
-    medicine.expiryDate >= sixMonthsFromNow && 
+  const hasExpiryWarning = medicine.expiryDate &&
+    medicine.expiryDate >= sixMonthsFromNow &&
     medicine.expiryDate <= twelveMonthsFromNow;
 
   return (

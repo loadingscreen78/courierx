@@ -6,6 +6,20 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const nextConfig = {
   reactStrictMode: true,
   
+  // ESLint configuration for build
+  eslint: {
+    // Only run ESLint on these directories during production builds
+    dirs: ['app', 'src'],
+    // Don't fail build on ESLint warnings, only on errors
+    ignoreDuringBuilds: false,
+  },
+  
+  // TypeScript configuration
+  typescript: {
+    // Don't fail build on TypeScript errors during production builds
+    ignoreBuildErrors: false,
+  },
+  
   // Image optimization
   images: {
     domains: ['nndcxvvulrxnfjoorjzz.supabase.co'],

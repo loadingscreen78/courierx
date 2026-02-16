@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
 import { GiftItemsStep } from '@/components/booking/gift/GiftItemsStep';
 import { GiftValidationStep } from '@/components/booking/gift/GiftValidationStep';
@@ -66,6 +66,8 @@ export interface GiftBookingData {
     country: string;
     zipcode: string;
   };
+  passportPhotoPage: File | null;
+  passportAddressPage: File | null;
   insurance: boolean;
   giftWrapping: boolean;
 }
@@ -98,6 +100,8 @@ const initialBookingData: GiftBookingData = {
     country: '',
     zipcode: '',
   },
+  passportPhotoPage: null,
+  passportAddressPage: null,
   insurance: false,
   giftWrapping: false,
 };
@@ -111,6 +115,9 @@ const STEPS = [
 ];
 
 const GiftBooking = () => {
+  const searchParams = useSearchParams();
+  const draftId = searchParams.get('draftId');
+
   const {
     data: bookingData,
     currentStep,
@@ -125,6 +132,7 @@ const GiftBooking = () => {
     type: 'gift',
     initialData: initialBookingData,
     totalSteps: STEPS.length,
+    draftId,
   });
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -142,14 +150,14 @@ const GiftBooking = () => {
   // Pre-fill from rate calculator if available
   useEffect(() => {
     const rateCalculatorData = localStorage.getItem('rateCalculatorBooking');
-    
+
     if (rateCalculatorData) {
       try {
         const data = JSON.parse(rateCalculatorData);
-        
+
         // Check if data is recent (within 30 minutes)
         const isRecent = Date.now() - data.timestamp < 30 * 60 * 1000;
-        
+
         if (isRecent && data.destinationCountry && data.weightGrams) {
           // Pre-fill destination country
           setData(prev => ({
@@ -159,11 +167,11 @@ const GiftBooking = () => {
               country: data.destinationCountry
             }
           }));
-          
+
           toast.success('Rate Calculator Data Loaded', {
             description: `Destination: ${data.destinationCountry}, Weight: ${data.weightGrams}g`
           });
-          
+
           // Clean up after using
           localStorage.removeItem('rateCalculatorBooking');
         }
@@ -257,10 +265,10 @@ const GiftBooking = () => {
       const itemCount = bookingData.items.length;
       const country = bookingData.consigneeAddress.country;
       const isGCC = country === 'AE' || country === 'SA';
-      
+
       const basePrice = isGCC ? 1450 : 1850;
       const shippingPrice = basePrice + (itemCount > 3 ? (itemCount - 3) * 100 : 0);
-      
+
       let totalAmount = shippingPrice;
       if (bookingData.insurance) totalAmount += 150;
       if (bookingData.giftWrapping) totalAmount += 100;
@@ -293,6 +301,8 @@ const GiftBooking = () => {
         consigneeAddress: bookingData.consigneeAddress,
         insurance: bookingData.insurance,
         giftWrapping: bookingData.giftWrapping,
+        passportPhotoPage: bookingData.passportPhotoPage,
+        passportAddressPage: bookingData.passportAddressPage,
       };
 
       // Create shipment
@@ -362,8 +372,8 @@ const GiftBooking = () => {
     }
   };
 
-  const hasBlockingIssue = (currentStep === 1 && isOverValueCap) || 
-                           (currentStep === 4 && bookingData.prohibitedItemAttempted);
+  const hasBlockingIssue = (currentStep === 1 && isOverValueCap) ||
+    (currentStep === 4 && bookingData.prohibitedItemAttempted);
 
   return (
     <AppLayout>
@@ -378,7 +388,7 @@ const GiftBooking = () => {
               <p className="text-muted-foreground text-sm">Personal gifts and product samples</p>
             </div>
           </div>
-          
+
           {/* Draft Actions */}
           {hasDraft && (
             <div className="flex items-center gap-2">
@@ -412,7 +422,7 @@ const GiftBooking = () => {
             <Ban className="h-4 w-4" />
             <AlertTitle>Booking Blocked - Prohibited Items</AlertTitle>
             <AlertDescription>
-              Your shipment contains items that are prohibited for international shipping. 
+              Your shipment contains items that are prohibited for international shipping.
               Please remove these items and try again, or contact support for assistance.
             </AlertDescription>
           </Alert>
@@ -456,8 +466,8 @@ const GiftBooking = () => {
           </Button>
 
           {currentStep < STEPS.length ? (
-            <Button 
-              onClick={handleNext} 
+            <Button
+              onClick={handleNext}
               disabled={hasBlockingIssue}
               className="btn-press bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
@@ -465,7 +475,7 @@ const GiftBooking = () => {
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           ) : (
-            <Button 
+            <Button
               onClick={handleConfirmAndPay}
               disabled={isProcessing || hasBlockingIssue}
               className="btn-press bg-destructive hover:bg-destructive/90 text-destructive-foreground"

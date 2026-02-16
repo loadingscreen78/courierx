@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { DocumentBookingData } from '@/views/DocumentBooking';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -27,7 +28,7 @@ const getShippingPrice = (weight: number) => {
   return 2100;
 };
 
-export const DocumentReviewStep = ({ data, onConfirmBooking }: DocumentReviewStepProps) => {
+export const DocumentReviewStep = memo(({ data, onConfirmBooking }: DocumentReviewStepProps) => {
   const shippingPrice = getShippingPrice(data.weight);
   const addonsTotal = (data.insurance ? INSURANCE_PRICE : 0) + (data.waterproofPackaging ? WATERPROOF_PRICE : 0);
   const grandTotal = shippingPrice + addonsTotal;
@@ -203,5 +204,6 @@ export const DocumentReviewStep = ({ data, onConfirmBooking }: DocumentReviewSte
       <WalletBalanceCheck totalAmount={grandTotal} onProceed={handleConfirmBooking} />
     </div>
   );
-};
+});
 
+DocumentReviewStep.displayName = 'DocumentReviewStep';

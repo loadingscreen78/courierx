@@ -1,14 +1,15 @@
-import { useRef, memo } from 'react';
+import { useRef, memo, useCallback } from 'react';
 import { MedicineBookingData } from '@/views/MedicineBooking';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, FileText, X, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useHaptics } from '@/hooks/useHaptics';
 
 interface DocumentUploadStepProps {
-  data: MedicineBookingData;
+  prescription: File | null;
+  pharmacyBill: File | null;
+  consigneeId: File | null;
   onUpdate: (updates: Partial<MedicineBookingData>) => void;
 }
 
@@ -22,7 +23,7 @@ interface DocumentUploadCardProps {
   onRemove: () => void;
 }
 
-const DocumentUploadCard = ({ 
+const DocumentUploadCard = memo(({ 
   title, 
   description, 
   file, 
@@ -32,7 +33,6 @@ const DocumentUploadCard = ({
   onRemove 
 }: DocumentUploadCardProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { lightTap, successFeedback } = useHaptics();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -42,19 +42,16 @@ const DocumentUploadCard = ({
         alert('File size must be less than 10MB');
         return;
       }
-      successFeedback();
       onUpload(selectedFile);
     }
   };
 
   const handleClick = () => {
-    lightTap();
     inputRef.current?.click();
   };
 
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
-    lightTap();
     onRemove();
     if (inputRef.current) {
       inputRef.current.value = '';
@@ -70,12 +67,13 @@ const DocumentUploadCard = ({
   return (
     <Card 
       className={cn(
-        "cursor-pointer transition-all duration-300 btn-press",
+        "cursor-pointer btn-press",
         file 
           ? "border-accent bg-accent/10" 
           : "border-dashed border-2 hover:border-muted-foreground"
       )}
       onClick={handleClick}
+      style={{ transform: 'translateZ(0)', willChange: 'transform' }}
     >
       <input
         ref={inputRef}
@@ -146,11 +144,36 @@ const DocumentUploadCard = ({
       )}
     </Card>
   );
-};
+});
 
-const DocumentUploadStepComponent = ({ data, onUpdate }: DocumentUploadStepProps) => {
+const DocumentUploadStepComponent = ({ prescription, pharmacyBill, consigneeId, onUpdate }: DocumentUploadStepProps) => {
+  // Memoize callbacks to prevent DocumentUploadCard re-renders
+  const handlePrescriptionUpload = useCallback((file: File) => {
+    onUpdate({ prescription: file });
+  }, [onUpdate]);
+
+  const handlePrescriptionRemove = useCallback(() => {
+    onUpdate({ prescription: null });
+  }, [onUpdate]);
+
+  const handlePharmacyBillUpload = useCallback((file: File) => {
+    onUpdate({ pharmacyBill: file });
+  }, [onUpdate]);
+
+  const handlePharmacyBillRemove = useCallback(() => {
+    onUpdate({ pharmacyBill: null });
+  }, [onUpdate]);
+
+  const handleConsigneeIdUpload = useCallback((file: File) => {
+    onUpdate({ consigneeId: file });
+  }, [onUpdate]);
+
+  const handleConsigneeIdRemove = useCallback(() => {
+    onUpdate({ consigneeId: null });
+  }, [onUpdate]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ transform: 'translateZ(0)', willChange: 'transform' }}>
       <div className="space-y-2">
         <h3 className="font-typewriter text-lg font-bold">Required Documents</h3>
         <p className="text-sm text-muted-foreground">
@@ -158,35 +181,35 @@ const DocumentUploadStepComponent = ({ data, onUpdate }: DocumentUploadStepProps
         </p>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-4" style={{ transform: 'translateZ(0)', willChange: 'transform' }}>
         <DocumentUploadCard
           title="Doctor's Prescription"
           description="Original prescription with doctor's name, registration number, and date"
-          file={data.prescription}
+          file={prescription}
           required={true}
           accepts=".pdf,.jpg,.jpeg,.png"
-          onUpload={(file) => onUpdate({ prescription: file })}
-          onRemove={() => onUpdate({ prescription: null })}
+          onUpload={handlePrescriptionUpload}
+          onRemove={handlePrescriptionRemove}
         />
 
         <DocumentUploadCard
           title="Pharmacy Bill / Invoice"
           description="Purchase bill showing medicine name, quantity, and price"
-          file={data.pharmacyBill}
+          file={pharmacyBill}
           required={true}
           accepts=".pdf,.jpg,.jpeg,.png"
-          onUpload={(file) => onUpdate({ pharmacyBill: file })}
-          onRemove={() => onUpdate({ pharmacyBill: null })}
+          onUpload={handlePharmacyBillUpload}
+          onRemove={handlePharmacyBillRemove}
         />
 
         <DocumentUploadCard
           title="Consignee ID Document"
           description="Passport or International Driving License of the recipient"
-          file={data.consigneeId}
+          file={consigneeId}
           required={true}
           accepts=".pdf,.jpg,.jpeg,.png"
-          onUpload={(file) => onUpdate({ consigneeId: file })}
-          onRemove={() => onUpdate({ consigneeId: null })}
+          onUpload={handleConsigneeIdUpload}
+          onRemove={handleConsigneeIdRemove}
         />
       </div>
 
@@ -228,7 +251,7 @@ const DocumentUploadStepComponent = ({ data, onUpdate }: DocumentUploadStepProps
       <div className="flex items-center justify-between p-4 bg-card rounded-lg border border-border">
         <span className="text-sm font-medium">Documents Uploaded</span>
         <span className="font-typewriter font-bold text-foreground">
-          {[data.prescription, data.pharmacyBill, data.consigneeId].filter(Boolean).length} / 3
+          {[prescription, pharmacyBill, consigneeId].filter(Boolean).length} / 3
         </span>
       </div>
     </div>

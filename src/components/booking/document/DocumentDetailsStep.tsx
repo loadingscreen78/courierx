@@ -1,7 +1,6 @@
+import { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { DocumentBookingData } from '@/views/DocumentBooking';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { FileText, Package, Ruler, Scale } from 'lucide-react';
 
@@ -28,7 +27,134 @@ const DOCUMENT_TYPES = [
   'Other',
 ];
 
-export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps) => {
+// ─── Stable text input that uses local state to prevent parent re-render blink ──
+interface StableInputProps {
+  value: string | number;
+  onChange: (val: string) => void;
+  type?: string;
+  placeholder?: string;
+  id?: string;
+  className?: string;
+  min?: string;
+  max?: string;
+  rows?: number;
+  isTextarea?: boolean;
+}
+
+const StableInput = memo(({
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+  id,
+  className = '',
+  min,
+  max,
+  rows,
+  isTextarea = false,
+}: StableInputProps) => {
+  const [localValue, setLocalValue] = useState(String(value ?? ''));
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync from parent only when parent value changes externally
+  useEffect(() => {
+    const parentStr = String(value ?? '');
+    setLocalValue(prev => {
+      // Don't override if user is actively typing the same value
+      if (prev === parentStr) return prev;
+      return parentStr;
+    });
+  }, [value]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const newVal = e.target.value;
+    setLocalValue(newVal);
+
+    // Debounce the parent update to avoid re-render storms
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(newVal);
+    }, 300);
+  }, [onChange]);
+
+  // Flush on blur so parent always gets the latest value
+  const handleBlur = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    onChange(localValue);
+  }, [localValue, onChange]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const inputClasses = cn(
+    "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+    "ring-offset-background placeholder:text-muted-foreground",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "disabled:cursor-not-allowed disabled:opacity-50",
+    className,
+  );
+
+  if (isTextarea) {
+    return (
+      <textarea
+        id={id}
+        value={localValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        rows={rows || 3}
+        className={cn(inputClasses, "min-h-[80px] resize-none")}
+      />
+    );
+  }
+
+  return (
+    <input
+      id={id}
+      type={type}
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      min={min}
+      max={max}
+      className={cn(inputClasses, "h-10")}
+    />
+  );
+});
+
+StableInput.displayName = 'StableInput';
+
+// ─── Main Component ─────────────────────────────────────────────────────────────
+
+export const DocumentDetailsStep = memo(({ data, onUpdate }: DocumentDetailsStepProps) => {
+  const handleDescriptionChange = useCallback((val: string) => {
+    onUpdate({ description: val });
+  }, [onUpdate]);
+
+  const handleWeightChange = useCallback((val: string) => {
+    onUpdate({ weight: parseInt(val) || 0 });
+  }, [onUpdate]);
+
+  const handleLengthChange = useCallback((val: string) => {
+    onUpdate({ length: parseInt(val) || 0 });
+  }, [onUpdate]);
+
+  const handleWidthChange = useCallback((val: string) => {
+    onUpdate({ width: parseInt(val) || 0 });
+  }, [onUpdate]);
+
+  const handleHeightChange = useCallback((val: string) => {
+    onUpdate({ height: parseInt(val) || 0 });
+  }, [onUpdate]);
+
   return (
     <div className="space-y-8">
       {/* Packet Type */}
@@ -40,9 +166,10 @@ export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps
             return (
               <button
                 key={type.value}
+                type="button"
                 onClick={() => onUpdate({ packetType: type.value as DocumentBookingData['packetType'] })}
                 className={cn(
-                  "p-4 rounded-lg border-2 text-center transition-all btn-press",
+                  "p-4 rounded-lg border-2 text-center",
                   data.packetType === type.value
                     ? "border-destructive bg-destructive/5"
                     : "border-border hover:border-muted-foreground/50"
@@ -64,9 +191,10 @@ export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps
           {DOCUMENT_TYPES.map((docType) => (
             <button
               key={docType}
+              type="button"
               onClick={() => onUpdate({ documentType: docType })}
               className={cn(
-                "px-4 py-2 rounded-lg border text-sm transition-all btn-press",
+                "px-4 py-2 rounded-lg border text-sm",
                 data.documentType === docType
                   ? "border-destructive bg-destructive/5 text-foreground"
                   : "border-border hover:border-muted-foreground/50"
@@ -81,12 +209,12 @@ export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps
       {/* Description */}
       <div className="space-y-2">
         <Label htmlFor="description">Description (Optional)</Label>
-        <Textarea
+        <StableInput
           id="description"
-          placeholder="Brief description of documents being shipped..."
           value={data.description}
-          onChange={(e) => onUpdate({ description: e.target.value })}
-          className="input-premium resize-none"
+          onChange={handleDescriptionChange}
+          placeholder="Brief description of documents being shipped..."
+          isTextarea
           rows={3}
         />
       </div>
@@ -98,14 +226,14 @@ export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps
           Weight *
         </Label>
         <div className="flex items-center gap-3">
-          <Input
+          <StableInput
             type="number"
             min="1"
             max="2000"
             placeholder="Enter weight"
             value={data.weight || ''}
-            onChange={(e) => onUpdate({ weight: parseInt(e.target.value) || 0 })}
-            className="input-premium max-w-[200px]"
+            onChange={handleWeightChange}
+            className="max-w-[200px]"
           />
           <span className="text-muted-foreground">grams</span>
         </div>
@@ -125,38 +253,35 @@ export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="length" className="text-sm">Length (cm)</Label>
-            <Input
+            <StableInput
               id="length"
               type="number"
               min="1"
               placeholder="L"
               value={data.length || ''}
-              onChange={(e) => onUpdate({ length: parseInt(e.target.value) || 0 })}
-              className="input-premium"
+              onChange={handleLengthChange}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="width" className="text-sm">Width (cm)</Label>
-            <Input
+            <StableInput
               id="width"
               type="number"
               min="1"
               placeholder="W"
               value={data.width || ''}
-              onChange={(e) => onUpdate({ width: parseInt(e.target.value) || 0 })}
-              className="input-premium"
+              onChange={handleWidthChange}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="height" className="text-sm">Height (cm)</Label>
-            <Input
+            <StableInput
               id="height"
               type="number"
               min="1"
               placeholder="H"
               value={data.height || ''}
-              onChange={(e) => onUpdate({ height: parseInt(e.target.value) || 0 })}
-              className="input-premium"
+              onChange={handleHeightChange}
             />
           </div>
         </div>
@@ -177,5 +302,6 @@ export const DocumentDetailsStep = ({ data, onUpdate }: DocumentDetailsStepProps
       </div>
     </div>
   );
-};
+});
 
+DocumentDetailsStep.displayName = 'DocumentDetailsStep';

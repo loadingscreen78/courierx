@@ -39,16 +39,12 @@ const DocumentAddressStepComponent = ({ data, onUpdate }: DocumentAddressStepPro
   const [localPickupAddress, setLocalPickupAddress] = useState(data.pickupAddress);
   const [localConsigneeAddress, setLocalConsigneeAddress] = useState(data.consigneeAddress);
 
-  // Debounced update to parent - only update after user stops typing
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onUpdate({
-        pickupAddress: localPickupAddress,
-        consigneeAddress: localConsigneeAddress
-      });
-    }, 300); // 300ms debounce
-
-    return () => clearTimeout(timer);
+  // Only update parent on blur, not while typing
+  const handleBlur = useCallback(() => {
+    onUpdate({
+      pickupAddress: localPickupAddress,
+      consigneeAddress: localConsigneeAddress
+    });
   }, [localPickupAddress, localConsigneeAddress, onUpdate]);
 
   const updatePickupAddress = useCallback((field: string, value: string) => {
@@ -60,7 +56,7 @@ const DocumentAddressStepComponent = ({ data, onUpdate }: DocumentAddressStepPro
   }, []);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" onBlur={handleBlur}>
       {/* Sender Notice */}
       <Card className="bg-accent/20 border-accent">
         <CardHeader className="pb-3">
