@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { filterActiveShipments, filterDeliveredShipments } from '@/lib/utils/shipmentFilters';
 
 export interface Shipment {
   id: string;
@@ -93,12 +94,10 @@ export function useShipments() {
   }
 
   // Get active shipments (not delivered or cancelled)
-  const activeShipments = shipments.filter(
-    (s) => !['delivered', 'cancelled'].includes(s.status)
-  );
+  const activeShipments = filterActiveShipments(shipments);
 
   // Get delivered shipments
-  const deliveredShipments = shipments.filter((s) => s.status === 'delivered');
+  const deliveredShipments = filterDeliveredShipments(shipments);
 
   // Get shipments by status
   const getShipmentsByStatus = (status: string) =>
@@ -132,9 +131,9 @@ export async function getShipmentDetails(shipmentId: string): Promise<ShipmentWi
     if (shipmentError) throw shipmentError;
 
     // Get medicine items if medicine shipment
-    let medicine_items = [];
+    let medicine_items: any[] = [];
     if (shipment.shipment_type === 'medicine') {
-      const { data: items } = await supabase
+      const { data: items } = await (supabase as any)
         .from('medicine_items')
         .select('*')
         .eq('shipment_id', shipmentId);
@@ -142,13 +141,13 @@ export async function getShipmentDetails(shipmentId: string): Promise<ShipmentWi
     }
 
     // Get documents
-    const { data: documents } = await supabase
+    const { data: documents } = await (supabase as any)
       .from('shipment_documents')
       .select('*')
       .eq('shipment_id', shipmentId);
 
     // Get addons
-    const { data: addons } = await supabase
+    const { data: addons } = await (supabase as any)
       .from('shipment_addons')
       .select('*')
       .eq('shipment_id', shipmentId);
