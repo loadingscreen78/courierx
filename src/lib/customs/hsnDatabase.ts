@@ -249,26 +249,6 @@ export const hsnDatabase: Record<string, HSNCode> = {
     commonNames: ['utensil', 'cutlery', 'kitchen item']
   },
 
-  // Textiles & Clothing
-  '61091000': {
-    code: '61091000',
-    description: 'T-shirts, singlets and other vests of cotton',
-    category: 'Textiles',
-    requiresLicense: false,
-    globallyProhibited: false,
-    globallyRestricted: false,
-    commonNames: ['t-shirt', 'tshirt', 'shirt', 'vest']
-  },
-  '62046200': {
-    code: '62046200',
-    description: 'Women\'s or girls\' trousers of cotton',
-    category: 'Textiles',
-    requiresLicense: false,
-    globallyProhibited: false,
-    globallyRestricted: false,
-    commonNames: ['trousers', 'pants', 'jeans']
-  },
-
   // Jewelry & Precious Items
   '71131900': {
     code: '71131900',
