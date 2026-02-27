@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/admin/layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Search, UserPlus, Shield, ShieldCheck, User, Trash2, Loader2 } from 'lucide-react';
@@ -23,17 +19,10 @@ interface UserWithRoles {
   roles: AppRole[];
 }
 
-interface UserRole {
-  id: string;
-  user_id: string;
-  role: AppRole;
-  created_at: string | null;
-}
-
 const roleConfig: Record<AppRole, { label: string; color: string; icon: typeof Shield }> = {
-  admin: { label: 'Admin', color: 'bg-destructive text-destructive-foreground', icon: ShieldCheck },
-  warehouse_operator: { label: 'Warehouse Operator', color: 'bg-amber-500 text-white', icon: Shield },
-  user: { label: 'User', color: 'bg-muted text-muted-foreground', icon: User },
+  admin: { label: 'Admin', color: 'bg-red-500/20 text-red-400 border border-red-500/30', icon: ShieldCheck },
+  warehouse_operator: { label: 'Warehouse Operator', color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30', icon: Shield },
+  user: { label: 'User', color: 'bg-white/10 text-gray-400 border border-white/10', icon: User },
 };
 
 export const RoleManagement = () => {
@@ -50,202 +39,98 @@ export const RoleManagement = () => {
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      // Fetch all profiles
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, email, full_name, created_at')
-        .order('created_at', { ascending: false });
-
+      const { data: profiles, error: profilesError } = await supabase.from('profiles').select('user_id, email, full_name, created_at').order('created_at', { ascending: false });
       if (profilesError) throw profilesError;
-
-      // Fetch all roles
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*');
-
+      const { data: roles, error: rolesError } = await supabase.from('user_roles').select('*');
       if (rolesError) throw rolesError;
-
-      // Combine profiles with their roles
       const usersWithRoles: UserWithRoles[] = (profiles || []).map(profile => ({
-        id: profile.user_id,
-        email: profile.email,
-        full_name: profile.full_name,
-        created_at: profile.created_at,
-        roles: (roles || [])
-          .filter(r => r.user_id === profile.user_id)
-          .map(r => r.role as AppRole),
+        id: profile.user_id, email: profile.email, full_name: profile.full_name, created_at: profile.created_at,
+        roles: (roles || []).filter(r => r.user_id === profile.user_id).map(r => r.role as AppRole),
       }));
-
       setUsers(usersWithRoles);
     } catch (error) {
       console.error('Error fetching users:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load users',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+      toast({ title: 'Error', description: 'Failed to load users', variant: 'destructive' });
+    } finally { setIsLoading(false); }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   const handleAddRole = async () => {
     if (!selectedUser || !newRole) return;
-    
-    // Check if role already exists
-    if (selectedUser.roles.includes(newRole)) {
-      toast({
-        title: 'Role exists',
-        description: `${selectedUser.email} already has the ${roleConfig[newRole].label} role`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
+    if (selectedUser.roles.includes(newRole)) { toast({ title: 'Role exists', description: `${selectedUser.email} already has the ${roleConfig[newRole].label} role`, variant: 'destructive' }); return; }
     setIsAddingRole(true);
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: selectedUser.id,
-          role: newRole,
-        });
-
+      const { error } = await supabase.from('user_roles').insert({ user_id: selectedUser.id, role: newRole });
       if (error) throw error;
-
-      toast({
-        title: 'Role added',
-        description: `${roleConfig[newRole].label} role added to ${selectedUser.email}`,
-      });
-      
-      setDialogOpen(false);
-      setSelectedUser(null);
-      fetchUsers();
+      toast({ title: 'Role added', description: `${roleConfig[newRole].label} role added to ${selectedUser.email}` });
+      setDialogOpen(false); setSelectedUser(null); fetchUsers();
     } catch (error) {
       console.error('Error adding role:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add role',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsAddingRole(false);
-    }
+      toast({ title: 'Error', description: 'Failed to add role', variant: 'destructive' });
+    } finally { setIsAddingRole(false); }
   };
 
   const handleRemoveRole = async (userId: string, role: AppRole) => {
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-        .eq('role', role);
-
+      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role);
       if (error) throw error;
-
-      toast({
-        title: 'Role removed',
-        description: `${roleConfig[role].label} role removed`,
-      });
-      
+      toast({ title: 'Role removed', description: `${roleConfig[role].label} role removed` });
       fetchUsers();
     } catch (error) {
       console.error('Error removing role:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to remove role',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to remove role', variant: 'destructive' });
     }
   };
 
-  // Filter users
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      (user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-      (user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-    
+    const matchesSearch = (user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) || (user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
     const matchesRole = roleFilter === 'all' || user.roles.includes(roleFilter as AppRole);
-    
     return matchesSearch && matchesRole;
   });
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="space-y-6">
         <div>
-          <h1 className="text-2xl font-typewriter font-bold">Role Management</h1>
-          <p className="text-muted-foreground">Assign and manage user roles</p>
+          <h1 className="text-2xl font-bold text-white">Role Management</h1>
+          <p className="text-gray-400">Assign and manage user roles</p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Admins</CardTitle>
-            </CardHeader>
-            <CardContent>
+          {[
+            { label: 'Total Admins', icon: ShieldCheck, iconColor: 'text-red-500', count: users.filter(u => u.roles.includes('admin')).length },
+            { label: 'Warehouse Operators', icon: Shield, iconColor: 'text-blue-500', count: users.filter(u => u.roles.includes('warehouse_operator')).length },
+            { label: 'Total Users', icon: User, iconColor: 'text-gray-400', count: users.length },
+          ].map(({ label, icon: Icon, iconColor, count }) => (
+            <div key={label} className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+              <p className="text-sm text-gray-500 mb-2">{label}</p>
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-destructive" />
-                <span className="text-2xl font-bold">
-                  {users.filter(u => u.roles.includes('admin')).length}
-                </span>
+                <Icon className={`h-5 w-5 ${iconColor}`} />
+                <span className="text-2xl font-bold text-white">{count}</span>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Warehouse Operators</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-amber-500" />
-                <span className="text-2xl font-bold">
-                  {users.filter(u => u.roles.includes('warehouse_operator')).length}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <User className="h-5 w-5 text-muted-foreground" />
-                <span className="text-2xl font-bold">{users.length}</span>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Users</CardTitle>
-            <CardDescription>Manage roles for all users</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        {/* Users Card */}
+        <div className="bg-[#16161a] rounded-[2rem] border border-white/5 shadow-2xl overflow-hidden">
+          <div className="p-6 pb-2">
+            <h3 className="text-white font-semibold">Users</h3>
+            <p className="text-xs text-gray-500">Manage roles for all users</p>
+          </div>
+          <div className="px-6 pb-6">
+            <div className="flex flex-col sm:flex-row gap-4 mb-6 mt-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by email or name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <input placeholder="Search by email or name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-500 focus:border-red-500 focus:outline-none transition-colors" />
               </div>
               <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-full sm:w-48">
+                <SelectTrigger className="w-full sm:w-48 bg-white/5 border-white/10 text-white">
                   <SelectValue placeholder="Filter by role" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-[#16161a] border-white/10">
                   <SelectItem value="all">All Users</SelectItem>
                   <SelectItem value="admin">Admins Only</SelectItem>
                   <SelectItem value="warehouse_operator">Operators Only</SelectItem>
@@ -253,152 +138,94 @@ export const RoleManagement = () => {
               </Select>
             </div>
 
-            {/* Users Table */}
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
+              <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-red-500" /></div>
             ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                No users found
-              </div>
+              <div className="text-center py-12 text-gray-500">No users found</div>
             ) : (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Roles</TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <div className="overflow-x-auto rounded-xl border border-white/5">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">User</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Roles</th>
+                      <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Joined</th>
+                      <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {filteredUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{user.full_name || 'No name'}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
+                      <tr key={user.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="py-3 px-4">
+                          <p className="text-white font-medium">{user.full_name || 'No name'}</p>
+                          <p className="text-sm text-gray-500">{user.email}</p>
+                        </td>
+                        <td className="py-3 px-4">
                           <div className="flex flex-wrap gap-1">
                             {user.roles.length === 0 ? (
-                              <Badge variant="outline" className="text-xs">No roles</Badge>
-                            ) : (
-                              user.roles.map((role) => {
-                                const config = roleConfig[role];
-                                return (
-                                  <div key={role} className="flex items-center gap-1">
-                                    <Badge className={`text-xs ${config.color}`}>
-                                      {config.label}
-                                    </Badge>
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5 text-muted-foreground hover:text-destructive"
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Remove Role</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Remove {config.label} role from {user.email}?
-                                            This action cannot be undone.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => handleRemoveRole(user.id, role)}
-                                            className="bg-destructive hover:bg-destructive/90"
-                                          >
-                                            Remove
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
-                                );
-                              })
-                            )}
+                              <span className="px-2 py-0.5 rounded-full text-xs bg-white/5 border border-white/10 text-gray-500">No roles</span>
+                            ) : user.roles.map((role) => (
+                              <div key={role} className="flex items-center gap-1">
+                                <span className={`px-2 py-0.5 rounded-full text-xs ${roleConfig[role].color}`}>{roleConfig[role].label}</span>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <button className="p-1 rounded text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="h-3 w-3" /></button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent className="bg-[#16161a] border-white/10 text-white">
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Remove Role</AlertDialogTitle>
+                                      <AlertDialogDescription className="text-gray-400">Remove {roleConfig[role].label} role from {user.email}? This action cannot be undone.</AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel className="bg-white/10 border-white/10 text-gray-300 hover:bg-white/20">Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleRemoveRole(user.id, role)} className="bg-red-600 hover:bg-red-700 text-white">Remove</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            ))}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(user.created_at), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Dialog open={dialogOpen && selectedUser?.id === user.id} onOpenChange={(open) => {
-                            setDialogOpen(open);
-                            if (!open) setSelectedUser(null);
-                          }}>
+                        </td>
+                        <td className="py-3 px-4 text-gray-500 text-sm">{format(new Date(user.created_at), 'MMM d, yyyy')}</td>
+                        <td className="py-3 px-4 text-right">
+                          <Dialog open={dialogOpen && selectedUser?.id === user.id} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSelectedUser(null); }}>
                             <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setDialogOpen(true);
-                                }}
-                              >
-                                <UserPlus className="h-4 w-4 mr-2" />
-                                Add Role
-                              </Button>
+                              <button onClick={() => { setSelectedUser(user); setDialogOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-white/10 border border-white/10 text-gray-300 hover:bg-white/20 transition-colors ml-auto">
+                                <UserPlus className="h-4 w-4" /> Add Role
+                              </button>
                             </DialogTrigger>
-                            <DialogContent>
+                            <DialogContent className="bg-[#16161a] border-white/10 text-white">
                               <DialogHeader>
                                 <DialogTitle>Add Role</DialogTitle>
-                                <DialogDescription>
-                                  Add a role to {user.email}
-                                </DialogDescription>
+                                <DialogDescription className="text-gray-400">Add a role to {user.email}</DialogDescription>
                               </DialogHeader>
                               <div className="py-4">
                                 <Select value={newRole} onValueChange={(val) => setNewRole(val as AppRole)}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select role" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="admin">
-                                      <div className="flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4 text-destructive" />
-                                        Admin
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="warehouse_operator">
-                                      <div className="flex items-center gap-2">
-                                        <Shield className="h-4 w-4 text-amber-500" />
-                                        Warehouse Operator
-                                      </div>
-                                    </SelectItem>
+                                  <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue placeholder="Select role" /></SelectTrigger>
+                                  <SelectContent className="bg-[#16161a] border-white/10">
+                                    <SelectItem value="admin"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-red-500" /> Admin</div></SelectItem>
+                                    <SelectItem value="warehouse_operator"><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-blue-500" /> Warehouse Operator</div></SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
                               <DialogFooter>
-                                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                                  Cancel
-                                </Button>
-                                <Button onClick={handleAddRole} disabled={isAddingRole}>
-                                  {isAddingRole && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                                  Add Role
-                                </Button>
+                                <button onClick={() => setDialogOpen(false)} className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-gray-300 hover:bg-white/20 transition-colors">Cancel</button>
+                                <button onClick={handleAddRole} disabled={isAddingRole} className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 transition-all">
+                                  {isAddingRole && <Loader2 className="h-4 w-4 animate-spin" />} Add Role
+                                </button>
                               </DialogFooter>
                             </DialogContent>
                           </Dialog>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </motion.div>
     </AdminLayout>
   );
 };

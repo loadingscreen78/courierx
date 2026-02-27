@@ -90,8 +90,21 @@ export function useDraft<T>({
   useEffect(() => {
     if (initialized) return;
 
-    // If propDraftId is provided, try to load that specific draft
-    if (propDraftId) {
+    // Check if this is a fresh start (from "New Shipment" page)
+    const isNew = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('new');
+
+    if (isNew) {
+      // Fresh start — delete any existing draft of this type and use initial data
+      const existingDraft = getActiveDraft<T>(type);
+      if (existingDraft) {
+        deleteDraft(existingDraft.id);
+      }
+      // Clean up the ?new param from URL without triggering navigation
+      const url = new URL(window.location.href);
+      url.searchParams.delete('new');
+      window.history.replaceState({}, '', url.toString());
+    } else if (propDraftId) {
+      // If propDraftId is provided, try to load that specific draft
       const specificDraft = getDraft(propDraftId);
       if (specificDraft && specificDraft.type === type) {
         setDataState(rehydrateDates(specificDraft.data) as T);

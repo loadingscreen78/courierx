@@ -3,10 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminLayout } from '@/components/admin/layout';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { 
   Package, 
   Search,
@@ -14,7 +11,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
 import {
   Select,
   SelectContent,
@@ -22,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { getStatusLabel, getStatusDotColor } from '@/lib/shipment-lifecycle/statusLabelMap';
+import type { ShipmentStatus } from '@/lib/shipment-lifecycle/types';
 
 interface Shipment {
   id: string;
@@ -30,6 +29,8 @@ interface Shipment {
   destination_country: string;
   shipment_type: string;
   status: string;
+  current_status: ShipmentStatus;
+  current_leg: string;
   created_at: string;
   weight_kg: number;
   total_amount: number;
@@ -45,19 +46,16 @@ interface Shipment {
 
 const statusOptions = [
   { value: 'all', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'payment_received', label: 'Payment Received' },
-  { value: 'pickup_scheduled', label: 'Pickup Scheduled' },
-  { value: 'out_for_pickup', label: 'Out for Pickup' },
-  { value: 'picked_up', label: 'Picked Up' },
-  { value: 'at_warehouse', label: 'At Warehouse' },
-  { value: 'qc_in_progress', label: 'QC In Progress' },
-  { value: 'qc_passed', label: 'QC Passed' },
-  { value: 'qc_failed', label: 'QC Failed' },
-  { value: 'pending_payment', label: 'Pending Payment' },
-  { value: 'dispatched', label: 'Dispatched' },
-  { value: 'in_transit', label: 'In Transit' },
-  { value: 'delivered', label: 'Delivered' },
+  { value: 'ARRIVED_AT_WAREHOUSE', label: 'Arrived at Warehouse' },
+  { value: 'QUALITY_CHECKED', label: 'Quality Check Completed' },
+  { value: 'PACKAGED', label: 'Shipment Packaged' },
+  { value: 'DISPATCH_APPROVED', label: 'Dispatch Approved' },
+  { value: 'DISPATCHED', label: 'Dispatched Internationally' },
+  { value: 'IN_INTERNATIONAL_TRANSIT', label: 'In International Transit' },
+  { value: 'CUSTOMS_CLEARANCE', label: 'Customs Clearance' },
+  { value: 'INTL_OUT_FOR_DELIVERY', label: 'Out for Delivery (International)' },
+  { value: 'INTL_DELIVERED', label: 'Delivered' },
+  { value: 'FAILED', label: 'Failed' },
 ];
 
 export default function AllShipments() {
@@ -82,10 +80,11 @@ export default function AllShipments() {
               phone
             )
           `)
+          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED'])
           .order('created_at', { ascending: false });
 
         if (statusFilter !== 'all') {
-          query = query.eq('status', statusFilter as any);
+          query = query.eq('current_status', statusFilter as any);
         }
 
         if (typeFilter !== 'all') {
@@ -105,7 +104,7 @@ export default function AllShipments() {
 
     fetchShipments();
 
-    // Subscribe to real-time updates
+    // Subscribe to real-time updates filtered by relevant legs
     const channel = supabase
       .channel('admin-shipments-changes')
       .on(
@@ -113,13 +112,22 @@ export default function AllShipments() {
         {
           event: '*',
           schema: 'public',
-          table: 'shipments'
+          table: 'shipments',
+          filter: 'current_leg=in.(COUNTER,INTERNATIONAL,COMPLETED)'
         },
         () => {
           fetchShipments();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[AllShipments] Channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // Re-fetch on reconnection to catch missed events
+          fetchShipments();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -132,153 +140,148 @@ export default function AllShipments() {
     s.destination_country?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; className: string }> = {
-      draft: { label: 'Draft', className: 'bg-muted text-muted-foreground' },
-      payment_received: { label: 'Paid', className: 'bg-success/10 text-success' },
-      pickup_scheduled: { label: 'Pickup Scheduled', className: 'bg-blue-500/10 text-blue-600' },
-      out_for_pickup: { label: 'Out for Pickup', className: 'bg-blue-500/10 text-blue-600' },
-      picked_up: { label: 'Picked Up', className: 'bg-blue-500/10 text-blue-600' },
-      at_warehouse: { label: 'At Warehouse', className: 'bg-amber-500/10 text-amber-600' },
-      qc_in_progress: { label: 'QC In Progress', className: 'bg-amber-500/10 text-amber-600' },
-      qc_passed: { label: 'QC Passed', className: 'bg-success/10 text-success' },
-      qc_failed: { label: 'QC Failed', className: 'bg-destructive/10 text-destructive' },
-      pending_payment: { label: 'Pending Payment', className: 'bg-destructive/10 text-destructive' },
-      dispatched: { label: 'Dispatched', className: 'bg-purple-500/10 text-purple-600' },
-      in_transit: { label: 'In Transit', className: 'bg-primary/10 text-primary' },
-      delivered: { label: 'Delivered', className: 'bg-success/10 text-success' },
-    };
-    const cfg = config[status] || { label: status, className: 'bg-muted' };
-    return <Badge variant="outline" className={cfg.className}>{cfg.label}</Badge>;
-  };
-
   return (
     <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-typewriter font-bold">All Shipments</h1>
-          <p className="text-muted-foreground">View and manage all shipments</p>
-        </div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <h1 className="text-2xl font-bold text-white">All Shipments</h1>
+          <p className="text-gray-400">View and manage all shipments</p>
+        </motion.div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="flex flex-col sm:flex-row gap-3"
+        >
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tracking, recipient, or country..."
-              className="pl-10"
+              className="w-full pl-10 pr-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-1 focus:ring-red-500/20 focus:outline-none transition-colors text-sm"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
-              <Filter className="h-4 w-4 mr-2" />
+            <SelectTrigger className="w-[180px] bg-[#16161a] border-white/10 text-white">
+              <Filter className="h-4 w-4 mr-2 text-gray-400" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-[#16161a] border-white/10">
               {statusOptions.map(opt => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} className="text-gray-300 focus:bg-white/10 focus:text-white">
                   {opt.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[150px] bg-[#16161a] border-white/10 text-white">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="medicine">Medicine</SelectItem>
-              <SelectItem value="document">Document</SelectItem>
-              <SelectItem value="gift">Gift</SelectItem>
+            <SelectContent className="bg-[#16161a] border-white/10">
+              <SelectItem value="all" className="text-gray-300 focus:bg-white/10 focus:text-white">All Types</SelectItem>
+              <SelectItem value="medicine" className="text-gray-300 focus:bg-white/10 focus:text-white">Medicine</SelectItem>
+              <SelectItem value="document" className="text-gray-300 focus:bg-white/10 focus:text-white">Document</SelectItem>
+              <SelectItem value="gift" className="text-gray-300 focus:bg-white/10 focus:text-white">Gift</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </motion.div>
 
         {/* Stats */}
-        <div className="flex gap-4 overflow-x-auto pb-2">
-          <Badge variant="secondary" className="shrink-0">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="flex gap-3 overflow-x-auto pb-2"
+        >
+          <span className="shrink-0 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-white">
             Total: {filteredShipments.length}
-          </Badge>
-          <Badge variant="outline" className="shrink-0 bg-amber-500/10 text-amber-600">
-            Pending QC: {filteredShipments.filter(s => ['at_warehouse', 'qc_in_progress'].includes(s.status)).length}
-          </Badge>
-          <Badge variant="outline" className="shrink-0 bg-success/10 text-success">
-            Ready: {filteredShipments.filter(s => s.status === 'qc_passed').length}
-          </Badge>
-        </div>
+          </span>
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-amber-400">
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            Pending QC: {filteredShipments.filter(s => s.current_status === 'ARRIVED_AT_WAREHOUSE').length}
+          </span>
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-green-400">
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            Ready: {filteredShipments.filter(s => s.current_status === 'DISPATCH_APPROVED').length}
+          </span>
+        </motion.div>
 
         {/* Shipments List */}
-        <div className="space-y-2">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="space-y-3"
+        >
           {isLoading ? (
             Array(10).fill(0).map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full" />
+              <div key={i} className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
             ))
           ) : filteredShipments.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="font-semibold mb-1">No Shipments Found</h3>
-                <p className="text-muted-foreground text-sm">
-                  Try adjusting your filters or search query
-                </p>
-              </CardContent>
-            </Card>
+            <div className="bg-[#16161a] rounded-[2rem] border border-white/5 shadow-2xl py-12 text-center">
+              <Package className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+              <h3 className="font-semibold text-white mb-1">No Shipments Found</h3>
+              <p className="text-gray-500 text-sm">
+                Try adjusting your filters or search query
+              </p>
+            </div>
           ) : (
             filteredShipments.map((shipment) => (
-              <Card 
-                key={shipment.id} 
-                className="card-hover cursor-pointer"
+              <div
+                key={shipment.id}
+                className="bg-[#16161a] rounded-[2rem] border border-white/5 p-4 hover:bg-white/5 transition-all cursor-pointer"
                 onClick={() => router.push(`/admin/qc/${shipment.id}`)}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-lg shrink-0">
-                        {shipment.shipment_type === 'medicine' && '💊'}
-                        {shipment.shipment_type === 'document' && '📄'}
-                        {shipment.shipment_type === 'gift' && '🎁'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <p className="font-typewriter font-medium">
-                            {shipment.tracking_number || 'No tracking'}
-                          </p>
-                          {getStatusBadge(shipment.status)}
-                        </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          <span className="font-medium">{shipment.recipient_name}</span> → {shipment.destination_country}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          User: {shipment.profiles?.full_name || 'Unknown'} • {shipment.profiles?.email || 'No email'}
-                        </p>
-                      </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-lg shrink-0">
+                      {shipment.shipment_type === 'medicine' && '💊'}
+                      {shipment.shipment_type === 'document' && '📄'}
+                      {shipment.shipment_type === 'gift' && '🎁'}
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-medium">
-                        ₹{shipment.total_amount?.toLocaleString() || '0'}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="font-medium text-white">
+                          {shipment.tracking_number || 'No tracking'}
+                        </p>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 border border-white/10">
+                          <span className={`w-2 h-2 rounded-full ${getStatusDotColor(shipment.current_status)}`} />
+                          <span className="text-gray-300">{getStatusLabel(shipment.current_status)}</span>
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400 truncate">
+                        <span className="font-medium text-gray-300">{shipment.recipient_name}</span> → {shipment.destination_country}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(shipment.created_at).toLocaleDateString()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(shipment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        User: {shipment.profiles?.full_name || 'Unknown'} • {shipment.profiles?.email || 'No email'}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon" className="shrink-0">
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium text-white">
+                      ₹{shipment.total_amount?.toLocaleString() || '0'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(shipment.created_at).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(shipment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="shrink-0 text-gray-400 hover:text-white hover:bg-white/10">
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             ))
           )}
-        </div>
+        </motion.div>
       </div>
     </AdminLayout>
   );
 }
-

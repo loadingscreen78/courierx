@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { filterActiveShipments, filterDeliveredShipments } from '@/lib/utils/shipmentFilters';
@@ -8,6 +8,11 @@ export interface Shipment {
   tracking_number: string;
   shipment_type: 'medicine' | 'document' | 'gift';
   status: string;
+  current_status: string;
+  current_leg: string;
+  version: number;
+  domestic_awb: string | null;
+  international_awb: string | null;
   origin_address: string;
   destination_address: string;
   destination_country: string;
@@ -37,6 +42,7 @@ export function useShipments() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const versionMapRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!user) {
@@ -47,7 +53,7 @@ export function useShipments() {
 
     fetchShipments();
 
-    // Set up real-time subscription
+    // Set up real-time subscription with reconnection handling
     const subscription = supabase
       .channel('shipments_changes')
       .on(
@@ -58,11 +64,26 @@ export function useShipments() {
           table: 'shipments',
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
+        (payload) => {
+          // Ignore stale events where version is lower than currently known
+          if (payload.new && typeof (payload.new as any).version === 'number') {
+            const id = (payload.new as any).id;
+            const incomingVersion = (payload.new as any).version;
+            const knownVersion = versionMapRef.current.get(id);
+            if (knownVersion !== undefined && incomingVersion < knownVersion) return;
+          }
           fetchShipments();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[useShipments] Channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // Re-fetch on reconnection to catch missed events
+          fetchShipments();
+        }
+      });
 
     return () => {
       subscription.unsubscribe();
@@ -84,7 +105,13 @@ export function useShipments() {
 
       if (fetchError) throw fetchError;
 
-      setShipments(data || []);
+      setShipments((data as unknown as Shipment[]) || []);
+      // Track known versions for stale event filtering
+      for (const s of (data as unknown as Shipment[]) || []) {
+        if (s.id && typeof s.version === 'number') {
+          versionMapRef.current.set(s.id, s.version);
+        }
+      }
     } catch (err) {
       console.error('[useShipments] Error fetching shipments:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch shipments');
@@ -153,7 +180,7 @@ export async function getShipmentDetails(shipmentId: string): Promise<ShipmentWi
       .eq('shipment_id', shipmentId);
 
     return {
-      ...shipment,
+      ...(shipment as unknown as Shipment),
       medicine_items,
       shipment_documents: documents || [],
       shipment_addons: addons || [],

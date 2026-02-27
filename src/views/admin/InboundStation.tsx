@@ -2,10 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { AdminLayout } from '@/components/admin/layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { motion } from 'framer-motion';
 import { 
   ScanLine, 
   Search, 
@@ -21,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useRouter } from 'next/navigation';
+import { sendStatusNotification } from '@/lib/email/notify';
 
 interface FoundShipment {
   id: string;
@@ -133,6 +131,9 @@ export default function InboundStation() {
         description: 'Shipment marked as arrived at warehouse.',
       });
 
+      // Fire-and-forget email notification
+      sendStatusNotification(foundShipment.id, 'at_warehouse').catch(() => {});
+
       // Reset for next scan
       setSearchQuery('');
       setFoundShipment(null);
@@ -161,161 +162,181 @@ export default function InboundStation() {
     <AdminLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-2xl font-typewriter font-bold">Inbound Station</h1>
-          <p className="text-muted-foreground">Scan or enter domestic AWB to receive packages</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="text-center"
+        >
+          <h1 className="text-2xl font-typewriter font-bold text-white">Inbound Station</h1>
+          <p className="text-gray-400">Scan or enter domestic AWB to receive packages</p>
+        </motion.div>
 
         {/* Scanner Input - Prominent */}
-        <Card className="border-2 border-dashed border-primary/30">
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center gap-6">
-              <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <ScanLine className="h-10 w-10 text-primary" />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="bg-[#16161a] rounded-[2rem] border-2 border-dashed border-red-500/30 p-8"
+        >
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-20 h-20 rounded-2xl bg-red-500/10 flex items-center justify-center">
+              <ScanLine className="h-10 w-10 text-red-500" />
+            </div>
+            
+            <div className="w-full max-w-md space-y-4">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                <input
+                  ref={inputRef}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Scan barcode or enter AWB number..."
+                  className="w-full bg-white/5 border border-white/10 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-1 focus:ring-red-500/20 focus:outline-none pl-12 h-14 text-lg text-center rounded-lg font-typewriter"
+                  autoComplete="off"
+                />
               </div>
               
-              <div className="w-full max-w-md space-y-4">
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    ref={inputRef}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Scan barcode or enter AWB number..."
-                    className="pl-12 h-14 text-lg font-typewriter text-center"
-                    autoComplete="off"
-                  />
-                </div>
-                
-                <Button 
-                  onClick={handleSearch} 
-                  className="w-full h-12 btn-press"
-                  disabled={isSearching || !searchQuery.trim()}
-                >
-                  {isSearching ? 'Searching...' : 'Search Shipment'}
-                </Button>
-              </div>
-
-              <p className="text-sm text-muted-foreground">
-                Scan the domestic courier barcode (Delhivery/BlueDart AWB) or enter manually
-              </p>
+              <button 
+                onClick={handleSearch} 
+                className="bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all w-full h-12 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSearching || !searchQuery.trim()}
+              >
+                {isSearching ? 'Searching...' : 'Search Shipment'}
+              </button>
             </div>
-          </CardContent>
-        </Card>
+
+            <p className="text-sm text-gray-400">
+              Scan the domestic courier barcode (Delhivery/BlueDart AWB) or enter manually
+            </p>
+          </div>
+        </motion.div>
 
         {/* Search Result */}
         {searchResult === 'found' && foundShipment && (
-          <Card className="border-success/50 bg-success/5">
-            <CardHeader className="pb-3">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="bg-[#16161a] rounded-[2rem] border border-green-500/30 p-6"
+          >
+            <div className="pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-success" />
+                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
-                  <CardTitle className="font-typewriter">Shipment Found</CardTitle>
-                  <CardDescription>
+                  <h3 className="text-white font-bold font-typewriter">Shipment Found</h3>
+                  <p className="text-gray-400 text-sm">
                     {foundShipment.tracking_number || foundShipment.domestic_tracking_id}
-                  </CardDescription>
+                  </p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </div>
+            <div className="space-y-4">
               {/* Shipment Details */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-start gap-3">
-                  <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <User className="h-5 w-5 text-gray-500 mt-0.5" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Recipient</p>
-                    <p className="font-medium">{foundShipment.recipient_name}</p>
+                    <p className="text-sm text-gray-500">Recipient</p>
+                    <p className="text-white font-medium">{foundShipment.recipient_name}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Phone className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <Phone className="h-5 w-5 text-gray-500 mt-0.5" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="font-medium">{foundShipment.recipient_phone || 'N/A'}</p>
+                    <p className="text-sm text-gray-500">Phone</p>
+                    <p className="text-white font-medium">{foundShipment.recipient_phone || 'N/A'}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <MapPin className="h-5 w-5 text-gray-500 mt-0.5" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Destination</p>
-                    <p className="font-medium">{foundShipment.destination_country}</p>
+                    <p className="text-sm text-gray-500">Destination</p>
+                    <p className="text-white font-medium">{foundShipment.destination_country}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Package className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <Package className="h-5 w-5 text-gray-500 mt-0.5" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Type</p>
-                    <Badge variant="outline" className="capitalize">
+                    <p className="text-sm text-gray-500">Type</p>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-white/10 text-white capitalize">
                       {foundShipment.shipment_type}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t">
-                <Button 
+              <div className="flex gap-3 pt-4 border-t border-white/10">
+                <button 
                   onClick={handleMarkArrived}
-                  className="flex-1 btn-press bg-success hover:bg-success/90"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-[0_0_15px_rgba(34,197,94,0.3)] h-10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={isMarking || foundShipment.status === 'at_warehouse'}
                 >
                   {isMarking ? 'Updating...' : foundShipment.status === 'at_warehouse' ? 'Already Received' : 'Mark as Arrived'}
-                </Button>
-                <Button 
-                  variant="outline"
+                </button>
+                <button 
                   onClick={() => router.push(`/admin/qc/${foundShipment.id}`)}
-                  className="btn-press"
+                  className="bg-white/10 border border-white/10 text-white hover:bg-white/20 rounded-lg font-bold px-4 h-10 transition-all inline-flex items-center gap-2"
                 >
                   Go to QC
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </motion.div>
         )}
 
         {/* Not Found State */}
         {searchResult === 'not_found' && (
-          <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-destructive/20 flex items-center justify-center">
-                  <XCircle className="h-6 w-6 text-destructive" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold">Unknown Shipment</h3>
-                  <p className="text-sm text-muted-foreground">
-                    No shipment found with AWB: {searchQuery}
-                  </p>
-                </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="bg-[#16161a] rounded-[2rem] border border-red-500/30 p-6"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                <XCircle className="h-6 w-6 text-red-500" />
               </div>
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-3">Try searching by:</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => {
+              <div className="flex-1">
+                <h3 className="text-white font-semibold">Unknown Shipment</h3>
+                <p className="text-sm text-gray-400">
+                  No shipment found with AWB: {searchQuery}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <p className="text-sm text-gray-400 mb-3">Try searching by:</p>
+              <div className="flex gap-2">
+                <button
+                  className="bg-white/10 border border-white/10 text-white hover:bg-white/20 rounded-lg font-bold px-3 py-1.5 text-sm transition-all"
+                  onClick={() => {
                     setSearchQuery('');
                     setSearchResult(null);
                     inputRef.current?.focus();
-                  }}>
-                    Customer Phone
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => {
+                  }}
+                >
+                  Customer Phone
+                </button>
+                <button
+                  className="bg-white/10 border border-white/10 text-white hover:bg-white/20 rounded-lg font-bold px-3 py-1.5 text-sm transition-all"
+                  onClick={() => {
                     setSearchQuery('');
                     setSearchResult(null);
                     inputRef.current?.focus();
-                  }}>
-                    Booking ID
-                  </Button>
-                </div>
+                  }}
+                >
+                  Booking ID
+                </button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </motion.div>
         )}
       </div>
     </AdminLayout>
   );
 }
-

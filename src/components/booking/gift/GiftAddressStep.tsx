@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { MapPin, User, Phone, Home, Globe, Upload, X, FileText, Info, CheckCircle2, Loader2, Search, Check, ChevronsUpDown } from 'lucide-react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { lookupPincode, INDIAN_STATES, CITIES_BY_STATE } from '@/lib/pincode-lookup';
+import { COUNTRY_DATA, getCountryByCode, validatePhone } from '@/lib/country-data';
+import { lookupZipcode, isZipLookupSupported } from '@/lib/zipcode-lookup';
 import {
   Command,
   CommandEmpty,
@@ -28,113 +30,8 @@ interface GiftAddressStepProps {
   onUpdate: (updates: Partial<GiftBookingData>) => void;
 }
 
-// Comprehensive list of countries sorted alphabetically
-const COUNTRIES = [
-  { code: 'AF', name: 'Afghanistan' },
-  { code: 'AL', name: 'Albania' },
-  { code: 'DZ', name: 'Algeria' },
-  { code: 'AR', name: 'Argentina' },
-  { code: 'AM', name: 'Armenia' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'AT', name: 'Austria' },
-  { code: 'AZ', name: 'Azerbaijan' },
-  { code: 'BH', name: 'Bahrain' },
-  { code: 'BD', name: 'Bangladesh' },
-  { code: 'BY', name: 'Belarus' },
-  { code: 'BE', name: 'Belgium' },
-  { code: 'BT', name: 'Bhutan' },
-  { code: 'BR', name: 'Brazil' },
-  { code: 'BN', name: 'Brunei' },
-  { code: 'BG', name: 'Bulgaria' },
-  { code: 'KH', name: 'Cambodia' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'CL', name: 'Chile' },
-  { code: 'CN', name: 'China' },
-  { code: 'CO', name: 'Colombia' },
-  { code: 'HR', name: 'Croatia' },
-  { code: 'CY', name: 'Cyprus' },
-  { code: 'CZ', name: 'Czech Republic' },
-  { code: 'DK', name: 'Denmark' },
-  { code: 'EG', name: 'Egypt' },
-  { code: 'EE', name: 'Estonia' },
-  { code: 'ET', name: 'Ethiopia' },
-  { code: 'FI', name: 'Finland' },
-  { code: 'FR', name: 'France' },
-  { code: 'GE', name: 'Georgia' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'GH', name: 'Ghana' },
-  { code: 'GR', name: 'Greece' },
-  { code: 'HK', name: 'Hong Kong' },
-  { code: 'HU', name: 'Hungary' },
-  { code: 'IS', name: 'Iceland' },
-  { code: 'ID', name: 'Indonesia' },
-  { code: 'IR', name: 'Iran' },
-  { code: 'IQ', name: 'Iraq' },
-  { code: 'IE', name: 'Ireland' },
-  { code: 'IL', name: 'Israel' },
-  { code: 'IT', name: 'Italy' },
-  { code: 'JP', name: 'Japan' },
-  { code: 'JO', name: 'Jordan' },
-  { code: 'KZ', name: 'Kazakhstan' },
-  { code: 'KE', name: 'Kenya' },
-  { code: 'KW', name: 'Kuwait' },
-  { code: 'KG', name: 'Kyrgyzstan' },
-  { code: 'LA', name: 'Laos' },
-  { code: 'LV', name: 'Latvia' },
-  { code: 'LB', name: 'Lebanon' },
-  { code: 'LT', name: 'Lithuania' },
-  { code: 'LU', name: 'Luxembourg' },
-  { code: 'MO', name: 'Macau' },
-  { code: 'MY', name: 'Malaysia' },
-  { code: 'MV', name: 'Maldives' },
-  { code: 'MT', name: 'Malta' },
-  { code: 'MU', name: 'Mauritius' },
-  { code: 'MX', name: 'Mexico' },
-  { code: 'MD', name: 'Moldova' },
-  { code: 'MN', name: 'Mongolia' },
-  { code: 'MA', name: 'Morocco' },
-  { code: 'MM', name: 'Myanmar' },
-  { code: 'NP', name: 'Nepal' },
-  { code: 'NL', name: 'Netherlands' },
-  { code: 'NZ', name: 'New Zealand' },
-  { code: 'NG', name: 'Nigeria' },
-  { code: 'NO', name: 'Norway' },
-  { code: 'OM', name: 'Oman' },
-  { code: 'PK', name: 'Pakistan' },
-  { code: 'PA', name: 'Panama' },
-  { code: 'PH', name: 'Philippines' },
-  { code: 'PL', name: 'Poland' },
-  { code: 'PT', name: 'Portugal' },
-  { code: 'QA', name: 'Qatar' },
-  { code: 'RO', name: 'Romania' },
-  { code: 'RU', name: 'Russia' },
-  { code: 'SA', name: 'Saudi Arabia' },
-  { code: 'RS', name: 'Serbia' },
-  { code: 'SG', name: 'Singapore' },
-  { code: 'SK', name: 'Slovakia' },
-  { code: 'SI', name: 'Slovenia' },
-  { code: 'ZA', name: 'South Africa' },
-  { code: 'KR', name: 'South Korea' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'LK', name: 'Sri Lanka' },
-  { code: 'SE', name: 'Sweden' },
-  { code: 'CH', name: 'Switzerland' },
-  { code: 'TW', name: 'Taiwan' },
-  { code: 'TJ', name: 'Tajikistan' },
-  { code: 'TZ', name: 'Tanzania' },
-  { code: 'TH', name: 'Thailand' },
-  { code: 'TR', name: 'Turkey' },
-  { code: 'TM', name: 'Turkmenistan' },
-  { code: 'UA', name: 'Ukraine' },
-  { code: 'AE', name: 'United Arab Emirates' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'US', name: 'United States' },
-  { code: 'UZ', name: 'Uzbekistan' },
-  { code: 'VN', name: 'Vietnam' },
-  { code: 'YE', name: 'Yemen' },
-  { code: 'ZM', name: 'Zambia' },
-  { code: 'ZW', name: 'Zimbabwe' },
-];
+// Use comprehensive country list from shared data
+const COUNTRIES = COUNTRY_DATA.map(c => ({ code: c.code, name: c.name }));
 
 export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   const { lightTap } = useHaptics();
@@ -144,6 +41,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   const [passportBackPreview, setPassportBackPreview] = useState<string | null>(null);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [pincodeError, setPincodeError] = useState<string | null>(null);
+  const [zipcodeLoading, setZipcodeLoading] = useState(false);
+  const [zipcodeError, setZipcodeError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
@@ -153,9 +53,13 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
     ? CITIES_BY_STATE[data.pickupAddress.state] || []
     : [];
 
-  // Get selected country name
+  // Get selected country info with phone/postal rules
   const selectedCountry = useMemo(() =>
     COUNTRIES.find(c => c.code === data.consigneeAddress.country),
+    [data.consigneeAddress.country]
+  );
+  const countryInfo = useMemo(() =>
+    getCountryByCode(data.consigneeAddress.country),
     [data.consigneeAddress.country]
   );
 
@@ -195,6 +99,75 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
 
   const updateConsigneeAddress = (field: string, value: string) => {
     onUpdate({ consigneeAddress: { ...data.consigneeAddress, [field]: value } });
+  };
+
+  // Handle ZIP/Postal code change with auto-fill for consignee
+  const handleZipcodeChange = async (zipcode: string) => {
+    const cc = data.consigneeAddress.country;
+    const postalRule = countryInfo?.postal;
+    const maxLen = postalRule?.maxLength || 10;
+    const cleanZip = zipcode.slice(0, maxLen);
+    updateConsigneeAddress('zipcode', cleanZip);
+    setZipcodeError(null);
+
+    // Only auto-lookup if country is selected and zip looks complete enough
+    if (!cc || cleanZip.length < 3) return;
+    if (postalRule && !postalRule.regex.test(cleanZip)) return;
+
+    if (isZipLookupSupported(cc)) {
+      setZipcodeLoading(true);
+      try {
+        const result = await lookupZipcode(cleanZip, cc);
+        if (result) {
+          onUpdate({
+            consigneeAddress: {
+              ...data.consigneeAddress,
+              zipcode: cleanZip,
+              city: result.city,
+            }
+          });
+        }
+      } catch {
+        // Silent fail - user can still type manually
+      } finally {
+        setZipcodeLoading(false);
+      }
+    }
+  };
+
+  // Handle consignee phone with country dial code auto-prefix
+  const handleConsigneePhoneChange = (phone: string) => {
+    updateConsigneeAddress('phone', phone);
+    setPhoneError(null);
+  };
+
+  const handleConsigneePhoneBlur = () => {
+    const phone = data.consigneeAddress.phone;
+    const cc = data.consigneeAddress.country;
+    if (!phone || !cc) return;
+    // Auto-prefix dial code if user forgot
+    if (countryInfo && !phone.startsWith('+') && phone.length > 3) {
+      updateConsigneeAddress('phone', `${countryInfo.phone.dialCode} ${phone}`);
+    }
+    // Validate
+    if (cc && phone.length > 3 && !validatePhone(phone, cc)) {
+      setPhoneError(`Expected format: ${countryInfo?.phone.format || 'international format'}`);
+    }
+  };
+
+  // When country changes, reset phone prefix hint and clear zip auto-fill
+  const handleCountryChange = (countryCode: string) => {
+    const info = getCountryByCode(countryCode);
+    setPhoneError(null);
+    setZipcodeError(null);
+    onUpdate({
+      consigneeAddress: {
+        ...data.consigneeAddress,
+        country: countryCode,
+        // Auto-prefix phone with dial code if phone is empty
+        phone: data.consigneeAddress.phone || (info ? `${info.phone.dialCode} ` : ''),
+      }
+    });
   };
 
   const handleFileUpload = (file: File | null, type: 'front' | 'back') => {
@@ -398,12 +371,20 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <DebouncedInput
                   type="tel"
-                  placeholder="With country code (e.g., +971 50 123 4567)"
+                  placeholder={countryInfo?.phone.example || 'With country code (e.g., +971 50 123 4567)'}
                   value={data.consigneeAddress.phone}
-                  onChange={(value) => updateConsigneeAddress('phone', value)}
-                  className="input-premium pl-10"
+                  onChange={handleConsigneePhoneChange}
+                  className={cn("input-premium pl-10", phoneError && "border-destructive")}
                 />
               </div>
+              {countryInfo && (
+                <p className="text-xs text-muted-foreground">
+                  Format: {countryInfo.phone.format}
+                </p>
+              )}
+              {phoneError && (
+                <p className="text-xs text-destructive">{phoneError}</p>
+              )}
             </div>
           </div>
 
@@ -453,7 +434,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                           key={country.code}
                           value={country.name}
                           onSelect={() => {
-                            updateConsigneeAddress('country', country.code);
+                            handleCountryChange(country.code);
                             setCountryOpen(false);
                             lightTap();
                           }}
@@ -496,21 +477,33 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label>{countryInfo?.postal.label || 'ZIP/Postal Code'} *</Label>
+              <div className="relative">
+                <DebouncedInput
+                  placeholder={countryInfo?.postal.example || 'ZIP code'}
+                  value={data.consigneeAddress.zipcode}
+                  onChange={handleZipcodeChange}
+                  maxLength={countryInfo?.postal.maxLength || 10}
+                  className="input-premium font-typewriter pr-10"
+                />
+                {zipcodeLoading && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                {!zipcodeLoading && data.consigneeAddress.zipcode && data.consigneeAddress.city && !zipcodeError && (
+                  <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {zipcodeError && (
+                <p className="text-xs text-destructive">{zipcodeError}</p>
+              )}
+            </div>
+            <div className="space-y-2">
               <Label>City *</Label>
               <DebouncedInput
-                placeholder="City"
+                placeholder="City (auto-filled from postal code)"
                 value={data.consigneeAddress.city}
                 onChange={(value) => updateConsigneeAddress('city', value)}
                 className="input-premium"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>ZIP/Postal Code *</Label>
-              <DebouncedInput
-                placeholder="ZIP code"
-                value={data.consigneeAddress.zipcode}
-                onChange={(value) => updateConsigneeAddress('zipcode', value)}
-                className="input-premium font-typewriter"
               />
             </div>
           </div>

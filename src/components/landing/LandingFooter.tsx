@@ -23,13 +23,15 @@ const quickLinks = [
 ];
 
 const supportLinks = [
-  { label: 'Help Center', href: '#' },
-  { label: 'FAQs', href: '#' },
   { label: 'Contact Us', href: '/contact' },
-  { label: 'Shipping Policy', href: '/shipping-policy' },
-  { label: 'Refund Policy', href: '/refund-policy' },
+  { label: 'Terms of Service', href: '/terms' },
   { label: 'Privacy Policy', href: '/privacy-policy' },
-  { label: 'Terms & Conditions', href: '/terms' },
+  { label: 'Refund & Cancellation', href: '/refund-policy' },
+  { label: 'Shipping & Compliance', href: '/shipping-policy' },
+  { label: 'Prohibited Items', href: '/prohibited-items' },
+  { label: 'KYC & Verification', href: '/kyc-policy' },
+  { label: 'Chargeback Policy', href: '/chargeback-policy' },
+  { label: 'Data Retention', href: '/data-retention-policy' },
 ];
 
 export const LandingFooter = () => {
@@ -136,31 +138,43 @@ export const LandingFooter = () => {
                 <li className="flex items-start gap-3 group">
                   <MapPin className="h-5 w-5 text-paper-white/60 mt-0.5 group-hover:text-coke-red transition-colors" />
                   <span className="text-paper-white/60 text-sm">
-                    123 Business Park, Sector 15<br />
-                    Gurugram, Haryana 122001
+                    A/1801, Gagan Unnati, Kondhwa BK,<br />
+                    Pune – 411048, Maharashtra, India
                   </span>
                 </li>
                 <li>
                   <motion.a
-                    href="tel:+911234567890"
+                    href="tel:+917008368628"
                     whileHover={{ x: 4 }}
                     className="flex items-center gap-3 group"
                   >
                     <Phone className="h-5 w-5 text-paper-white/60 group-hover:text-coke-red transition-colors" />
                     <span className="text-paper-white/60 group-hover:text-paper-white text-sm transition-colors">
-                      +91 123 456 7890
+                      +91 7008368628 (East India)
                     </span>
                   </motion.a>
                 </li>
                 <li>
                   <motion.a
-                    href="mailto:support@courierx.in"
+                    href="tel:+918484050057"
+                    whileHover={{ x: 4 }}
+                    className="flex items-center gap-3 group"
+                  >
+                    <Phone className="h-5 w-5 text-paper-white/60 group-hover:text-coke-red transition-colors" />
+                    <span className="text-paper-white/60 group-hover:text-paper-white text-sm transition-colors">
+                      +91 8484050057 (West India)
+                    </span>
+                  </motion.a>
+                </li>
+                <li>
+                  <motion.a
+                    href="mailto:info@courierx.in"
                     whileHover={{ x: 4 }}
                     className="flex items-center gap-3 group"
                   >
                     <Mail className="h-5 w-5 text-paper-white/60 group-hover:text-coke-red transition-colors" />
                     <span className="text-paper-white/60 group-hover:text-paper-white text-sm transition-colors">
-                      support@courierx.in
+                      info@courierx.in
                     </span>
                   </motion.a>
                 </li>

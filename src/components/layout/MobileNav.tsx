@@ -17,6 +17,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useHaptics } from '@/hooks/useHaptics';
 import { MobileMoreDrawer } from './MobileMoreDrawer';
+import { deleteDraftsByType } from '@/lib/drafts/draftService';
+import type { Draft } from '@/lib/drafts/draftService';
 import {
   Sheet,
   SheetContent,
@@ -116,10 +118,11 @@ export const MobileNav = () => {
   const router = useRouter();
   const { mediumTap } = useHaptics();
 
-  const handleShipmentSelect = (href: string) => {
+  const handleShipmentSelect = (href: string, draftType: Draft['type']) => {
     mediumTap();
+    deleteDraftsByType(draftType);
     setShipDrawerOpen(false);
-    router.push(href);
+    router.push(href + '?new=1');
   };
 
   return (
@@ -171,7 +174,7 @@ export const MobileNav = () => {
             {shipmentOptions.map((option) => (
               <button
                 key={option.id}
-                onClick={() => handleShipmentSelect(option.href)}
+                onClick={() => handleShipmentSelect(option.href, option.id as Draft['type'])}
                 className="w-full flex items-start gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors btn-press text-left"
               >
                 <div className={cn("p-3 rounded-xl", option.color)}>

@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { VerificationBadge } from '@/components/ui/verification-badge';
 import { useHaptics } from '@/hooks/useHaptics';
 import logoSymbol from '@/assets/logo-symbol.jpeg';
+import { useShipments } from '@/hooks/useShipments';
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -77,6 +78,7 @@ export const DesktopSidebar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { mediumTap, lightTap } = useHaptics();
+  const { activeShipments } = useShipments();
 
   const handleSignOut = async () => {
     mediumTap();
@@ -141,7 +143,7 @@ export const DesktopSidebar = () => {
           label="Track Shipments" 
           href="/shipments"
           isActive={pathname === '/shipments'}
-          badge="3"
+          badge={activeShipments.length > 0 ? String(activeShipments.length) : undefined}
         />
         <NavItem 
           icon={<Package className="h-5 w-5" />} 

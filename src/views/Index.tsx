@@ -23,6 +23,9 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { useShipments, Shipment } from '@/hooks/useShipments';
+import { useAddresses } from '@/hooks/useAddresses';
+import { getStatusLabel, getStatusDotColor, getLegLabel } from '@/lib/shipment-lifecycle/statusLabelMap';
+import { ShipmentStatus, ShipmentLeg } from '@/lib/shipment-lifecycle/types';
 import { KycPromptBanner } from '@/components/dashboard/KycPromptBanner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -105,21 +108,9 @@ const ShipmentCard = ({ shipment, index }: { shipment: Shipment; index: number }
   const typeIcons = { medicine: Pill, document: FileText, gift: Gift };
   const Icon = typeIcons[shipment.shipment_type as keyof typeof typeIcons] || Package;
   
-  const statusConfig: Record<string, { label: string }> = {
-    draft: { label: 'Draft' },
-    confirmed: { label: 'Confirmed' },
-    picked_up: { label: 'Picked Up' },
-    at_warehouse: { label: 'At Warehouse' },
-    qc_passed: { label: 'QC Passed' },
-    qc_failed: { label: 'QC Failed' },
-    in_transit: { label: 'In Transit' },
-    customs_clearance: { label: 'At Customs' },
-    out_for_delivery: { label: 'Out for Delivery' },
-    delivered: { label: 'Delivered' },
-    cancelled: { label: 'Cancelled' },
-  };
-
-  const status = statusConfig[shipment.status] || { label: shipment.status };
+  const statusLabel = getStatusLabel(shipment.current_status as ShipmentStatus);
+  const statusDotColor = getStatusDotColor(shipment.current_status as ShipmentStatus);
+  const legLabel = getLegLabel(shipment.current_leg as ShipmentLeg);
 
   // Extract city from destination address
   const getDestinationCity = () => {
@@ -169,8 +160,9 @@ const ShipmentCard = ({ shipment, index }: { shipment: Shipment; index: number }
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">{shipment.tracking_number}</p>
                 </div>
               </div>
-              <Badge className="bg-coke-red text-white border-0 rounded-full px-3 py-1 text-xs font-medium">
-                {status.label}
+              <Badge className="bg-coke-red text-white border-0 rounded-full px-3 py-1 text-xs font-medium flex items-center gap-1.5">
+                <span className={`inline-block w-2 h-2 rounded-full ${statusDotColor}`} />
+                {statusLabel}
               </Badge>
             </div>
 
@@ -191,7 +183,7 @@ const ShipmentCard = ({ shipment, index }: { shipment: Shipment; index: number }
             <div className="flex items-center justify-between text-sm mb-4">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">{status.label}</span>
+                <span className="text-muted-foreground">{legLabel}</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -225,6 +217,7 @@ const Index = () => {
   const { profile } = useAuth();
   const { balance } = useWallet();
   const { activeShipments, deliveredShipments, loading } = useShipments();
+  const { addresses } = useAddresses();
   
   const displayName = profile?.full_name?.split(' ')[0] || 'there';
   const isKycComplete = profile?.aadhaar_verified;
@@ -304,7 +297,7 @@ const Index = () => {
           />
           <StatCard
             icon={Box}
-            value={3}
+            value={addresses.length}
             label="Saved Addresses"
             href="/vault"
           />

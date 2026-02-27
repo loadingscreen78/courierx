@@ -38,3 +38,18 @@ build/
 
 # Bun
 bun.lockb
+
+# SQL migration files (backend only)
+*.sql
+supabase/
+
+# Documentation/notes (not needed for deployment)
+*.md
+!README.md
+
+# Test/migration scripts
+test-database-setup.js
+run-document-migration.js
+
+# Kiro specs
+.kiro/

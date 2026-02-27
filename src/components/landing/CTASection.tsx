@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Phone, Mail, MessageCircle } from 'lucide-react';
+import { ArrowRight, Phone, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { AnimatedSection } from './AnimatedSection';
@@ -9,25 +9,24 @@ import { motion } from 'framer-motion';
 const contactOptions = [
   {
     icon: Phone,
-    title: 'Call Us',
-    subtitle: '+91 123 456 7890',
-    href: 'tel:+911234567890',
+    title: 'East India',
+    subtitle: '+91 7008368628',
+    href: 'tel:+917008368628',
+    iconBg: 'bg-paper-white/10',
+  },
+  {
+    icon: Phone,
+    title: 'West India',
+    subtitle: '+91 8484050057',
+    href: 'tel:+918484050057',
     iconBg: 'bg-paper-white/10',
   },
   {
     icon: Mail,
     title: 'Email Support',
-    subtitle: 'support@courierx.in',
-    href: 'mailto:support@courierx.in',
+    subtitle: 'info@courierx.in',
+    href: 'mailto:info@courierx.in',
     iconBg: 'bg-paper-white/10',
-  },
-  {
-    icon: MessageCircle,
-    title: 'WhatsApp',
-    subtitle: 'Chat with us 24/7',
-    href: 'https://wa.me/911234567890',
-    iconBg: 'bg-candlestick-green/20',
-    iconColor: 'text-candlestick-green',
   },
 ];
 

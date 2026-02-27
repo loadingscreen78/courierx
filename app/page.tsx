@@ -16,10 +16,9 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Show loader long enough to see the full animation
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 2500);
+    }, 1400);
 
     return () => clearTimeout(timer);
   }, []);
@@ -27,7 +26,7 @@ export default function HomePage() {
   return (
     <div suppressHydrationWarning>
       <AppLoader isLoading={isLoading} />
-      <div className="min-h-screen flex flex-col bg-background">
+      <div className="min-h-screen flex flex-col bg-background no-animate">
         <LandingHeader />
         <main className="flex-1">
           <HeroSection />

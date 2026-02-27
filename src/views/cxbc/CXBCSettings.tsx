@@ -675,9 +675,9 @@ const CXBCSettings = () => {
                 </a>
               </Button>
               <Button variant="outline" className="flex-1" asChild>
-                <a href="tel:+919876543210">
+                <a href="tel:+917008368628">
                   <Phone className="h-4 w-4 mr-2" />
-                  +91 98765 43210
+                  +91 7008368628
                 </a>
               </Button>
             </div>

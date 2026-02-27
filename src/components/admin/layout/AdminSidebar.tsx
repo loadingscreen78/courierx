@@ -16,7 +16,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import logoMain from '@/assets/logo-main.jpeg';
 
 const navItems = [
   { 
@@ -84,18 +83,23 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
   const sidebarContent = (
     <>
       {/* Header */}
-      <div className="p-4 border-b border-[hsl(200,15%,30%)]">
+      <div className="p-6 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <img src={logoMain.src} alt="CourierX" className="h-10 w-10 rounded-lg" />
+          <div className="bg-red-600 p-1.5 rounded-lg shadow-lg shadow-red-900/20">
+            <Package className="text-white" size={24} />
+          </div>
           <div>
-            <h1 className="font-typewriter font-bold text-lg">CourierX</h1>
-            <p className="text-xs text-[hsl(50,20%,70%)]">Warehouse OS</p>
+            <h1 className="text-xl font-black tracking-tight">
+              <span className="text-white">Courier</span>
+              <span className="text-red-500 text-sm align-top italic ml-0.5">X</span>
+            </h1>
+            <p className="text-xs text-gray-500">Warehouse OS</p>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 mt-4 px-3 space-y-1 overflow-y-auto">
         {navItems
           .filter((item) => !item.adminOnly || isAdmin)
           .map((item) => {
@@ -109,10 +113,10 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
                 href={item.href}
                 onClick={handleNavClick}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+                  'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-[hsl(0,98%,48%)] text-white shadow-lg'
-                    : 'text-[hsl(50,20%,80%)] hover:bg-[hsl(200,18%,28%)] hover:text-white'
+                    ? 'text-red-500 bg-red-500/10 border-r-4 border-red-500'
+                    : 'text-gray-400 hover:bg-white/10 hover:text-white'
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -123,10 +127,10 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
       </nav>
 
       {/* Footer */}
-      <div className="p-3 border-t border-[hsl(200,15%,30%)]">
+      <div className="p-3 border-t border-white/5">
         <Button
           variant="ghost"
-          className="w-full justify-start text-[hsl(50,20%,70%)] hover:bg-[hsl(200,18%,28%)] hover:text-white"
+          className="w-full justify-start text-gray-400 hover:bg-white/10 hover:text-white"
           onClick={handleSignOut}
         >
           <LogOut className="h-5 w-5 mr-3" />
@@ -138,16 +142,15 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
 
   if (isMobile) {
     return (
-      <div className="h-full flex flex-col bg-gradient-to-b from-[hsl(200,18%,20%)] to-[hsl(200,18%,16%)] text-[hsl(50,20%,95%)]">
+      <div className="h-full flex flex-col bg-[#16161a] text-white">
         {sidebarContent}
       </div>
     );
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 flex flex-col bg-gradient-to-b from-[hsl(200,18%,20%)] to-[hsl(200,18%,16%)] text-[hsl(50,20%,95%)] border-r border-[hsl(200,15%,30%)] z-40">
+    <aside className="fixed left-0 top-0 h-screen w-64 flex flex-col bg-[#16161a] text-white border-r border-white/5 z-40">
       {sidebarContent}
     </aside>
   );
 };
-

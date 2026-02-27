@@ -1,36 +1,36 @@
-import { MessageCircle, Mail, Phone, ExternalLink } from 'lucide-react';
+import { Mail, Phone, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 const contactOptions = [
   {
-    icon: MessageCircle,
-    title: 'WhatsApp Support',
-    description: 'Chat with us instantly for quick resolutions',
-    action: 'Open WhatsApp',
-    href: 'https://wa.me/919876543210?text=Hi%2C%20I%20need%20help%20with%20my%20CourierX%20shipment',
-    available: 'Available 24/7',
-    responseTime: 'Instant response',
+    icon: Phone,
+    title: 'East India Support',
+    description: 'Speak directly with our Eastern India team',
+    action: 'Call Now',
+    href: 'tel:+917008368628',
+    available: '10 AM - 8 PM IST',
+    responseTime: '+91 7008368628',
     accent: true,
+  },
+  {
+    icon: Phone,
+    title: 'West India Support',
+    description: 'Speak directly with our Western India team',
+    action: 'Call Now',
+    href: 'tel:+918484050057',
+    available: '10 AM - 8 PM IST',
+    responseTime: '+91 8484050057',
+    accent: false,
   },
   {
     icon: Mail,
     title: 'Email Support',
     description: 'Detailed queries and documentation requests',
     action: 'Send Email',
-    href: 'mailto:support@courierx.in?subject=Support%20Request',
+    href: 'mailto:info@courierx.in?subject=Support%20Request',
     available: 'Always available',
-    responseTime: 'Response within 4 hours',
-    accent: false,
-  },
-  {
-    icon: Phone,
-    title: 'Phone Support',
-    description: 'Speak directly with our support team',
-    action: 'Call Now',
-    href: 'tel:+919876543210',
-    available: '10 AM - 8 PM IST',
-    responseTime: 'Mon - Sat',
+    responseTime: 'info@courierx.in',
     accent: false,
   },
 ];

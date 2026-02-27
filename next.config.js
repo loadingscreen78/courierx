@@ -77,6 +77,16 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Prevent stale HTML pages from being served by the browser cache
+        source: '/((?!_next/static|_next/image|fonts|favicon.ico).*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      },
+      {
         source: '/:path*',
         headers: [
           {

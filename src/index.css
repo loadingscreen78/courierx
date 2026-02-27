@@ -168,35 +168,18 @@
     @apply bg-destructive/20 text-foreground;
   }
 
-  /* Disable animations globally to prevent flickering, 
-     but allow specific loader and game animations */
-  *:not(.truckBody):not(.road):not(.road::before):not(.road::after):not(.lampPost):not(.cx-404-container):not(.cx-404-container *):not(canvas),
-  *:not(.truckBody):not(.road):not(.lampPost):not(.cx-404-container):not(.cx-404-container *)::before,
-  *:not(.truckBody):not(.road):not(.lampPost):not(.cx-404-container):not(.cx-404-container *)::after {
+  /* Disable flickering animations on page content only.
+     Loader (.app-loader), 404 game (.cx-404-container), and admin (.admin-dark) are excluded. */
+  .no-animate,
+  .no-animate *,
+  .no-animate *::before,
+  .no-animate *::after {
     animation-duration: 0s !important;
     animation-delay: 0s !important;
     transition-duration: 0s !important;
     transition-delay: 0s !important;
   }
 
-  /* Re-enable animations for truck loader */
-  .truckBody,
-  .road,
-  .road::before,
-  .road::after,
-  .lampPost {
-    animation-duration: revert !important;
-    animation-delay: revert !important;
-  }
-
-  /* Re-enable animations for 404 game */
-  .cx-404-container,
-  .cx-404-container * {
-    animation-duration: revert !important;
-    animation-delay: revert !important;
-    transition-duration: revert !important;
-    transition-delay: revert !important;
-  }
 
   /* Simple GPU acceleration for inputs */
   input,
@@ -527,6 +510,42 @@
   .-webkit-font-smoothing-subpixel-antialiased {
     -webkit-font-smoothing: subpixel-antialiased;
   }
+}
+
+/* ============================================
+   Admin Dark Theme - Premium Design System
+   ============================================
+   Background: #0f0f12 (60%)
+   Surface/Cards: #16161a (30%)
+   Accent: red-500/red-600 (10%)
+*/
+.admin-dark {
+  --admin-bg: #0f0f12;
+  --admin-surface: #16161a;
+  --admin-border: rgba(255, 255, 255, 0.05);
+  --admin-border-hover: rgba(255, 255, 255, 0.1);
+  --admin-text-primary: #f5f5f5;
+  --admin-text-secondary: #9ca3af;
+  --admin-text-muted: #6b7280;
+  --admin-accent: #ef4444;
+  --admin-accent-hover: #dc2626;
+  --admin-glow: 0 0 15px rgba(220, 38, 38, 0.4);
+  --admin-card-radius: 2rem;
+  --admin-card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.admin-dark ::selection {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Re-enable transitions and animations for admin panel */
+.admin-dark *,
+.admin-dark *::before,
+.admin-dark *::after {
+  animation-duration: revert !important;
+  animation-delay: revert !important;
+  transition-duration: revert !important;
+  transition-delay: revert !important;
 }
 
 /* Keyframe animations */

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card } from '@/components/ui/card';
 import { useHaptics } from '@/hooks/useHaptics';
+import { deleteDraftsByType } from '@/lib/drafts/draftService';
 
 interface ShipmentTypeCardProps {
   icon: React.ElementType;
@@ -12,14 +13,16 @@ interface ShipmentTypeCardProps {
   description: string;
   color: string;
   href: string;
+  onBeforeNavigate?: () => void;
 }
 
-const ShipmentTypeCard = ({ icon: Icon, title, description, color, href }: ShipmentTypeCardProps) => {
+const ShipmentTypeCard = ({ icon: Icon, title, description, color, href, onBeforeNavigate }: ShipmentTypeCardProps) => {
   const router = useRouter();
   const { mediumTap } = useHaptics();
 
   const handleClick = () => {
     mediumTap();
+    onBeforeNavigate?.();
     router.push(href);
   };
 
@@ -68,7 +71,8 @@ const NewShipment = () => {
             title="Medicine"
             description="Send prescription medicines with proper documentation. Includes HSN code verification and 90-day supply limit compliance."
             color="bg-destructive/10"
-            href="/book/medicine"
+            href="/book/medicine?new=1"
+            onBeforeNavigate={() => deleteDraftsByType('medicine')}
           />
           
           <ShipmentTypeCard
@@ -76,7 +80,8 @@ const NewShipment = () => {
             title="Documents"
             description="Ship important documents like certificates, legal papers, and official records securely worldwide."
             color="bg-accent"
-            href="/book/document"
+            href="/book/document?new=1"
+            onBeforeNavigate={() => deleteDraftsByType('document')}
           />
           
           <ShipmentTypeCard
@@ -84,7 +89,8 @@ const NewShipment = () => {
             title="Gifts & Samples"
             description="Send personal gifts and product samples. Safety checklist included for restricted items."
             color="bg-success/20"
-            href="/book/gift"
+            href="/book/gift?new=1"
+            onBeforeNavigate={() => deleteDraftsByType('gift')}
           />
         </div>
 

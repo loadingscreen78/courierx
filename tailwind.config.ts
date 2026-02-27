@@ -79,6 +79,13 @@ export default {
         'charcoal': "hsl(var(--charcoal))",
         'pencil-black': "hsl(var(--pencil-black))",
         'candlestick-green': "hsl(var(--candlestick-green))",
+        // Admin Dark Theme
+        admin: {
+          bg: 'var(--admin-bg, #0f0f12)',
+          surface: 'var(--admin-surface, #16161a)',
+          accent: 'var(--admin-accent, #ef4444)',
+          'accent-hover': 'var(--admin-accent-hover, #dc2626)',
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

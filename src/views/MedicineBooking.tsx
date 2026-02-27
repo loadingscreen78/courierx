@@ -17,7 +17,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Medicine, createEmptyMedicine } from '@/components/booking/medicine/MedicineCard';
-import { createMedicineShipment } from '@/lib/shipments/medicineShipmentService';
+import { adaptBookingData } from '@/lib/shipments/bookingAdapter';
+import { submitBooking } from '@/lib/shipments/lifecycleApiClient';
+import { insertMedicineItems, uploadShipmentDocuments, insertAddons } from '@/lib/shipments/postBookingService';
+import { sendStatusNotification } from '@/lib/email/notify';
 import { toast } from 'sonner';
 
 export interface MedicineBookingData {
@@ -99,7 +102,7 @@ interface MedicineBookingProps {
 
 const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { deductFundsForShipment, refreshBalance } = useWallet();
   const searchParams = useSearchParams();
   const draftId = searchParams.get('draftId');
@@ -122,6 +125,7 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingReferenceId, setBookingReferenceId] = useState<string | null>(null);
   const { mediumTap, errorFeedback, successFeedback } = useHaptics();
   const { playClick, playError, playSuccess } = useSoundEffects();
 
@@ -260,7 +264,7 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
   };
 
   const handleConfirmBooking = async () => {
-    if (!user) {
+    if (!user || !session?.access_token) {
       toast.error('Please sign in to continue');
       router.push('/auth');
       return;
@@ -270,60 +274,148 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
     mediumTap();
 
     try {
-      console.log('[MedicineBooking] Submitting booking data...');
+      console.log('[MedicineBooking] Submitting booking via lifecycle API...');
 
-      // Create shipment first
-      const result = await createMedicineShipment({
-        bookingData,
-        userId: user.id,
-      });
+      // Generate or reuse bookingReferenceId for idempotency
+      let refId = bookingReferenceId;
+      if (!refId) {
+        const adapted = adaptBookingData({ formData: bookingData, shipmentType: 'medicine', draftId });
+        refId = adapted.bookingReferenceId;
+        setBookingReferenceId(refId);
+      }
 
-      if (result.success && result.shipmentId) {
-        // Deduct funds from wallet
-        console.log('[MedicineBooking] Deducting funds from wallet...');
+      // Adapt form data to lifecycle API schema
+      const payload = adaptBookingData({ formData: bookingData, shipmentType: 'medicine', draftId });
+      // Ensure the same reference ID is used across retries
+      payload.bookingReferenceId = refId;
 
-        // Calculate total amount (same as in service)
-        const baseAmount = 2000; // Simplified - should match actual calculation
-        let totalAmount = baseAmount;
-        if (bookingData.insurance) totalAmount += 150;
-        if (bookingData.specialPackaging) totalAmount += 300;
+      // Add add-on costs to the total
+      let addonTotal = 0;
+      const addons: Array<{ type: string; name: string; cost: number }> = [];
+      if (bookingData.insurance) {
+        addons.push({ type: 'insurance', name: 'Shipment Insurance', cost: 150 });
+        addonTotal += 150;
+      }
+      if (bookingData.specialPackaging) {
+        addons.push({ type: 'special_packaging', name: 'Special Packaging', cost: 300 });
+        addonTotal += 300;
+      }
+      payload.totalAmount += addonTotal;
 
-        const walletResult = await deductFundsForShipment(
-          totalAmount,
-          result.shipmentId,
-          `Medicine shipment to ${bookingData.consigneeAddress.country}`
-        );
+      // Call lifecycle API
+      const { httpStatus, body } = await submitBooking(payload, session.access_token);
 
-        if (!walletResult.success) {
-          console.error('[MedicineBooking] Wallet deduction failed:', walletResult.error);
-          toast.error('Payment Failed', {
-            description: walletResult.error || 'Failed to deduct from wallet',
-          });
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Refresh wallet balance
-        await refreshBalance();
-
-        successFeedback();
-        playSuccess();
-
-        toast.success('Booking Confirmed!', {
-          description: `Tracking Number: ${result.trackingNumber}`,
+      // Handle error status codes
+      if (httpStatus === 401) {
+        toast.error('Session expired. Please sign in again.');
+        router.push('/auth');
+        return;
+      }
+      if (httpStatus === 429) {
+        toast.error('Too many requests', {
+          description: 'Please wait a moment before trying again.',
         });
-
-        // Redirect to shipments page
-        setTimeout(() => {
-          router.push(`/shipments`);
-        }, 1500);
-      } else {
+        return;
+      }
+      if (httpStatus === 502) {
+        toast.error('Courier Unavailable', {
+          description: 'Courier service is temporarily unavailable. Please try again later.',
+        });
+        return;
+      }
+      if (httpStatus === 400) {
+        const detail = body.details?.map(d => `${d.field}: ${d.message}`).join(', ') || body.error;
+        toast.error('Validation Error', { description: detail || 'Invalid booking data.' });
+        return;
+      }
+      if (httpStatus === 0) {
+        toast.error('Connection Error', {
+          description: body.error || 'Unable to connect. Please check your internet connection.',
+        });
+        return;
+      }
+      if (!body.success || !body.shipment) {
         errorFeedback();
         playError();
         toast.error('Booking Failed', {
-          description: result.error || 'Failed to create shipment. Please try again.',
+          description: body.error || 'Failed to create shipment. Please try again.',
         });
+        return;
       }
+
+      // --- Success (201) ---
+      const shipmentId = body.shipment.id;
+      console.log('[MedicineBooking] Shipment created:', shipmentId);
+
+      // Insert type-specific data (non-blocking on failure)
+      try {
+        await insertMedicineItems(shipmentId, bookingData);
+      } catch (err) {
+        console.error('[MedicineBooking] Medicine items insert failed:', err);
+        toast.warning('Booking created but some details may not have saved. Contact support if needed.');
+      }
+
+      // Upload documents (non-blocking on failure)
+      try {
+        const files: Array<{ file: File; type: string }> = [];
+        if (bookingData.prescription) files.push({ file: bookingData.prescription, type: 'prescription' });
+        if (bookingData.pharmacyBill) files.push({ file: bookingData.pharmacyBill, type: 'pharmacy_bill' });
+        if (bookingData.consigneeId) files.push({ file: bookingData.consigneeId, type: 'consignee_id' });
+        if (files.length > 0) {
+          await uploadShipmentDocuments(shipmentId, files);
+        }
+      } catch (err) {
+        console.error('[MedicineBooking] Document upload failed:', err);
+        toast.warning('Booking created but some documents may not have uploaded. Contact support if needed.');
+      }
+
+      // Insert add-ons (non-blocking on failure)
+      try {
+        if (addons.length > 0) {
+          await insertAddons(shipmentId, addons);
+        }
+      } catch (err) {
+        console.error('[MedicineBooking] Add-ons insert failed:', err);
+        toast.warning('Booking created but add-on details may not have saved.');
+      }
+
+      // Wallet deduction
+      console.log('[MedicineBooking] Deducting funds from wallet...');
+      const walletResult = await deductFundsForShipment(
+        payload.totalAmount,
+        shipmentId,
+        `Medicine shipment to ${bookingData.consigneeAddress.country}`,
+      );
+
+      if (!walletResult.success) {
+        console.error('[MedicineBooking] Wallet deduction failed:', walletResult.error);
+        toast.error('Payment Failed', {
+          description: walletResult.error || 'Your shipment was created but payment could not be processed.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Refresh wallet balance
+      await refreshBalance();
+
+      successFeedback();
+      playSuccess();
+
+      toast.success('Booking Confirmed!', {
+        description: `Shipment ID: ${shipmentId}`,
+      });
+
+      // Fire-and-forget email notification
+      sendStatusNotification(shipmentId, 'confirmed').catch(() => {});
+
+      // Discard draft after successful booking
+      discardDraft();
+
+      // Redirect to shipments page
+      setTimeout(() => {
+        router.push('/shipments');
+      }, 1500);
     } catch (error) {
       errorFeedback();
       playError();

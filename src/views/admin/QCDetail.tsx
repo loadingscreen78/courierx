@@ -1,32 +1,31 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AdminLayout } from '@/components/admin/layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { motion } from 'framer-motion';
 import { 
   FileText, 
   CheckCircle2, 
-  XCircle, 
   AlertTriangle,
   ArrowLeft,
   Scale,
   Ruler,
   Calculator,
-  Loader2
+  Loader2,
+  Clock
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useAuth } from '@/contexts/AuthContext';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useAdminAction, AdminActionType } from '@/hooks/useAdminAction';
+import { useShipmentTimeline } from '@/hooks/useShipmentTimeline';
+import { ShipmentTimeline } from '@/components/shipment/ShipmentTimeline';
+import { getStatusLabel, getStatusDotColor, getLegLabel } from '@/lib/shipment-lifecycle/statusLabelMap';
+import { ShipmentStatus, ShipmentLeg } from '@/lib/shipment-lifecycle/types';
 
 interface Shipment {
   id: string;
@@ -35,6 +34,11 @@ interface Shipment {
   destination_country: string;
   shipment_type: string;
   status: string;
+  current_status: ShipmentStatus;
+  current_leg: ShipmentLeg;
+  version: number;
+  domestic_awb: string | null;
+  international_awb: string | null;
   weight_kg: number;
   declared_value: number;
   notes: string;
@@ -85,8 +89,10 @@ export default function QCDetail() {
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const { performAction, performDispatch, loading: actionLoading, rateLimitedUntil } = useAdminAction();
+  const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(shipmentId);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState<number>(0);
 
   const [checklist, setChecklist] = useState<QCChecklist>({
     passport_name_match: false,
@@ -104,202 +110,164 @@ export default function QCDetail() {
     dimensions_height_cm: 0,
   });
 
+  const refreshShipment = useCallback(async () => {
+    if (!shipmentId) return;
+    try {
+      const { data, error } = await supabase
+        .from('shipments')
+        .select(`*, profiles:user_id (full_name, email, phone)`)
+        .eq('id', shipmentId)
+        .single();
+      if (error) throw error;
+      if (data.shipment_type === 'medicine') {
+        const { data: medicineItems, error: medError } = await supabase
+          .from('medicine_items')
+          .select('*')
+          .eq('shipment_id', shipmentId);
+        if (!medError) data.medicine_items = medicineItems;
+      }
+      setShipment(data);
+    } catch (error) {
+      console.error('Error refreshing shipment:', error);
+    }
+  }, [shipmentId]);
+
   useEffect(() => {
     const fetchShipment = async () => {
       if (!shipmentId) return;
-
       try {
         const { data, error } = await supabase
           .from('shipments')
-          .select(`
-            *,
-            profiles:user_id (
-              full_name,
-              email,
-              phone
-            )
-          `)
+          .select(`*, profiles:user_id (full_name, email, phone)`)
           .eq('id', shipmentId)
           .single();
-
         if (error) throw error;
-
-        // Fetch medicine items if it's a medicine shipment
         if (data.shipment_type === 'medicine') {
           const { data: medicineItems, error: medError } = await supabase
             .from('medicine_items')
             .select('*')
             .eq('shipment_id', shipmentId);
-
-          if (!medError) {
-            data.medicine_items = medicineItems;
-          }
+          if (!medError) data.medicine_items = medicineItems;
         }
-
         setShipment(data);
-
-        // Initialize checklist with existing weight
-        if (data.weight_kg) {
-          setChecklist(prev => ({ ...prev, final_weight_kg: data.weight_kg }));
-        }
-
-        // Mark as in progress if at warehouse
-        if (data.status === 'at_warehouse') {
-          await supabase
-            .from('shipments')
-            .update({ status: 'qc_in_progress' })
-            .eq('id', shipmentId);
-        }
+        if (data.weight_kg) setChecklist(prev => ({ ...prev, final_weight_kg: data.weight_kg }));
       } catch (error) {
         console.error('Error fetching shipment:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load shipment details.',
-          variant: 'destructive',
-        });
+        toast({ title: 'Error', description: 'Failed to load shipment details.', variant: 'destructive' });
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchShipment();
   }, [shipmentId, toast]);
 
-  // Calculate days supply when units or dosage changes
+  // Realtime subscription for shipment row updates (status/leg/version changes)
+  useEffect(() => {
+    if (!shipmentId) return;
+    const channel = supabase
+      .channel(`shipment-detail-${shipmentId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'shipments',
+        filter: `id=eq.${shipmentId}`,
+      }, (payload) => {
+        const updated = payload.new as Record<string, unknown>;
+        // Ignore stale events where version is lower than current
+        if (shipment && typeof updated.version === 'number' && updated.version < shipment.version) return;
+        refreshShipment();
+      })
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[QCDetail] Channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // Re-fetch on reconnection to catch missed events
+          refreshShipment();
+        }
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [shipmentId, shipment?.version, refreshShipment]);
+
   useEffect(() => {
     if (checklist.actual_unit_count > 0 && checklist.daily_dosage > 0) {
       const daysSupply = Math.floor(checklist.actual_unit_count / checklist.daily_dosage);
-      setChecklist(prev => ({
-        ...prev,
-        days_supply_calculated: daysSupply,
-        days_supply_compliant: daysSupply <= 90,
-      }));
+      setChecklist(prev => ({ ...prev, days_supply_calculated: daysSupply, days_supply_compliant: daysSupply <= 90 }));
     }
   }, [checklist.actual_unit_count, checklist.daily_dosage]);
 
-  const identityChecksPassed = 
-    checklist.passport_name_match && 
-    checklist.prescription_patient_match && 
-    checklist.bill_patient_match;
+  // Rate limit countdown timer
+  useEffect(() => {
+    if (rateLimitedUntil === null) { setRateLimitCountdown(0); return; }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((rateLimitedUntil - Date.now()) / 1000));
+      setRateLimitCountdown(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitedUntil]);
 
-  const canApprove = 
-    identityChecksPassed && 
-    !checklist.is_narcotic && 
-    checklist.bill_date_valid &&
-    checklist.days_supply_compliant &&
-    checklist.final_weight_kg > 0;
+  const isCounterLeg = shipment?.current_leg === 'COUNTER';
+  const isReadOnly = shipment?.current_leg === 'INTERNATIONAL' || shipment?.current_leg === 'COMPLETED';
+  const identityChecksPassed = checklist.passport_name_match && checklist.prescription_patient_match && checklist.bill_patient_match;
 
-  const handleApprove = async () => {
-    if (!shipment || !user) return;
-
-    setIsSaving(true);
-    try {
-      // Save QC checklist
-      const { error: checklistError } = await supabase
-        .from('qc_checklists')
-        .upsert({
-          shipment_id: shipment.id,
-          operator_id: user.id,
-          ...checklist,
-          decision: 'APPROVED',
-        });
-
-      if (checklistError) throw checklistError;
-
-      // Update shipment
-      const { error: updateError } = await supabase
-        .from('shipments')
-        .update({
-          status: 'qc_passed',
-          actual_weight_kg: checklist.final_weight_kg,
-          dimensions_length_cm: checklist.dimensions_length_cm,
-          dimensions_width_cm: checklist.dimensions_width_cm,
-          dimensions_height_cm: checklist.dimensions_height_cm,
-          qc_operator_id: user.id,
-          qc_completed_at: new Date().toISOString(),
-        })
-        .eq('id', shipment.id);
-
-      if (updateError) throw updateError;
-
+  const handleLifecycleAction = async (action: AdminActionType) => {
+    if (!shipment) return;
+    const result = await performAction(shipment.id, action, shipment.version);
+    if (result.success) {
       playSuccess();
-      toast({
-        title: 'QC Approved!',
-        description: 'Shipment passed quality control and is ready for dispatch.',
-      });
-      router.push('/admin/qc');
-    } catch (error) {
-      console.error('Error approving:', error);
+      toast({ title: 'Action completed', description: `${getStatusLabel(shipment.current_status)} → next step.` });
+      await refreshShipment();
+    } else if (result.errorCode === 'VERSION_CONFLICT') {
+      toast({ title: 'Version conflict', description: 'This shipment was updated by another process. Refreshing...', variant: 'destructive' });
+      await refreshShipment();
+    } else if (result.errorCode === 'INVALID_TRANSITION') {
       playError();
-      toast({
-        title: 'Error',
-        description: 'Failed to approve shipment.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
+      toast({ title: 'Invalid transition', description: result.error ?? 'This action is not valid for the current status.', variant: 'destructive' });
+      await refreshShipment();
+    } else if (result.retryAfterMs) {
+      toast({ title: 'Rate limited', description: `Too many requests. Please wait ${Math.ceil(result.retryAfterMs / 1000)} seconds.`, variant: 'destructive' });
+    } else {
+      playError();
+      toast({ title: 'Error', description: result.error ?? 'Action failed.', variant: 'destructive' });
     }
   };
 
-  const handleReject = async () => {
-    if (!shipment || !user || !rejectionReason) return;
-
-    setIsSaving(true);
-    try {
-      // Save QC checklist
-      const { error: checklistError } = await supabase
-        .from('qc_checklists')
-        .upsert({
-          shipment_id: shipment.id,
-          operator_id: user.id,
-          ...checklist,
-          decision: 'REJECTED',
-          rejection_reason: rejectionReason,
-        });
-
-      if (checklistError) throw checklistError;
-
-      // Update shipment
-      const { error: updateError } = await supabase
-        .from('shipments')
-        .update({
-          status: 'qc_failed',
-          qc_operator_id: user.id,
-          qc_completed_at: new Date().toISOString(),
-          qc_notes: rejectionReason,
-        })
-        .eq('id', shipment.id);
-
-      if (updateError) throw updateError;
-
+  const handleDispatch = async () => {
+    if (!shipment) return;
+    const result = await performDispatch(shipment.id, shipment.version);
+    if (result.success) {
+      playSuccess();
+      toast({ title: 'Dispatched', description: 'Shipment dispatched internationally.' });
+      await refreshShipment();
+    } else if (result.errorCode === 'VERSION_CONFLICT') {
+      toast({ title: 'Version conflict', description: 'This shipment was updated by another process. Refreshing...', variant: 'destructive' });
+      await refreshShipment();
+    } else if (result.errorCode === 'INVALID_TRANSITION') {
       playError();
-      toast({
-        title: 'QC Rejected',
-        description: 'Shipment has been put on hold.',
-        variant: 'destructive',
-      });
-      router.push('/admin/qc');
-    } catch (error) {
-      console.error('Error rejecting:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to reject shipment.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
+      toast({ title: 'Invalid transition', description: result.error ?? 'Cannot dispatch at this time.', variant: 'destructive' });
+      await refreshShipment();
+    } else if (result.retryAfterMs) {
+      toast({ title: 'Rate limited', description: `Too many requests. Please wait ${Math.ceil(result.retryAfterMs / 1000)} seconds.`, variant: 'destructive' });
+    } else {
+      playError();
+      toast({ title: 'Error', description: result.error ?? 'Dispatch failed.', variant: 'destructive' });
     }
   };
+
+  const isRateLimited = rateLimitedUntil !== null && Date.now() < rateLimitedUntil;
 
   if (isLoading) {
     return (
       <AdminLayout>
         <div className="space-y-6">
-          <Skeleton className="h-8 w-48" />
+          <div className="h-8 w-48 bg-white/5 rounded-[2rem] animate-pulse" />
           <div className="grid grid-cols-3 gap-6">
-            <Skeleton className="h-96" />
-            <Skeleton className="h-96" />
-            <Skeleton className="h-96" />
+            <div className="h-96 bg-white/5 rounded-[2rem] animate-pulse" />
+            <div className="h-96 bg-white/5 rounded-[2rem] animate-pulse" />
+            <div className="h-96 bg-white/5 rounded-[2rem] animate-pulse" />
           </div>
         </div>
       </AdminLayout>
@@ -310,10 +278,10 @@ export default function QCDetail() {
     return (
       <AdminLayout>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Shipment not found</p>
-          <Button onClick={() => router.push('/admin/qc')} className="mt-4">
+          <p className="text-gray-400">Shipment not found</p>
+          <button onClick={() => router.push('/admin/qc')} className="mt-4 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors">
             Back to QC Workbench
-          </Button>
+          </button>
         </div>
       </AdminLayout>
     );
@@ -321,453 +289,325 @@ export default function QCDetail() {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/admin/qc')}>
+          <button onClick={() => router.push('/admin/qc')} className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
             <ArrowLeft className="h-5 w-5" />
-          </Button>
+          </button>
           <div>
-            <h1 className="text-2xl font-typewriter font-bold">
-              QC: {shipment.tracking_number || 'No Tracking'}
-            </h1>
-            <p className="text-muted-foreground">
-              {shipment.recipient_name} • {shipment.destination_country}
-            </p>
+            <h1 className="text-2xl font-bold text-white">QC: {shipment.tracking_number || 'No Tracking'}</h1>
+            <p className="text-gray-400">{shipment.recipient_name} • {shipment.destination_country}</p>
           </div>
-          <Badge variant="outline" className="ml-auto capitalize">
-            {shipment.shipment_type}
-          </Badge>
+          <span className="ml-auto px-3 py-1 rounded-full text-xs font-medium bg-white/10 border border-white/10 text-gray-300 capitalize">{shipment.shipment_type}</span>
+          {shipment.current_status && (
+            <span className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-white/10 border border-white/10 text-gray-300">
+              <span className={`h-2 w-2 rounded-full ${getStatusDotColor(shipment.current_status)}`} />
+              {getStatusLabel(shipment.current_status)}
+            </span>
+          )}
+          {shipment.current_leg && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 border border-white/10 text-gray-300">
+              {getLegLabel(shipment.current_leg)}
+            </span>
+          )}
         </div>
 
         {/* User & Shipment Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">User Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Name</p>
-                <p className="font-medium">{shipment.profiles?.full_name || 'Unknown'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Email</p>
-                <p className="text-sm">{shipment.profiles?.email || 'No email'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Phone</p>
-                <p className="text-sm">{shipment.profiles?.phone || 'No phone'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Booking Date</p>
-                <p className="text-sm">{new Date(shipment.created_at).toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Shipment Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Tracking Number</p>
-                <p className="font-typewriter font-medium">{shipment.tracking_number || 'Not assigned'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Type</p>
-                <p className="capitalize">{shipment.shipment_type}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total Amount</p>
-                <p className="font-medium">₹{shipment.total_amount?.toLocaleString() || '0'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Declared Value</p>
-                <p className="font-medium">₹{shipment.declared_value?.toLocaleString() || '0'}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+            <h3 className="text-sm font-semibold text-white mb-4">User Information</h3>
+            <div className="space-y-3">
+              <div><p className="text-xs text-gray-500">Name</p><p className="text-white font-medium">{shipment.profiles?.full_name || 'Unknown'}</p></div>
+              <div><p className="text-xs text-gray-500">Email</p><p className="text-gray-300 text-sm">{shipment.profiles?.email || 'No email'}</p></div>
+              <div><p className="text-xs text-gray-500">Phone</p><p className="text-gray-300 text-sm">{shipment.profiles?.phone || 'No phone'}</p></div>
+              <div><p className="text-xs text-gray-500">Booking Date</p><p className="text-gray-300 text-sm">{new Date(shipment.created_at).toLocaleString()}</p></div>
+            </div>
+          </div>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+            <h3 className="text-sm font-semibold text-white mb-4">Shipment Details</h3>
+            <div className="space-y-3">
+              <div><p className="text-xs text-gray-500">Tracking Number</p><p className="text-white font-medium font-mono">{shipment.tracking_number || 'Not assigned'}</p></div>
+              <div><p className="text-xs text-gray-500">Type</p><p className="text-gray-300 capitalize">{shipment.shipment_type}</p></div>
+              <div><p className="text-xs text-gray-500">Total Amount</p><p className="text-white font-medium">₹{shipment.total_amount?.toLocaleString() || '0'}</p></div>
+              <div><p className="text-xs text-gray-500">Declared Value</p><p className="text-white font-medium">₹{shipment.declared_value?.toLocaleString() || '0'}</p></div>
+              {shipment.domestic_awb && (
+                <div><p className="text-xs text-gray-500">Domestic AWB</p><p className="text-white font-medium font-mono">{shipment.domestic_awb}</p></div>
+              )}
+              {shipment.international_awb && (shipment.current_leg === 'INTERNATIONAL' || shipment.current_leg === 'COMPLETED') && (
+                <div><p className="text-xs text-gray-500">International AWB</p><p className="text-white font-medium font-mono">{shipment.international_awb}</p></div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Medicine Items (if medicine shipment) */}
+        {/* Medicine Items */}
         {shipment.shipment_type === 'medicine' && shipment.medicine_items && shipment.medicine_items.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Medicine Items</CardTitle>
-              <CardDescription>{shipment.medicine_items.length} item(s) in this shipment</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {shipment.medicine_items.map((item, index) => (
-                  <div key={index} className="p-3 rounded-lg bg-muted/50 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium">{item.medicine_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.medicine_type} • {item.category} • {item.form}
-                        </p>
-                      </div>
-                      <Badge variant="outline">{item.unit_count} units</Badge>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+            <h3 className="text-sm font-semibold text-white mb-1">Medicine Items</h3>
+            <p className="text-xs text-gray-500 mb-4">{shipment.medicine_items.length} item(s) in this shipment</p>
+            <div className="space-y-3">
+              {shipment.medicine_items.map((item, index) => (
+                <div key={index} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-white font-medium">{item.medicine_name}</p>
+                      <p className="text-xs text-gray-500">{item.medicine_type} • {item.category} • {item.form}</p>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <p className="text-muted-foreground">Unit Price</p>
-                        <p className="font-medium">₹{item.unit_price}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Daily Dosage</p>
-                        <p className="font-medium">{item.daily_dosage}/day</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Supply</p>
-                        <p className="font-medium">
-                          {item.daily_dosage > 0 ? Math.ceil(item.unit_count / item.daily_dosage) : 0} days
-                        </p>
-                      </div>
-                    </div>
-                    {item.batch_number && (
-                      <div className="text-xs">
-                        <span className="text-muted-foreground">Batch: </span>
-                        <span className="font-typewriter">{item.batch_number}</span>
-                      </div>
-                    )}
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 border border-white/10 text-gray-300">{item.unit_count} units</span>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div><p className="text-gray-500">Unit Price</p><p className="text-white font-medium">₹{item.unit_price}</p></div>
+                    <div><p className="text-gray-500">Daily Dosage</p><p className="text-white font-medium">{item.daily_dosage}/day</p></div>
+                    <div><p className="text-gray-500">Supply</p><p className="text-white font-medium">{item.daily_dosage > 0 ? Math.ceil(item.unit_count / item.daily_dosage) : 0} days</p></div>
+                  </div>
+                  {item.batch_number && (
+                    <div className="text-xs"><span className="text-gray-500">Batch: </span><span className="font-mono text-gray-300">{item.batch_number}</span></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Addresses */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Pickup Address</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {shipment.pickup_address ? (
-                <div className="text-sm space-y-1">
-                  <p className="font-medium">{shipment.pickup_address.fullName}</p>
-                  <p>{shipment.pickup_address.phone}</p>
-                  <p>{shipment.pickup_address.addressLine1}</p>
-                  {shipment.pickup_address.addressLine2 && <p>{shipment.pickup_address.addressLine2}</p>}
-                  <p>{shipment.pickup_address.city}, {shipment.pickup_address.state} {shipment.pickup_address.pincode}</p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No pickup address</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Consignee Address</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {shipment.consignee_address ? (
-                <div className="text-sm space-y-1">
-                  <p className="font-medium">{shipment.consignee_address.fullName}</p>
-                  <p>{shipment.consignee_address.phone}</p>
-                  {shipment.consignee_address.email && <p>{shipment.consignee_address.email}</p>}
-                  <p>{shipment.consignee_address.addressLine1}</p>
-                  {shipment.consignee_address.addressLine2 && <p>{shipment.consignee_address.addressLine2}</p>}
-                  <p>{shipment.consignee_address.city}, {shipment.consignee_address.zipcode}</p>
-                  <p className="font-medium">{shipment.consignee_address.country}</p>
-                  {shipment.consignee_address.passportNumber && (
-                    <p className="text-xs text-muted-foreground">Passport: {shipment.consignee_address.passportNumber}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No consignee address</p>
-              )}
-            </CardContent>
-          </Card>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+            <h3 className="text-sm font-semibold text-white mb-4">Pickup Address</h3>
+            {shipment.pickup_address ? (
+              <div className="text-sm space-y-1 text-gray-300">
+                <p className="text-white font-medium">{shipment.pickup_address.fullName}</p>
+                <p>{shipment.pickup_address.phone}</p>
+                <p>{shipment.pickup_address.addressLine1}</p>
+                {shipment.pickup_address.addressLine2 && <p>{shipment.pickup_address.addressLine2}</p>}
+                <p>{shipment.pickup_address.city}, {shipment.pickup_address.state} {shipment.pickup_address.pincode}</p>
+              </div>
+            ) : <p className="text-sm text-gray-500">No pickup address</p>}
+          </div>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+            <h3 className="text-sm font-semibold text-white mb-4">Consignee Address</h3>
+            {shipment.consignee_address ? (
+              <div className="text-sm space-y-1 text-gray-300">
+                <p className="text-white font-medium">{shipment.consignee_address.fullName}</p>
+                <p>{shipment.consignee_address.phone}</p>
+                {shipment.consignee_address.email && <p>{shipment.consignee_address.email}</p>}
+                <p>{shipment.consignee_address.addressLine1}</p>
+                {shipment.consignee_address.addressLine2 && <p>{shipment.consignee_address.addressLine2}</p>}
+                <p>{shipment.consignee_address.city}, {shipment.consignee_address.zipcode}</p>
+                <p className="text-white font-medium">{shipment.consignee_address.country}</p>
+                {shipment.consignee_address.passportNumber && (
+                  <p className="text-xs text-gray-500">Passport: {shipment.consignee_address.passportNumber}</p>
+                )}
+              </div>
+            ) : <p className="text-sm text-gray-500">No consignee address</p>}
+          </div>
         </div>
 
         {/* 3-Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Column 1: Document Viewer */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-base font-typewriter flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Documents
-              </CardTitle>
-              <CardDescription>Review uploaded documents</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="prescription" className="w-full">
-                <TabsList className="w-full grid grid-cols-3">
-                  <TabsTrigger value="prescription" className="text-xs">Rx</TabsTrigger>
-                  <TabsTrigger value="bill" className="text-xs">Bill</TabsTrigger>
-                  <TabsTrigger value="passport" className="text-xs">ID</TabsTrigger>
-                </TabsList>
-                <TabsContent value="prescription" className="mt-4">
-                  <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground">Prescription Preview</p>
-                  </div>
-                </TabsContent>
-                <TabsContent value="bill" className="mt-4">
-                  <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground">Pharmacy Bill Preview</p>
-                  </div>
-                </TabsContent>
-                <TabsContent value="passport" className="mt-4">
-                  <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                    <p className="text-sm text-muted-foreground">Passport/ID Preview</p>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl lg:col-span-1">
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="h-4 w-4 text-red-500" />
+              <h3 className="text-sm font-semibold text-white">Documents</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Review uploaded documents</p>
+            <Tabs defaultValue="prescription" className="w-full">
+              <TabsList className="w-full grid grid-cols-3 bg-white/5 border border-white/10 rounded-xl p-1">
+                <TabsTrigger value="prescription" className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400">Rx</TabsTrigger>
+                <TabsTrigger value="bill" className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400">Bill</TabsTrigger>
+                <TabsTrigger value="passport" className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400">ID</TabsTrigger>
+              </TabsList>
+              <TabsContent value="prescription" className="mt-4">
+                <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
+                  <p className="text-sm text-gray-500">Prescription Preview</p>
+                </div>
+              </TabsContent>
+              <TabsContent value="bill" className="mt-4">
+                <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
+                  <p className="text-sm text-gray-500">Pharmacy Bill Preview</p>
+                </div>
+              </TabsContent>
+              <TabsContent value="passport" className="mt-4">
+                <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
+                  <p className="text-sm text-gray-500">Passport/ID Preview</p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
 
           {/* Column 2: Validation Checklist */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-base font-typewriter flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" />
-                Validation Checklist
-              </CardTitle>
-              <CardDescription>Three-way identity match & safety</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Identity Checks */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  Identity Verification
-                  {identityChecksPassed ? (
-                    <CheckCircle2 className="h-4 w-4 text-success" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl lg:col-span-1">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle2 className="h-4 w-4 text-red-500" />
+              <h3 className="text-sm font-semibold text-white">Validation Checklist</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-6">Three-way identity match & safety</p>
+
+            {/* Identity Checks */}
+            <div className="space-y-3 mb-6">
+              <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                Identity Verification
+                {identityChecksPassed ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <AlertTriangle className="h-4 w-4 text-amber-500" />}
+              </h4>
+              <div className="space-y-1">
+                {[
+                  { key: 'passport_name_match' as const, label: 'Passport name matches booking?' },
+                  { key: 'prescription_patient_match' as const, label: 'Prescription patient = passport?' },
+                  { key: 'bill_patient_match' as const, label: 'Bill patient = passport?' },
+                ].map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors">
+                    <Checkbox checked={checklist[key]} onCheckedChange={(checked) => setChecklist(prev => ({ ...prev, [key]: !!checked }))} />
+                    <span className="text-sm text-gray-300">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Safety Checks */}
+            <div className="space-y-3 mb-6">
+              <h4 className="text-sm font-semibold text-white">Safety Verification</h4>
+              <div className="space-y-1">
+                <label className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors">
+                  <Checkbox checked={checklist.is_narcotic} onCheckedChange={(checked) => setChecklist(prev => ({ ...prev, is_narcotic: !!checked }))} />
+                  <span className="text-sm text-red-400">⚠️ Narcotic/Psychotropic?</span>
+                </label>
+                <label className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors">
+                  <Checkbox checked={checklist.bill_date_valid} onCheckedChange={(checked) => setChecklist(prev => ({ ...prev, bill_date_valid: !!checked }))} />
+                  <span className="text-sm text-gray-300">Bill date within prescription duration?</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Quantity Check */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-white flex items-center gap-2"><Calculator className="h-4 w-4" /> Quantity Verification</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Unit Count</label>
+                  <input type="number" value={checklist.actual_unit_count || ''} onChange={(e) => setChecklist(prev => ({ ...prev, actual_unit_count: parseInt(e.target.value) || 0 }))} placeholder="e.g., 200" className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-red-500 focus:outline-none transition-colors text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Daily Dosage</label>
+                  <input type="number" value={checklist.daily_dosage || ''} onChange={(e) => setChecklist(prev => ({ ...prev, daily_dosage: parseInt(e.target.value) || 1 }))} placeholder="e.g., 2" className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-red-500 focus:outline-none transition-colors text-sm" />
+                </div>
+              </div>
+              {checklist.days_supply_calculated > 0 && (
+                <div className={`p-3 rounded-xl ${checklist.days_supply_compliant ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                  <p className="text-sm font-medium text-white">Days Supply: {checklist.days_supply_calculated} days</p>
+                  {!checklist.days_supply_compliant && (
+                    <p className="text-xs text-red-400 mt-1">⚠️ Exceeds 90-day limit. Remove {Math.ceil(checklist.actual_unit_count - (90 * checklist.daily_dosage))} units.</p>
                   )}
-                </h4>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                    <Checkbox 
-                      checked={checklist.passport_name_match}
-                      onCheckedChange={(checked) => 
-                        setChecklist(prev => ({ ...prev, passport_name_match: !!checked }))
-                      }
-                    />
-                    <span className="text-sm">Passport name matches booking?</span>
-                  </label>
-                  <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                    <Checkbox 
-                      checked={checklist.prescription_patient_match}
-                      onCheckedChange={(checked) => 
-                        setChecklist(prev => ({ ...prev, prescription_patient_match: !!checked }))
-                      }
-                    />
-                    <span className="text-sm">Prescription patient = passport?</span>
-                  </label>
-                  <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                    <Checkbox 
-                      checked={checklist.bill_patient_match}
-                      onCheckedChange={(checked) => 
-                        setChecklist(prev => ({ ...prev, bill_patient_match: !!checked }))
-                      }
-                    />
-                    <span className="text-sm">Bill patient = passport?</span>
-                  </label>
                 </div>
-              </div>
-
-              {/* Safety Checks */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold">Safety Verification</h4>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                    <Checkbox 
-                      checked={checklist.is_narcotic}
-                      onCheckedChange={(checked) => 
-                        setChecklist(prev => ({ ...prev, is_narcotic: !!checked }))
-                      }
-                    />
-                    <span className="text-sm text-destructive">⚠️ Narcotic/Psychotropic?</span>
-                  </label>
-                  <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted cursor-pointer">
-                    <Checkbox 
-                      checked={checklist.bill_date_valid}
-                      onCheckedChange={(checked) => 
-                        setChecklist(prev => ({ ...prev, bill_date_valid: !!checked }))
-                      }
-                    />
-                    <span className="text-sm">Bill date within prescription duration?</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Quantity Check */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <Calculator className="h-4 w-4" />
-                  Quantity Verification
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Unit Count</Label>
-                    <Input
-                      type="number"
-                      value={checklist.actual_unit_count || ''}
-                      onChange={(e) => 
-                        setChecklist(prev => ({ ...prev, actual_unit_count: parseInt(e.target.value) || 0 }))
-                      }
-                      placeholder="e.g., 200"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Daily Dosage</Label>
-                    <Input
-                      type="number"
-                      value={checklist.daily_dosage || ''}
-                      onChange={(e) => 
-                        setChecklist(prev => ({ ...prev, daily_dosage: parseInt(e.target.value) || 1 }))
-                      }
-                      placeholder="e.g., 2"
-                    />
-                  </div>
-                </div>
-                {checklist.days_supply_calculated > 0 && (
-                  <div className={`p-3 rounded-lg ${checklist.days_supply_compliant ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                    <p className="text-sm font-medium">
-                      Days Supply: {checklist.days_supply_calculated} days
-                    </p>
-                    {!checklist.days_supply_compliant && (
-                      <p className="text-xs text-destructive mt-1">
-                        ⚠️ Exceeds 90-day limit. Remove {Math.ceil(checklist.actual_unit_count - (90 * checklist.daily_dosage))} units.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              )}
+            </div>
+          </div>
 
           {/* Column 3: Physical & Actions */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-base font-typewriter flex items-center gap-2">
-                <Scale className="h-4 w-4" />
-                Physical Verification
-              </CardTitle>
-              <CardDescription>Weight, dimensions & final decision</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Weight */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Final Weight (kg)</Label>
-                  <span className="text-xs text-muted-foreground">
-                    Declared: {shipment.weight_kg || '?'} kg
-                  </span>
-                </div>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={checklist.final_weight_kg || ''}
-                  onChange={(e) => 
-                    setChecklist(prev => ({ ...prev, final_weight_kg: parseFloat(e.target.value) || 0 }))
-                  }
-                  placeholder="0.0"
-                  className="text-lg font-typewriter"
-                />
-              </div>
+          <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl lg:col-span-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Scale className="h-4 w-4 text-red-500" />
+              <h3 className="text-sm font-semibold text-white">Physical Verification</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-6">Weight, dimensions & final decision</p>
 
-              {/* Dimensions */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <Ruler className="h-4 w-4" />
-                  Dimensions (cm)
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Input
-                      type="number"
-                      value={checklist.dimensions_length_cm || ''}
-                      onChange={(e) => 
-                        setChecklist(prev => ({ ...prev, dimensions_length_cm: parseFloat(e.target.value) || 0 }))
-                      }
-                      placeholder="L"
-                    />
-                    <span className="text-xs text-muted-foreground">Length</span>
-                  </div>
-                  <div>
-                    <Input
-                      type="number"
-                      value={checklist.dimensions_width_cm || ''}
-                      onChange={(e) => 
-                        setChecklist(prev => ({ ...prev, dimensions_width_cm: parseFloat(e.target.value) || 0 }))
-                      }
-                      placeholder="W"
-                    />
-                    <span className="text-xs text-muted-foreground">Width</span>
-                  </div>
-                  <div>
-                    <Input
-                      type="number"
-                      value={checklist.dimensions_height_cm || ''}
-                      onChange={(e) => 
-                        setChecklist(prev => ({ ...prev, dimensions_height_cm: parseFloat(e.target.value) || 0 }))
-                      }
-                      placeholder="H"
-                    />
-                    <span className="text-xs text-muted-foreground">Height</span>
-                  </div>
-                </div>
+            {/* Weight */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-gray-300">Final Weight (kg)</label>
+                <span className="text-xs text-gray-500">Declared: {shipment.weight_kg || '?'} kg</span>
               </div>
+              <input type="number" step="0.1" value={checklist.final_weight_kg || ''} onChange={(e) => setChecklist(prev => ({ ...prev, final_weight_kg: parseFloat(e.target.value) || 0 }))} placeholder="0.0" className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-mono placeholder:text-gray-600 focus:border-red-500 focus:outline-none transition-colors" />
+            </div>
 
-              {/* Rejection Reason */}
-              <div className="space-y-2">
-                <Label>Rejection Reason (if applicable)</Label>
-                <Textarea
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Describe issue if rejecting..."
-                  rows={3}
-                />
+            {/* Dimensions */}
+            <div className="space-y-3 mb-6">
+              <label className="text-sm text-gray-300 flex items-center gap-2"><Ruler className="h-4 w-4" /> Dimensions (cm)</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'dimensions_length_cm' as const, label: 'Length', ph: 'L' },
+                  { key: 'dimensions_width_cm' as const, label: 'Width', ph: 'W' },
+                  { key: 'dimensions_height_cm' as const, label: 'Height', ph: 'H' },
+                ].map(({ key, label, ph }) => (
+                  <div key={key}>
+                    <input type="number" value={checklist[key] || ''} onChange={(e) => setChecklist(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))} placeholder={ph} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-red-500 focus:outline-none transition-colors text-sm" />
+                    <span className="text-xs text-gray-500">{label}</span>
+                  </div>
+                ))}
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="space-y-3 pt-4 border-t">
-                <Button 
-                  onClick={handleApprove}
-                  disabled={!canApprove || isSaving}
-                  className="w-full bg-success hover:bg-success/90 btn-press"
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
+            {/* Rejection Reason */}
+            <div className="space-y-2 mb-6">
+              <label className="text-sm text-gray-300">Rejection Reason (if applicable)</label>
+              <textarea value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} placeholder="Describe issue if rejecting..." rows={3} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-red-500 focus:outline-none transition-colors text-sm resize-none" />
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3 pt-4 border-t border-white/5">
+              {isCounterLeg && (
+                <>
+                  <button
+                    onClick={() => handleLifecycleAction('quality_check')}
+                    disabled={shipment.current_status !== 'ARRIVED_AT_WAREHOUSE' || actionLoading || isRateLimited}
+                    className="w-full py-3 rounded-xl font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-[0_0_15px_rgba(217,119,6,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && shipment.current_status === 'ARRIVED_AT_WAREHOUSE' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Quality Check
+                  </button>
+                  <button
+                    onClick={() => handleLifecycleAction('package')}
+                    disabled={shipment.current_status !== 'QUALITY_CHECKED' || actionLoading || isRateLimited}
+                    className="w-full py-3 rounded-xl font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-[0_0_15px_rgba(217,119,6,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && shipment.current_status === 'QUALITY_CHECKED' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Package
+                  </button>
+                  <button
+                    onClick={() => handleLifecycleAction('approve_dispatch')}
+                    disabled={shipment.current_status !== 'PACKAGED' || actionLoading || isRateLimited}
+                    className="w-full py-3 rounded-xl font-semibold text-white bg-green-600 hover:bg-green-700 shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && shipment.current_status === 'PACKAGED' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Approve Dispatch
+                  </button>
+                  <button
+                    onClick={handleDispatch}
+                    disabled={shipment.current_status !== 'DISPATCH_APPROVED' || actionLoading || isRateLimited}
+                    className="w-full py-3 rounded-xl font-semibold text-white bg-purple-600 hover:bg-purple-700 shadow-[0_0_15px_rgba(147,51,234,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && shipment.current_status === 'DISPATCH_APPROVED' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Dispatch Internationally
+                  </button>
+                  {isRateLimited && (
+                    <p className="text-xs text-amber-400 text-center flex items-center justify-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Rate limited. {rateLimitCountdown > 0 ? `Retry in ${rateLimitCountdown}s` : 'Please wait...'}
+                    </p>
                   )}
-                  Approve & Pass QC
-                </Button>
-                <Button 
-                  variant="destructive"
-                  onClick={handleReject}
-                  disabled={!rejectionReason || isSaving}
-                  className="w-full btn-press"
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <XCircle className="h-4 w-4 mr-2" />
-                  )}
-                  Reject / Hold
-                </Button>
-                
-                {!canApprove && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Complete all identity checks, safety verification, and enter weight to approve
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </>
+              )}
+              {!isCounterLeg && (
+                <p className="text-xs text-gray-500 text-center">
+                  {shipment.current_leg === 'INTERNATIONAL' ? 'Shipment is in international transit — no actions available.' :
+                   shipment.current_leg === 'COMPLETED' ? 'Shipment delivered — no actions available.' :
+                   'No actions available for this shipment phase.'}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Shipment Timeline */}
+        <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-4 w-4 text-red-500" />
+            <h3 className="text-sm font-semibold text-white">Shipment Timeline</h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">Full history of status changes across all phases</p>
+          <ShipmentTimeline entries={timelineEntries} loading={timelineLoading} />
+        </div>
+      </motion.div>
     </AdminLayout>
   );
 }
-

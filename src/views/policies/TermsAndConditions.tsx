@@ -1,7 +1,11 @@
 "use client";
 
 import { LandingHeader, LandingFooter } from '@/components/landing';
-import { FileText } from 'lucide-react';
+import { FileText, Scale, Shield, AlertTriangle, Wallet, Ban, Globe, Gavel } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+const sectionClass = "bg-card border border-border rounded-2xl p-8";
+const h2Class = "text-2xl font-bold font-typewriter text-foreground mb-4 flex items-center gap-3";
 
 const TermsAndConditions = () => {
   return (
@@ -9,130 +13,221 @@ const TermsAndConditions = () => {
       <LandingHeader />
       <main className="flex-1 py-16">
         <div className="container max-w-4xl">
-          <div className="text-center mb-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-12"
+          >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-coke-red/10 text-coke-red mb-4">
               <FileText className="h-5 w-5" />
               <span className="font-semibold text-sm">Legal</span>
             </div>
-            <h1 className="text-4xl font-bold font-typewriter text-foreground mb-4">Terms & Conditions</h1>
-            <p className="text-muted-foreground">Last updated: January 4, 2026</p>
-          </div>
+            <h1 className="text-4xl font-bold font-typewriter text-foreground mb-4">CourierX™ Terms of Service</h1>
+            <p className="text-muted-foreground">Effective Date: 23rd February 2026</p>
+            <p className="text-muted-foreground text-sm mt-2">
+              Operated by: Indiano Ventures Private Limited<br />
+              Registered Address: A/1801, Gagan Unnati, Kondhwa BK, Pune – 411048, Maharashtra, India<br />
+              Governing Law: Maharashtra, India
+            </p>
+          </motion.div>
 
-          <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">1. Acceptance of Terms</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                By accessing or using CourierX services, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services. These terms constitute a legally binding agreement between you and CourierX.
-              </p>
-            </section>
+          <div className="prose prose-gray dark:prose-invert max-w-none space-y-10">
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">2. Services Description</h2>
+            {/* 1. Platform Nature */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Globe className="h-6 w-6 text-coke-red" />
+                1. Platform Nature
+              </h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                CourierX is an international courier aggregator platform that provides:
+                CourierX™ is a technology-enabled logistics intermediary platform that facilitates shipment bookings between users and licensed third-party courier partners.
               </p>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>International shipping services for medicines, documents, and personal gifts</li>
-                <li>CSB-IV compliant pharmaceutical shipments from India</li>
-                <li>Real-time shipment tracking and notifications</li>
-                <li>Secure online payment processing</li>
-                <li>Customer support and assistance</li>
+              <p className="text-muted-foreground leading-relaxed mb-2">CourierX™:</p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Does not operate as a principal carrier</li>
+                <li>Does not physically transport goods</li>
+                <li>Does not act as exporter or importer of record</li>
+                <li>Does not guarantee customs clearance</li>
               </ul>
-            </section>
+              <p className="text-muted-foreground leading-relaxed mt-4">
+                All transportation services are performed by independent courier partners subject to their own terms and liability policies.
+              </p>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">3. User Eligibility</h2>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>You must be at least 18 years old to use our services</li>
-                <li>You must provide accurate and complete information during registration</li>
-                <li>You are responsible for maintaining the confidentiality of your account</li>
-                <li>You must comply with all applicable laws and regulations</li>
+            {/* 2. Eligibility */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Shield className="h-6 w-6 text-coke-red" />
+                2. Eligibility
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-2">To use CourierX™, you must:</p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Be at least 18 years old</li>
+                <li>Provide accurate KYC documents</li>
+                <li>Provide truthful shipment declarations</li>
               </ul>
-            </section>
+              <p className="text-muted-foreground leading-relaxed mt-4">
+                CourierX™ reserves the right to suspend or terminate accounts for non-compliance.
+              </p>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">4. User Obligations</h2>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Provide accurate shipment details and declarations</li>
-                <li>Ensure packages comply with prohibited items list</li>
-                <li>Maintain valid prescriptions for medicine shipments</li>
-                <li>Pay all applicable fees, duties, and taxes</li>
-                <li>Not use services for illegal or fraudulent purposes</li>
+            {/* 3. Shipper of Record */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <FileText className="h-6 w-6 text-coke-red" />
+                3. Shipper of Record
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                You are the legal Shipper of Record for all shipments. You are fully responsible for:
+              </p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Accuracy of declared contents</li>
+                <li>Regulatory compliance</li>
+                <li>Customs documentation</li>
+                <li>Authenticity of prescriptions</li>
               </ul>
-            </section>
+              <p className="text-muted-foreground leading-relaxed mt-4">
+                CourierX™ performs document verification but does not independently validate medical prescriptions beyond document review.
+              </p>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">5. Payment Terms</h2>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>All prices are in Indian Rupees (INR) unless otherwise stated</li>
-                <li>Payment must be made in full before shipment pickup</li>
-                <li>We accept Credit/Debit Cards, UPI, Net Banking, and Wallet payments</li>
-                <li>All transactions are processed through secure payment gateways</li>
-                <li>Additional customs duties are the responsibility of the recipient</li>
+            {/* 4. Insurance & Liability */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Shield className="h-6 w-6 text-coke-red" />
+                4. Insurance &amp; Liability
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-4">Insurance is optional. Maximum insurance coverage per shipment: ₹25,000.</p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1 mb-4">
+                <li>If insured: Liability is limited to the insured amount.</li>
+                <li>If uninsured: Liability is limited to the service fee paid.</li>
               </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">6. Shipping & Delivery</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                Delivery timeframes are estimates and not guaranteed. CourierX is not liable for delays caused by customs clearance, weather conditions, carrier issues, or other circumstances beyond our control. Please refer to our Shipping Policy for detailed information.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">7. Limitation of Liability</h2>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Maximum liability is limited to declared shipment value or insurance coverage</li>
-                <li>We are not liable for indirect, incidental, or consequential damages</li>
-                <li>We are not responsible for customs seizures due to prohibited items</li>
-                <li>Force majeure events release us from liability</li>
+              <p className="text-muted-foreground leading-relaxed mb-2">CourierX™ shall not be liable for:</p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Indirect or consequential losses</li>
+                <li>Customs seizure or penalties</li>
+                <li>Regulatory delays</li>
+                <li>Acts of government authorities</li>
+                <li>Force majeure events</li>
               </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">8. Intellectual Property</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                All content, trademarks, logos, and intellectual property on the CourierX platform are owned by or licensed to CourierX. You may not use, reproduce, or distribute any content without prior written permission.
+              <p className="text-muted-foreground leading-relaxed mt-4">
+                Carrier compensation remains subject to respective courier partner policies.
               </p>
-            </section>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">9. Privacy</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                Your use of our services is also governed by our Privacy Policy. By using CourierX, you consent to the collection and use of your information as described in our Privacy Policy.
+            {/* 5. Refund Framework */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Wallet className="h-6 w-6 text-coke-red" />
+                5. Refund Framework
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                Refund eligibility is governed by shipment stage. Full details are available in the Refund &amp; Cancellation Policy.
               </p>
-            </section>
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                All refunds are credited to the CourierX™ wallet only. Refunds are not returned to the original payment source except upon permanent account deletion, subject to verification.
+              </p>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">10. Termination</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                We reserve the right to suspend or terminate your account at any time for violation of these terms, fraudulent activity, or any other reason at our sole discretion. Upon termination, your right to use our services ceases immediately.
+            {/* 6. Wallet Terms */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Wallet className="h-6 w-6 text-coke-red" />
+                6. Wallet Terms
+              </h2>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Wallet balances are non-interest bearing</li>
+                <li>Not transferable</li>
+                <li>Not redeemable except upon permanent account deletion</li>
+                <li>Not classified as a prepaid payment instrument</li>
+              </ul>
+              <p className="text-muted-foreground leading-relaxed mt-4">
+                CourierX™ may withhold wallet withdrawals in cases of suspected fraud, disputes, or regulatory review.
               </p>
-            </section>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">11. Governing Law</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                These terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of courts in Gurugram, Haryana, India.
+            {/* 7. Indemnification */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Scale className="h-6 w-6 text-coke-red" />
+                7. Indemnification
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-2">
+                You agree to indemnify CourierX™ and its officers against any claims arising from:
               </p>
-            </section>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>False declarations</li>
+                <li>Shipment of prohibited items</li>
+                <li>Customs penalties</li>
+                <li>Regulatory violations</li>
+                <li>Fraudulent activities</li>
+              </ul>
+              <p className="text-muted-foreground leading-relaxed mt-4">This obligation survives account termination.</p>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">12. Changes to Terms</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                We may update these terms at any time. Continued use of our services after changes constitutes acceptance of the modified terms. We will notify users of significant changes via email or platform notification.
-              </p>
-            </section>
+            {/* 8. AML & Sanctions Compliance */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Shield className="h-6 w-6 text-coke-red" />
+                8. AML &amp; Sanctions Compliance
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-2">CourierX™ may:</p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Monitor suspicious transactions</li>
+                <li>Report unlawful activities</li>
+                <li>Refuse service to sanctioned jurisdictions</li>
+                <li>Cancel bookings violating export regulations</li>
+              </ul>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">13. Contact Information</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                For questions about these Terms & Conditions:<br />
-                Email: legal@courierx.in<br />
-                Phone: +91 124 456 7890<br />
-                Address: 123 Business Park, Sector 15, Gurugram, Haryana 122001
+            {/* 9. Suspension & Termination */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Ban className="h-6 w-6 text-coke-red" />
+                9. Suspension &amp; Termination
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-2">
+                CourierX™ may suspend or permanently terminate accounts for:
               </p>
-            </section>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>False declaration</li>
+                <li>Failed KYC</li>
+                <li>Prohibited goods attempts</li>
+                <li>Chargeback abuse</li>
+                <li>Customs violations</li>
+                <li>Threatening conduct</li>
+              </ul>
+            </motion.section>
+
+            {/* 10. Force Majeure */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <AlertTriangle className="h-6 w-6 text-coke-red" />
+                10. Force Majeure
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-2">
+                CourierX™ shall not be liable for delays caused by:
+              </p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+                <li>Government action</li>
+                <li>Customs detention</li>
+                <li>Natural disasters</li>
+                <li>War</li>
+                <li>Regulatory changes</li>
+                <li>Carrier strikes</li>
+              </ul>
+            </motion.section>
+
+            {/* 11. Dispute Resolution */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="bg-coke-red/5 border border-coke-red/20 rounded-2xl p-8">
+              <h2 className={h2Class}>
+                <Gavel className="h-6 w-6 text-coke-red" />
+                11. Dispute Resolution
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Governing law: Maharashtra, India. All disputes shall be resolved through binding arbitration in Pune under the Arbitration &amp; Conciliation Act, 1996.
+              </p>
+            </motion.section>
           </div>
         </div>
       </main>

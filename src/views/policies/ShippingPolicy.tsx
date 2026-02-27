@@ -1,8 +1,11 @@
 "use client";
 
 import { LandingHeader, LandingFooter } from '@/components/landing';
-import { Truck, Clock, Globe, Package, Plane, AlertTriangle, Shield, Mail, MapPin } from 'lucide-react';
+import { Truck, Globe, Shield, Package, AlertTriangle, Scale } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+const sectionClass = "bg-card border border-border rounded-2xl p-8";
+const h2Class = "text-2xl font-bold font-typewriter text-foreground mb-4 flex items-center gap-3";
 
 const ShippingPolicy = () => {
   return (
@@ -10,124 +13,70 @@ const ShippingPolicy = () => {
       <LandingHeader />
       <main className="flex-1 py-16">
         <div className="container max-w-4xl">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-8"
+            className="text-center mb-12"
           >
-            <h1 className="text-4xl font-bold font-typewriter text-foreground mb-4">Shipping Policy</h1>
-            <p className="text-muted-foreground">Last updated: January 4, 2026</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-coke-red/10 text-coke-red mb-4">
+              <Truck className="h-5 w-5" />
+              <span className="font-semibold text-sm">Legal</span>
+            </div>
+            <h1 className="text-4xl font-bold font-typewriter text-foreground mb-4">Shipping &amp; Compliance Policy</h1>
+            <p className="text-muted-foreground">Effective Date: 23rd February 2026</p>
           </motion.div>
 
-          <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">1. Service Coverage</h2>
+          <div className="prose prose-gray dark:prose-invert max-w-none space-y-10">
+            {/* Platform Nature */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Globe className="h-6 w-6 text-coke-red" />
+                Platform Nature
+              </h2>
+              <p className="text-muted-foreground leading-relaxed">
+                CourierX™ operates as an intermediary platform. Users are Shippers of Record.
+              </p>
+            </motion.section>
+
+            {/* CSB-IV Personal Shipments */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <Package className="h-6 w-6 text-coke-red" />
+                CSB-IV Personal Shipments
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-4">For CSB-IV personal shipments:</p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
+                <li>Max declared value: ₹25,000</li>
+                <li>Max medicine supply: 90 days</li>
+                <li>Valid prescription mandatory</li>
+                <li>Max shipment weight: 68 kg</li>
+              </ul>
+            </motion.section>
+
+            {/* Customs & Duties */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={sectionClass}>
+              <h2 className={h2Class}>
+                <AlertTriangle className="h-6 w-6 text-coke-red" />
+                Customs &amp; Duties
+              </h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                CourierX provides international shipping services from India to 150+ countries worldwide. We specialize in:
+                CourierX™ does not guarantee customs clearance.
               </p>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li><strong>Medicines:</strong> CSB-IV compliant pharmaceutical shipments</li>
-                <li><strong>Documents:</strong> Legal, educational, and business documents</li>
-                <li><strong>Personal Gifts:</strong> Non-commercial items for personal use</li>
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">2. Delivery Timeframes</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-foreground font-semibold">Region</th>
-                      <th className="text-left py-3 px-4 text-foreground font-semibold">Standard</th>
-                      <th className="text-left py-3 px-4 text-foreground font-semibold">Express</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-muted-foreground">
-                    <tr className="border-b border-border"><td className="py-3 px-4">USA, UK, Europe</td><td className="py-3 px-4">5-7 days</td><td className="py-3 px-4">3-4 days</td></tr>
-                    <tr className="border-b border-border"><td className="py-3 px-4">Middle East, UAE</td><td className="py-3 px-4">4-6 days</td><td className="py-3 px-4">2-3 days</td></tr>
-                    <tr className="border-b border-border"><td className="py-3 px-4">Australia, NZ</td><td className="py-3 px-4">6-8 days</td><td className="py-3 px-4">4-5 days</td></tr>
-                    <tr className="border-b border-border"><td className="py-3 px-4">Southeast Asia</td><td className="py-3 px-4">4-5 days</td><td className="py-3 px-4">2-3 days</td></tr>
-                    <tr><td className="py-3 px-4">Africa, South America</td><td className="py-3 px-4">7-10 days</td><td className="py-3 px-4">5-6 days</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-sm text-muted-foreground mt-4">*Delivery times are estimates and may vary due to customs clearance.</p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">3. Pickup Process</h2>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Schedule pickup during booking (same-day or next-day available)</li>
-                <li>Pickup window: 10 AM - 7 PM (Mon-Sat)</li>
-                <li>Ensure package is properly packed and labeled</li>
-                <li>Keep ID proof ready for verification</li>
-                <li>Receive pickup confirmation via SMS/Email</li>
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">4. Prohibited Items</h2>
-              <p className="text-muted-foreground leading-relaxed mb-4">The following items cannot be shipped:</p>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Narcotics and controlled substances</li>
-                <li>Weapons, ammunition, and explosives</li>
-                <li>Hazardous materials and flammable goods</li>
-                <li>Counterfeit products and pirated goods</li>
-                <li>Currency, precious metals, and jewelry</li>
-                <li>Live animals and perishable food items</li>
-                <li>Items prohibited by destination country laws</li>
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">5. Packaging Requirements</h2>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Use sturdy corrugated boxes for all shipments</li>
-                <li>Medicines must be in original packaging with prescription</li>
-                <li>Documents should be in waterproof sleeves</li>
-                <li>Fragile items require bubble wrap and &quot;Fragile&quot; labels</li>
-                <li>Maximum weight: 30 kg per package</li>
-                <li>Maximum dimensions: 120cm x 80cm x 80cm</li>
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">6. Insurance Coverage</h2>
-              <p className="text-muted-foreground leading-relaxed mb-4">
-                All shipments include basic insurance coverage up to ₹5,000. Additional coverage options:
-              </p>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li><strong>Standard:</strong> Up to ₹25,000 (1% of declared value)</li>
-                <li><strong>Premium:</strong> Up to ₹1,00,000 (1.5% of declared value)</li>
-                <li><strong>Comprehensive:</strong> Full declared value (2% of declared value)</li>
-              </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">7. Customs & Duties</h2>
               <p className="text-muted-foreground leading-relaxed">
-                Import duties and taxes are the responsibility of the recipient. CourierX provides all necessary customs documentation. Shipments may be held for customs inspection. We recommend accurate declaration of contents and value to avoid delays.
+                Duties and taxes imposed by destination authorities are the responsibility of the recipient unless prepaid.
               </p>
-            </section>
+            </motion.section>
 
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">8. Liability</h2>
+            {/* Carrier Liability */}
+            <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-coke-red/5 border border-coke-red/20 rounded-2xl p-8">
+              <h2 className={h2Class}>
+                <Scale className="h-6 w-6 text-coke-red" />
+                Carrier Liability
+              </h2>
               <p className="text-muted-foreground leading-relaxed">
-                CourierX liability is limited to the declared value or insurance coverage, whichever is lower. We are not liable for delays due to customs, weather, or other circumstances beyond our control.
+                Carrier liability remains subject to respective courier policies.
               </p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold font-typewriter text-foreground mb-4">9. Contact Us</h2>
-              <p className="text-muted-foreground leading-relaxed">
-                For shipping inquiries:<br />
-                Email: shipping@courierx.in<br />
-                Phone: +91 124 456 7890<br />
-                Support Hours: Mon-Sat, 9 AM - 8 PM IST
-              </p>
-            </section>
+            </motion.section>
           </div>
         </div>
       </main>

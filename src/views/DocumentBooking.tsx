@@ -15,7 +15,10 @@ import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { createDocumentShipment } from '@/lib/shipments/documentShipmentService';
+import { adaptBookingData } from '@/lib/shipments/bookingAdapter';
+import { submitBooking } from '@/lib/shipments/lifecycleApiClient';
+import { insertDocumentItems, insertAddons } from '@/lib/shipments/postBookingService';
+import { sendStatusNotification } from '@/lib/email/notify';
 import { toast } from 'sonner';
 
 export interface DocumentBookingData {
@@ -94,7 +97,7 @@ const STEPS = [
 
 const DocumentBooking = () => {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { deductFundsForShipment, refreshBalance } = useWallet();
   const searchParams = useSearchParams();
   const draftId = searchParams.get('draftId');
@@ -117,6 +120,7 @@ const DocumentBooking = () => {
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingReferenceId, setBookingReferenceId] = useState<string | null>(null);
   const { mediumTap, errorFeedback, successFeedback } = useHaptics();
   const { playClick, playError, playSuccess } = useSoundEffects();
 
@@ -184,7 +188,7 @@ const DocumentBooking = () => {
   };
 
   const handleConfirmBooking = async () => {
-    if (!user) {
+    if (!user || !session?.access_token) {
       toast.error('Please sign in to continue');
       router.push('/auth');
       return;
@@ -194,71 +198,134 @@ const DocumentBooking = () => {
     mediumTap();
 
     try {
-      console.log('[DocumentBooking] Submitting booking data...');
+      console.log('[DocumentBooking] Submitting booking via lifecycle API...');
 
-      // Create shipment first
-      const result = await createDocumentShipment({
-        bookingData,
-        userId: user.id,
-      });
+      // Generate or reuse bookingReferenceId for idempotency
+      let refId = bookingReferenceId;
+      if (!refId) {
+        const adapted = adaptBookingData({ formData: bookingData, shipmentType: 'document', draftId });
+        refId = adapted.bookingReferenceId;
+        setBookingReferenceId(refId);
+      }
 
-      if (result.success && result.shipmentId) {
-        // Calculate total amount (same as in service)
-        const weightInKg = bookingData.weight / 1000;
-        const volumetricWeight = (bookingData.length * bookingData.width * bookingData.height) / 5000;
-        const chargeableWeight = Math.max(weightInKg, volumetricWeight);
-        const baseRatePerKg = 500;
-        const packetMultiplier: Record<string, number> = {
-          'envelope': 1.0,
-          'small-packet': 1.2,
-          'large-packet': 1.5,
-          'tube': 1.3,
-        };
-        const multiplier = packetMultiplier[bookingData.packetType] || 1.0;
-        let totalAmount = Math.ceil(chargeableWeight * baseRatePerKg * multiplier);
+      // Adapt form data to lifecycle API schema
+      const payload = adaptBookingData({ formData: bookingData, shipmentType: 'document', draftId });
+      // Ensure the same reference ID is used across retries
+      payload.bookingReferenceId = refId;
 
-        if (bookingData.insurance) totalAmount += 100;
-        if (bookingData.waterproofPackaging) totalAmount += 50;
+      // Add add-on costs to the total
+      let addonTotal = 0;
+      const addons: Array<{ type: string; name: string; cost: number }> = [];
+      if (bookingData.insurance) {
+        addons.push({ type: 'insurance', name: 'Shipment Insurance', cost: 100 });
+        addonTotal += 100;
+      }
+      if (bookingData.waterproofPackaging) {
+        addons.push({ type: 'waterproof_packaging', name: 'Waterproof Packaging', cost: 50 });
+        addonTotal += 50;
+      }
+      payload.totalAmount += addonTotal;
 
-        // Deduct funds from wallet
-        console.log('[DocumentBooking] Deducting funds from wallet...');
+      // Call lifecycle API
+      const { httpStatus, body } = await submitBooking(payload, session.access_token);
 
-        const walletResult = await deductFundsForShipment(
-          totalAmount,
-          result.shipmentId,
-          `Document shipment to ${bookingData.consigneeAddress.country}`
-        );
-
-        if (!walletResult.success) {
-          console.error('[DocumentBooking] Wallet deduction failed:', walletResult.error);
-          toast.error('Payment Failed', {
-            description: walletResult.error || 'Failed to deduct from wallet',
-          });
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Refresh wallet balance
-        await refreshBalance();
-
-        successFeedback();
-        playSuccess();
-
-        toast.success('Booking Confirmed!', {
-          description: `Tracking Number: ${result.trackingNumber}`,
+      // Handle error status codes
+      if (httpStatus === 401) {
+        toast.error('Session expired. Please sign in again.');
+        router.push('/auth');
+        return;
+      }
+      if (httpStatus === 429) {
+        toast.error('Too many requests', {
+          description: 'Please wait a moment before trying again.',
         });
-
-        // Redirect to shipments page
-        setTimeout(() => {
-          router.push(`/shipments`);
-        }, 1500);
-      } else {
+        return;
+      }
+      if (httpStatus === 502) {
+        toast.error('Courier Unavailable', {
+          description: 'Courier service is temporarily unavailable. Please try again later.',
+        });
+        return;
+      }
+      if (httpStatus === 400) {
+        const detail = body.details?.map(d => `${d.field}: ${d.message}`).join(', ') || body.error;
+        toast.error('Validation Error', { description: detail || 'Invalid booking data.' });
+        return;
+      }
+      if (httpStatus === 0) {
+        toast.error('Connection Error', {
+          description: body.error || 'Unable to connect. Please check your internet connection.',
+        });
+        return;
+      }
+      if (!body.success || !body.shipment) {
         errorFeedback();
         playError();
         toast.error('Booking Failed', {
-          description: result.error || 'Failed to create shipment. Please try again.',
+          description: body.error || 'Failed to create shipment. Please try again.',
         });
+        return;
       }
+
+      // --- Success (201) ---
+      const shipmentId = body.shipment.id;
+      console.log('[DocumentBooking] Shipment created:', shipmentId);
+
+      // Insert type-specific data (non-blocking on failure)
+      try {
+        await insertDocumentItems(shipmentId, bookingData);
+      } catch (err) {
+        console.error('[DocumentBooking] Document items insert failed:', err);
+        toast.warning('Booking created but some details may not have saved. Contact support if needed.');
+      }
+
+      // Insert add-ons (non-blocking on failure)
+      try {
+        if (addons.length > 0) {
+          await insertAddons(shipmentId, addons);
+        }
+      } catch (err) {
+        console.error('[DocumentBooking] Add-ons insert failed:', err);
+        toast.warning('Booking created but add-on details may not have saved.');
+      }
+
+      // Wallet deduction
+      console.log('[DocumentBooking] Deducting funds from wallet...');
+      const walletResult = await deductFundsForShipment(
+        payload.totalAmount,
+        shipmentId,
+        `Document shipment to ${bookingData.consigneeAddress.country}`,
+      );
+
+      if (!walletResult.success) {
+        console.error('[DocumentBooking] Wallet deduction failed:', walletResult.error);
+        toast.error('Payment Failed', {
+          description: walletResult.error || 'Your shipment was created but payment could not be processed.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Refresh wallet balance
+      await refreshBalance();
+
+      successFeedback();
+      playSuccess();
+
+      toast.success('Booking Confirmed!', {
+        description: `Shipment ID: ${shipmentId}`,
+      });
+
+      // Fire-and-forget email notification
+      sendStatusNotification(shipmentId, 'confirmed').catch(() => {});
+
+      // Discard draft after successful booking
+      discardDraft();
+
+      // Redirect to shipments page
+      setTimeout(() => {
+        router.push('/shipments');
+      }, 1500);
     } catch (error) {
       errorFeedback();
       playError();

@@ -24,7 +24,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { createGiftShipment } from '@/lib/shipments/giftShipmentService';
+import { adaptBookingData } from '@/lib/shipments/bookingAdapter';
+import { submitBooking } from '@/lib/shipments/lifecycleApiClient';
+import { insertGiftItems, uploadShipmentDocuments, insertAddons } from '@/lib/shipments/postBookingService';
+import { sendStatusNotification } from '@/lib/email/notify';
 import { toast } from 'sonner';
 
 export interface GiftItem {
@@ -137,11 +140,12 @@ const GiftBooking = () => {
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingReferenceId, setBookingReferenceId] = useState<string | null>(null);
   const { mediumTap, errorFeedback, successFeedback } = useHaptics();
   const { playClick, playError, playSuccess } = useSoundEffects();
-  const { user } = useAuth();
-  const { deductFundsForShipment, availableBalance } = useWallet();
+  const { user, session } = useAuth();
+  const { deductFundsForShipment, refreshBalance } = useWallet();
   const router = useRouter();
 
   const totalValue = bookingData.items.reduce((sum, item) => sum + (item.units * item.unitPrice), 0);
@@ -251,107 +255,167 @@ const GiftBooking = () => {
     setValidationErrors([]);
   };
 
-  const handleConfirmAndPay = async () => {
-    if (!user) {
-      toast.error('Please login to continue');
+  const handleConfirmBooking = async () => {
+    if (!user || !session?.access_token) {
+      toast.error('Please sign in to continue');
+      router.push('/auth');
       return;
     }
 
-    setIsProcessing(true);
+    setIsSubmitting(true);
     mediumTap();
 
     try {
-      // Calculate total amount (matching GiftReviewStep pricing)
-      const itemCount = bookingData.items.length;
-      const country = bookingData.consigneeAddress.country;
-      const isGCC = country === 'AE' || country === 'SA';
+      console.log('[GiftBooking] Submitting booking via lifecycle API...');
 
-      const basePrice = isGCC ? 1450 : 1850;
-      const shippingPrice = basePrice + (itemCount > 3 ? (itemCount - 3) * 100 : 0);
+      // Generate or reuse bookingReferenceId for idempotency
+      let refId = bookingReferenceId;
+      if (!refId) {
+        const adapted = adaptBookingData({ formData: bookingData, shipmentType: 'gift', draftId });
+        refId = adapted.bookingReferenceId;
+        setBookingReferenceId(refId);
+      }
 
-      let totalAmount = shippingPrice;
-      if (bookingData.insurance) totalAmount += 150;
-      if (bookingData.giftWrapping) totalAmount += 100;
+      // Adapt form data to lifecycle API schema
+      const payload = adaptBookingData({ formData: bookingData, shipmentType: 'gift', draftId });
+      // Ensure the same reference ID is used across retries
+      payload.bookingReferenceId = refId;
 
-      console.log('[GiftBooking] Total amount:', totalAmount);
+      // Add add-on costs to the total
+      let addonTotal = 0;
+      const addons: Array<{ type: string; name: string; cost: number }> = [];
+      if (bookingData.insurance) {
+        addons.push({ type: 'insurance', name: 'Shipment Insurance', cost: 150 });
+        addonTotal += 150;
+      }
+      if (bookingData.giftWrapping) {
+        addons.push({ type: 'gift_wrapping', name: 'Gift Wrapping', cost: 100 });
+        addonTotal += 100;
+      }
+      payload.totalAmount += addonTotal;
 
-      // Check wallet balance
-      console.log('[GiftBooking] Available balance:', availableBalance);
+      // Call lifecycle API
+      const { httpStatus, body } = await submitBooking(payload, session.access_token);
 
-      if (availableBalance < totalAmount) {
-        toast.error(`Insufficient balance. Available: ₹${availableBalance.toLocaleString('en-IN')}`);
+      // Handle error status codes
+      if (httpStatus === 401) {
+        toast.error('Session expired. Please sign in again.');
+        router.push('/auth');
+        return;
+      }
+      if (httpStatus === 429) {
+        toast.error('Too many requests', {
+          description: 'Please wait a moment before trying again.',
+        });
+        return;
+      }
+      if (httpStatus === 502) {
+        toast.error('Courier Unavailable', {
+          description: 'Courier service is temporarily unavailable. Please try again later.',
+        });
+        return;
+      }
+      if (httpStatus === 400) {
+        const detail = body.details?.map(d => `${d.field}: ${d.message}`).join(', ') || body.error;
+        toast.error('Validation Error', { description: detail || 'Invalid booking data.' });
+        return;
+      }
+      if (httpStatus === 0) {
+        toast.error('Connection Error', {
+          description: body.error || 'Unable to connect. Please check your internet connection.',
+        });
+        return;
+      }
+      if (!body.success || !body.shipment) {
         errorFeedback();
         playError();
-        setIsProcessing(false);
+        toast.error('Booking Failed', {
+          description: body.error || 'Failed to create shipment. Please try again.',
+        });
         return;
       }
 
-      // Transform data to match service interface
-      const serviceData = {
-        items: bookingData.items.map(item => ({
-          id: item.id,
-          itemName: item.name,
-          hsnCode: item.hsnCode,
-          description: item.description,
-          quantity: item.units,
-          unitPrice: item.unitPrice,
-          totalValue: item.units * item.unitPrice,
-        })),
-        pickupAddress: bookingData.pickupAddress,
-        consigneeAddress: bookingData.consigneeAddress,
-        insurance: bookingData.insurance,
-        giftWrapping: bookingData.giftWrapping,
-        passportPhotoPage: bookingData.passportPhotoPage,
-        passportAddressPage: bookingData.passportAddressPage,
-      };
+      // --- Success (201) ---
+      const shipmentId = body.shipment.id;
+      console.log('[GiftBooking] Shipment created:', shipmentId);
 
-      // Create shipment
-      console.log('[GiftBooking] Creating shipment...');
-      const result = await createGiftShipment({
-        bookingData: serviceData,
-        userId: user.id,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create shipment');
+      // Insert type-specific data (non-blocking on failure)
+      try {
+        await insertGiftItems(shipmentId, bookingData);
+      } catch (err) {
+        console.error('[GiftBooking] Gift items insert failed:', err);
+        toast.warning('Booking created but some details may not have saved. Contact support if needed.');
       }
 
-      console.log('[GiftBooking] Shipment created:', result.shipmentId);
+      // Upload documents (non-blocking on failure)
+      try {
+        const files: Array<{ file: File; type: string }> = [];
+        if (bookingData.passportPhotoPage) files.push({ file: bookingData.passportPhotoPage, type: 'passport_photo' });
+        if (bookingData.passportAddressPage) files.push({ file: bookingData.passportAddressPage, type: 'passport_address' });
+        if (files.length > 0) {
+          await uploadShipmentDocuments(shipmentId, files);
+        }
+      } catch (err) {
+        console.error('[GiftBooking] Document upload failed:', err);
+        toast.warning('Booking created but some documents may not have uploaded. Contact support if needed.');
+      }
 
-      // Deduct from wallet using WalletContext
-      console.log('[GiftBooking] Deducting from wallet...');
-      const deductResult = await deductFundsForShipment(
-        totalAmount,
-        result.shipmentId!,
-        `Gift shipment - ${result.trackingNumber}`
+      // Insert add-ons (non-blocking on failure)
+      try {
+        if (addons.length > 0) {
+          await insertAddons(shipmentId, addons);
+        }
+      } catch (err) {
+        console.error('[GiftBooking] Add-ons insert failed:', err);
+        toast.warning('Booking created but add-on details may not have saved.');
+      }
+
+      // Wallet deduction
+      console.log('[GiftBooking] Deducting funds from wallet...');
+      const walletResult = await deductFundsForShipment(
+        payload.totalAmount,
+        shipmentId,
+        `Gift shipment to ${bookingData.consigneeAddress.country}`,
       );
 
-      if (!deductResult.success) {
-        throw new Error(deductResult.error || 'Failed to deduct from wallet');
+      if (!walletResult.success) {
+        console.error('[GiftBooking] Wallet deduction failed:', walletResult.error);
+        toast.error('Payment Failed', {
+          description: walletResult.error || 'Your shipment was created but payment could not be processed.',
+        });
+        setIsSubmitting(false);
+        return;
       }
 
-      console.log('[GiftBooking] Wallet deducted successfully');
+      // Refresh wallet balance
+      await refreshBalance();
 
-      // Success!
       successFeedback();
       playSuccess();
-      toast.success('Booking confirmed! Redirecting to dashboard...');
 
-      // Discard draft
+      toast.success('Booking Confirmed!', {
+        description: `Shipment ID: ${shipmentId}`,
+      });
+
+      // Fire-and-forget email notification
+      sendStatusNotification(shipmentId, 'confirmed').catch(() => {});
+
+      // Discard draft after successful booking
       discardDraft();
 
       // Redirect to dashboard
       setTimeout(() => {
         router.push('/dashboard');
       }, 1500);
-
-    } catch (error: any) {
-      console.error('[GiftBooking] Error:', error);
-      toast.error(error.message || 'Booking failed. Please try again.');
+    } catch (error) {
       errorFeedback();
       playError();
+      console.error('[GiftBooking] Error:', error);
+      toast.error('Unexpected Error', {
+        description: 'Something went wrong. Please try again.',
+      });
     } finally {
-      setIsProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -476,11 +540,11 @@ const GiftBooking = () => {
             </Button>
           ) : (
             <Button
-              onClick={handleConfirmAndPay}
-              disabled={isProcessing || hasBlockingIssue}
+              onClick={handleConfirmBooking}
+              disabled={isSubmitting || hasBlockingIssue}
               className="btn-press bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
-              {isProcessing ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Processing...
