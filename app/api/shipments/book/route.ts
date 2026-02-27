@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { bookingRequestSchema } from '@/lib/shipment-lifecycle/inputValidator';
 import { checkRateLimit } from '@/lib/shipment-lifecycle/rateLimiter';
-import { createBooking } from '@/lib/shipment-lifecycle/bookingService';
+import { createBooking, BookingRequest } from '@/lib/shipment-lifecycle/bookingService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     // 4. Call createBooking
     const result = await createBooking({
       userId: user.id,
-      ...validation.data,
+      ...(validation.data as BookingRequest),
     });
 
     // 5. Return appropriate response
