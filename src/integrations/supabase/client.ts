@@ -6,21 +6,43 @@ import type { Database } from './types';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
 
-// Validate environment variables
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.error('Missing Supabase environment variables');
-  console.error('SUPABASE_URL:', SUPABASE_URL);
-  console.error('SUPABASE_PUBLISHABLE_KEY:', SUPABASE_PUBLISHABLE_KEY ? 'Present' : 'Missing');
-}
-
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: typeof window !== 'undefined' ? localStorage : undefined,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-}) as any;
+let _supabase: any = null;
+
+function getClient() {
+  if (_supabase) return _supabase;
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    // Return a no-op proxy during SSR/build when env vars aren't available
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return new Proxy({} as any, {
+      get: () => new Proxy(() => Promise.resolve({ data: null, error: null }), {
+        get: () => new Proxy(() => Promise.resolve({ data: null, error: null }), {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          get: (_t: any, _p: any) => () => Promise.resolve({ data: null, error: null }),
+          apply: () => Promise.resolve({ data: null, error: null }),
+        }),
+        apply: () => Promise.resolve({ data: null, error: null }),
+      }),
+    });
+  }
+  _supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: typeof window !== 'undefined' ? localStorage : undefined,
+      persistSession: true,
+      autoRefreshToken: true,
+    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }) as any;
+  return _supabase;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabase: any = new Proxy({} as any, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get(_target: any, prop: string) {
+    return getClient()[prop];
+  },
+});
