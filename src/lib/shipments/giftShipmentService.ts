@@ -5,6 +5,9 @@ import {
   FILE_TYPES,
 } from '@/lib/storage/storageService';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 export interface GiftItem {
   id: string;
   itemName: string;
@@ -59,36 +62,23 @@ export const createGiftShipment = async ({
   userId,
 }: CreateGiftShipmentParams): Promise<CreateGiftShipmentResult> => {
   try {
-    console.log('[GiftShipmentService] Creating gift shipment...');
-
-    // Calculate total declared value
     const totalDeclaredValue = bookingData.items.reduce((sum, item) => sum + item.totalValue, 0);
 
-    // Check CSB IV limit (₹25,000)
     if (totalDeclaredValue > 25000) {
-      return {
-        success: false,
-        error: 'Total value exceeds CSB IV limit of ₹25,000',
-      };
+      return { success: false, error: 'Total value exceeds CSB IV limit of ₹25,000' };
     }
 
-    // Calculate shipping cost
     const baseAmount = calculateShippingCost(bookingData);
     let totalAmount = baseAmount;
-
-    // Add-ons
     if (bookingData.insurance) totalAmount += 150;
     if (bookingData.giftWrapping) totalAmount += 100;
 
-    // Generate tracking number
     const trackingNumber = `CRX-GFT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-    // Format addresses as text for required columns
     const originAddressText = `${bookingData.pickupAddress.addressLine1}, ${bookingData.pickupAddress.addressLine2 ? bookingData.pickupAddress.addressLine2 + ', ' : ''}${bookingData.pickupAddress.city}, ${bookingData.pickupAddress.state} - ${bookingData.pickupAddress.pincode}`;
     const destinationAddressText = `${bookingData.consigneeAddress.addressLine1}, ${bookingData.consigneeAddress.addressLine2 ? bookingData.consigneeAddress.addressLine2 + ', ' : ''}${bookingData.consigneeAddress.city}, ${bookingData.consigneeAddress.country} - ${bookingData.consigneeAddress.zipcode}`;
 
-    // Create shipment record
-    const { data: shipment, error: shipmentError } = await supabase
+    const { data: shipment, error: shipmentError } = await db
       .from('shipments')
       .insert({
         user_id: userId,
@@ -115,9 +105,6 @@ export const createGiftShipment = async ({
       throw shipmentError;
     }
 
-    console.log('[GiftShipmentService] Shipment created:', shipment.id);
-
-    // Create gift items records
     const giftItemsToInsert = bookingData.items.map(item => ({
       shipment_id: shipment.id,
       item_name: item.itemName,
@@ -130,16 +117,14 @@ export const createGiftShipment = async ({
       gift_wrapping: bookingData.giftWrapping,
     }));
 
-    const { error: itemsError } = await supabase
+    const { error: itemsError } = await db
       .from('gift_items')
       .insert(giftItemsToInsert);
 
     if (itemsError) {
       console.error('[GiftShipmentService] Error creating gift items:', itemsError);
-      // Don't fail the whole operation, just log the error
     }
 
-    // Upload passport documents if provided
     const passportUploads: Array<{ file: File; type: string }> = [];
     if (bookingData.passportPhotoPage) {
       passportUploads.push({ file: bookingData.passportPhotoPage, type: 'passport_photo_page' });
@@ -154,8 +139,6 @@ export const createGiftShipment = async ({
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const filePath = `${shipment.id}/${type}_${timestamp}_${sanitizedName}`;
 
-        console.log(`[GiftShipmentService] Uploading ${type}...`);
-
         const result = await uploadWithValidation({
           bucket: STORAGE_BUCKETS.PASSPORT_DOCUMENTS,
           file,
@@ -165,11 +148,8 @@ export const createGiftShipment = async ({
         });
 
         if (result.success) {
-          console.log(`[GiftShipmentService] ${type} uploaded:`, result.path);
-
-          // Save document record
-          await supabase
-            .from('shipment_documents' as any)
+          await db
+            .from('shipment_documents')
             .insert({
               shipment_id: shipment.id,
               document_type: type,
@@ -184,7 +164,6 @@ export const createGiftShipment = async ({
         }
       } catch (uploadErr) {
         console.error(`[GiftShipmentService] ${type} upload exception:`, uploadErr);
-        // Don't fail the whole operation for document upload errors
       }
     }
 
@@ -195,40 +174,26 @@ export const createGiftShipment = async ({
     };
   } catch (error: any) {
     console.error('[GiftShipmentService] Error:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to create gift shipment',
-    };
+    return { success: false, error: error.message || 'Failed to create gift shipment' };
   }
 };
 
-// Calculate shipping cost based on value and destination
 const calculateShippingCost = (data: GiftBookingData): number => {
   const itemCount = data.items.length;
-  const country = data.consigneeAddress.country;
-
-  // Check if GCC country (UAE, Saudi Arabia)
-  const isGCC = country === 'AE' || country === 'SA';
-
-  // Base price
+  const isGCC = data.consigneeAddress.country === 'AE' || data.consigneeAddress.country === 'SA';
   const basePrice = isGCC ? 1450 : 1850;
-
-  // Add extra cost for more than 3 items
   const extraItemsCost = itemCount > 3 ? (itemCount - 3) * 100 : 0;
-
   return basePrice + extraItemsCost;
 };
 
-// Estimate weight based on items (simplified)
 const estimateWeight = (items: GiftItem[]): number => {
-  // Assume average 0.5kg per item
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
   return totalQuantity * 0.5;
 };
 
 export const getGiftShipmentDetails = async (shipmentId: string) => {
   try {
-    const { data: shipment, error: shipmentError } = await supabase
+    const { data: shipment, error: shipmentError } = await db
       .from('shipments')
       .select('*')
       .eq('id', shipmentId)
@@ -236,7 +201,7 @@ export const getGiftShipmentDetails = async (shipmentId: string) => {
 
     if (shipmentError) throw shipmentError;
 
-    const { data: giftItems, error: itemsError } = await supabase
+    const { data: giftItems, error: itemsError } = await db
       .from('gift_items')
       .select('*')
       .eq('shipment_id', shipmentId);
@@ -245,16 +210,9 @@ export const getGiftShipmentDetails = async (shipmentId: string) => {
       console.error('Error fetching gift items:', itemsError);
     }
 
-    return {
-      success: true,
-      shipment,
-      giftItems,
-    };
+    return { success: true, shipment, giftItems };
   } catch (error: any) {
     console.error('[GiftShipmentService] Error fetching details:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    return { success: false, error: error.message };
   }
 };

@@ -1,9 +1,13 @@
-import type { Shipment } from '@/hooks/useShipments';
+export type ShipmentLike = { status: string };
 
-export function filterActiveShipments(shipments: Shipment[]): Shipment[] {
-  return shipments.filter((shipment) => shipment.current_leg !== 'COMPLETED');
+export function filterActiveShipments<T extends ShipmentLike>(shipments: T[]): T[] {
+  return shipments.filter((s) => !['delivered', 'cancelled'].includes(s.status));
 }
 
-export function filterDeliveredShipments(shipments: Shipment[]): Shipment[] {
-  return shipments.filter((shipment) => shipment.current_leg === 'COMPLETED');
+export function filterDeliveredShipments<T extends ShipmentLike>(shipments: T[]): T[] {
+  return shipments.filter((s) => s.status === 'delivered');
+}
+
+export function filterCancelledShipments<T extends ShipmentLike>(shipments: T[]): T[] {
+  return shipments.filter((s) => s.status === 'cancelled');
 }

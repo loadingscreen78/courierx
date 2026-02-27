@@ -7,6 +7,9 @@ import {
   FILE_TYPES,
 } from '@/lib/storage/storageService';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 export interface CreateMedicineShipmentParams {
   bookingData: MedicineBookingData;
   userId: string;
@@ -19,9 +22,6 @@ export interface MedicineShipmentResponse {
   error?: string;
 }
 
-/**
- * Upload document to Supabase Storage
- */
 async function uploadDocument(
   file: File,
   shipmentId: string,
@@ -32,8 +32,6 @@ async function uploadDocument(
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filePath = `${shipmentId}/${documentType}_${timestamp}_${sanitizedName}`;
 
-    console.log(`[Storage] Uploading ${documentType} to ${STORAGE_BUCKETS.SHIPMENT_DOCUMENTS}/${filePath}`);
-
     const result = await uploadWithValidation({
       bucket: STORAGE_BUCKETS.SHIPMENT_DOCUMENTS,
       file,
@@ -43,40 +41,22 @@ async function uploadDocument(
     });
 
     if (!result.success) {
-      console.error(`[Storage] Upload failed for ${documentType}:`, result.error);
       return { path: '', error: result.error };
     }
 
-    console.log(`[Storage] ${documentType} uploaded successfully:`, result.path);
     return { path: result.path || filePath, url: result.url };
   } catch (err) {
-    console.error('[Storage] Upload exception:', err);
     return { path: '', error: err instanceof Error ? err.message : 'Upload failed' };
   }
 }
 
-/**
- * Calculate shipping costs based on medicines and destination
- */
 function calculateShippingCosts(medicines: Medicine[], country: string) {
-  // Calculate total weight (assuming average 50g per medicine unit)
-  const totalWeight = medicines.reduce((sum, med) => {
-    return sum + (med.unitCount * 0.05); // 50g = 0.05kg per unit
-  }, 0);
+  const totalWeight = medicines.reduce((sum, med) => sum + (med.unitCount * 0.05), 0);
+  const declaredValue = medicines.reduce((sum, med) => sum + (med.unitCount * med.unitPrice), 0);
 
-  // Calculate declared value
-  const declaredValue = medicines.reduce((sum, med) => {
-    return sum + (med.unitCount * med.unitPrice);
-  }, 0);
-
-  // Base shipping cost calculation (simplified)
-  // In production, this would call a rate calculator API
-  let baseShippingCost = 1500; // Base ₹1500
-
-  // Add weight-based cost (₹200 per kg)
+  let baseShippingCost = 1500;
   baseShippingCost += Math.ceil(totalWeight) * 200;
 
-  // Add destination-based cost
   const destinationMultiplier: Record<string, number> = {
     'United States': 1.5,
     'United Kingdom': 1.3,
@@ -85,10 +65,8 @@ function calculateShippingCosts(medicines: Medicine[], country: string) {
     'UAE': 1.2,
     'Singapore': 1.3,
   };
-  const multiplier = destinationMultiplier[country] || 1.0;
-  baseShippingCost *= multiplier;
+  baseShippingCost *= destinationMultiplier[country] || 1.0;
 
-  // Calculate GST (18%)
   const gstAmount = baseShippingCost * 0.18;
   const totalAmount = baseShippingCost + gstAmount;
 
@@ -101,30 +79,17 @@ function calculateShippingCosts(medicines: Medicine[], country: string) {
   };
 }
 
-/**
- * Create a medicine shipment with all related data
- */
 export async function createMedicineShipment({
   bookingData,
   userId,
 }: CreateMedicineShipmentParams): Promise<MedicineShipmentResponse> {
   try {
-    console.log('[MedicineShipment] Starting shipment creation for user:', userId);
+    const costs = calculateShippingCosts(bookingData.medicines, bookingData.consigneeAddress.country);
 
-    // Calculate costs
-    const costs = calculateShippingCosts(
-      bookingData.medicines,
-      bookingData.consigneeAddress.country
-    );
-
-    // Add add-on costs
     let totalAmount = costs.totalAmount;
     if (bookingData.insurance) totalAmount += 150;
     if (bookingData.specialPackaging) totalAmount += 300;
 
-    console.log('[MedicineShipment] Total amount to charge:', totalAmount);
-
-    // Format addresses as JSONB
     const pickupAddress = {
       fullName: bookingData.pickupAddress.fullName,
       phone: bookingData.pickupAddress.phone,
@@ -146,12 +111,10 @@ export async function createMedicineShipment({
       zipcode: bookingData.consigneeAddress.zipcode,
     };
 
-    // Format addresses as text for legacy columns
     const originAddressText = `${pickupAddress.addressLine1}, ${pickupAddress.addressLine2 ? pickupAddress.addressLine2 + ', ' : ''}${pickupAddress.city}, ${pickupAddress.state} - ${pickupAddress.pincode}`;
     const destinationAddressText = `${consigneeAddress.addressLine1}, ${consigneeAddress.addressLine2 ? consigneeAddress.addressLine2 + ', ' : ''}${consigneeAddress.city}, ${consigneeAddress.country} - ${consigneeAddress.zipcode}`;
 
-    // Create shipment record
-    const { data: shipment, error: shipmentError } = await supabase
+    const { data: shipment, error: shipmentError } = await db
       .from('shipments')
       .insert({
         user_id: userId,
@@ -181,9 +144,6 @@ export async function createMedicineShipment({
       return { success: false, error: shipmentError.message };
     }
 
-    console.log('[MedicineShipment] Shipment created:', shipment.id);
-
-    // Insert medicine items
     const medicineItems = bookingData.medicines.map((medicine) => ({
       shipment_id: shipment.id,
       medicine_type: medicine.medicineType,
@@ -202,44 +162,25 @@ export async function createMedicineShipment({
       is_controlled: medicine.isControlled,
     }));
 
-    const { error: medicineError } = await supabase
+    const { error: medicineError } = await db
       .from('medicine_items')
       .insert(medicineItems);
 
     if (medicineError) {
       console.error('[MedicineShipment] Medicine items error:', medicineError);
-      // Rollback: delete shipment
-      await supabase.from('shipments').delete().eq('id', shipment.id);
+      await db.from('shipments').delete().eq('id', shipment.id);
       return { success: false, error: medicineError.message };
     }
 
-    console.log('[MedicineShipment] Medicine items inserted:', medicineItems.length);
-
-    // Upload documents
-    const documentUploads: Array<{
-      file: File;
-      type: string;
-    }> = [];
-
-    if (bookingData.prescription) {
-      documentUploads.push({ file: bookingData.prescription, type: 'prescription' });
-    }
-    if (bookingData.pharmacyBill) {
-      documentUploads.push({ file: bookingData.pharmacyBill, type: 'pharmacy_bill' });
-    }
-    if (bookingData.consigneeId) {
-      documentUploads.push({ file: bookingData.consigneeId, type: 'consignee_id' });
-    }
+    const documentUploads: Array<{ file: File; type: string }> = [];
+    if (bookingData.prescription) documentUploads.push({ file: bookingData.prescription, type: 'prescription' });
+    if (bookingData.pharmacyBill) documentUploads.push({ file: bookingData.pharmacyBill, type: 'pharmacy_bill' });
+    if (bookingData.consigneeId) documentUploads.push({ file: bookingData.consigneeId, type: 'consignee_id' });
 
     const documentRecords = [];
     for (const { file, type } of documentUploads) {
       const { path, url, error } = await uploadDocument(file, shipment.id, type);
-      if (error || !path) {
-        console.error(`[MedicineShipment] Document upload error (${type}):`, error);
-        // Continue with other uploads
-        continue;
-      }
-
+      if (error || !path) continue;
       documentRecords.push({
         shipment_id: shipment.id,
         document_type: type,
@@ -252,19 +193,12 @@ export async function createMedicineShipment({
     }
 
     if (documentRecords.length > 0) {
-      const { error: docError } = await supabase
+      const { error: docError } = await db
         .from('shipment_documents')
         .insert(documentRecords);
-
-      if (docError) {
-        console.error('[MedicineShipment] Document records error:', docError);
-        // Don't fail the entire shipment for document errors
-      } else {
-        console.log('[MedicineShipment] Documents uploaded:', documentRecords.length);
-      }
+      if (docError) console.error('[MedicineShipment] Document records error:', docError);
     }
 
-    // Insert add-ons
     const addons = [];
     if (bookingData.insurance) {
       addons.push({
@@ -284,19 +218,11 @@ export async function createMedicineShipment({
     }
 
     if (addons.length > 0) {
-      const { error: addonError } = await supabase
+      const { error: addonError } = await db
         .from('shipment_addons')
         .insert(addons);
-
-      if (addonError) {
-        console.error('[MedicineShipment] Addons error:', addonError);
-        // Don't fail for addon errors
-      } else {
-        console.log('[MedicineShipment] Addons inserted:', addons.length);
-      }
+      if (addonError) console.error('[MedicineShipment] Addons error:', addonError);
     }
-
-    console.log('[MedicineShipment] Shipment creation completed successfully');
 
     return {
       success: true,
@@ -305,65 +231,40 @@ export async function createMedicineShipment({
     };
   } catch (error) {
     console.error('[MedicineShipment] Unexpected error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' };
   }
 }
 
-/**
- * Get shipment details with all related data
- */
 export async function getMedicineShipmentDetails(shipmentId: string) {
   try {
-    // Get shipment
-    const { data: shipment, error: shipmentError } = await supabase
+    const { data: shipment, error: shipmentError } = await db
       .from('shipments')
       .select('*')
       .eq('id', shipmentId)
       .single();
-
     if (shipmentError) throw shipmentError;
 
-    // Get medicine items
-    const { data: medicines, error: medicineError } = await supabase
+    const { data: medicines, error: medicineError } = await db
       .from('medicine_items')
       .select('*')
       .eq('shipment_id', shipmentId);
-
     if (medicineError) throw medicineError;
 
-    // Get documents
-    const { data: documents, error: docError } = await supabase
+    const { data: documents, error: docError } = await db
       .from('shipment_documents')
       .select('*')
       .eq('shipment_id', shipmentId);
-
     if (docError) throw docError;
 
-    // Get addons
-    const { data: addons, error: addonError } = await supabase
+    const { data: addons, error: addonError } = await db
       .from('shipment_addons')
       .select('*')
       .eq('shipment_id', shipmentId);
-
     if (addonError) throw addonError;
 
-    return {
-      success: true,
-      data: {
-        shipment,
-        medicines,
-        documents,
-        addons,
-      },
-    };
+    return { success: true, data: { shipment, medicines, documents, addons } };
   } catch (error) {
     console.error('[MedicineShipment] Get details error:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch shipment details',
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch shipment details' };
   }
 }

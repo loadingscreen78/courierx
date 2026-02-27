@@ -384,12 +384,12 @@ const shipmentArb = fc.record({
 // ── Pure logic extracted from AdminDashboard for testability ─────────────────
 
 /** Simulates the admin panel query filter: only COUNTER, INTERNATIONAL, COMPLETED */
-function filterAdminVisible(shipments: { current_leg: ShipmentLeg }[]) {
+function filterAdminVisible(shipments: { current_leg: ShipmentLeg; current_status: ShipmentStatus; updated_at: string; id: string }[]) {
   return shipments.filter(s => ADMIN_VISIBLE_LEGS.includes(s.current_leg));
 }
 
 /** Simulates queue tab grouping from AdminDashboard */
-function groupByQueueTab(shipments: { current_leg: ShipmentLeg }[]) {
+function groupByQueueTab(shipments: { current_leg: ShipmentLeg; current_status: ShipmentStatus; updated_at: string; id: string }[]) {
   return {
     warehouse: shipments.filter(s => s.current_leg === 'COUNTER'),
     international: shipments.filter(s => s.current_leg === 'INTERNATIONAL'),
@@ -398,7 +398,7 @@ function groupByQueueTab(shipments: { current_leg: ShipmentLeg }[]) {
 }
 
 /** Simulates stat card counting from AdminDashboard */
-function computeStatCounts(shipments: { current_status: ShipmentStatus }[]) {
+function computeStatCounts(shipments: { current_status: ShipmentStatus; current_leg: ShipmentLeg; updated_at: string; id: string }[]) {
   return {
     pendingQC: shipments.filter(s => s.current_status === 'ARRIVED_AT_WAREHOUSE').length,
     readyToDispatch: shipments.filter(s => s.current_status === 'DISPATCH_APPROVED').length,
