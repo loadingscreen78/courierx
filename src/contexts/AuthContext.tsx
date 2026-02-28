@@ -30,6 +30,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithOtp: (phone: string) => Promise<{ error: Error | null }>;
   verifyOtp: (phone: string, token: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: (idToken: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   completeAadhaarKyc: (aadhaarNumber: string, otp: string) => Promise<{ error: Error | null; address?: string }>;
@@ -154,10 +155,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
+  const signInWithGoogle = async (idToken: string): Promise<{ error: Error | null }> => {
+    try {
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: idToken,
+      });
+      return { error: error as Error | null };
+    } catch (err) {
+      return { error: err as Error };
+    }
   };
+
+  const signOut = async () => {
+      try {
+        if (typeof google !== 'undefined' && google.accounts?.id) {
+          google.accounts.id.disableAutoSelect();
+        }
+      } catch {
+        // GSI not loaded, safe to ignore
+      }
+      await supabase.auth.signOut();
+      setProfile(null);
+    };
+
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('Not authenticated') };
@@ -223,6 +244,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signUpWithEmail,
       signInWithOtp,
       verifyOtp,
+      signInWithGoogle,
       signOut,
       updateProfile,
       completeAadhaarKyc,

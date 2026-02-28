@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import logoMain from '@/assets/logo-main.jpeg';
 import { motion } from 'framer-motion';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { useGoogleGsi } from '@/hooks/useGoogleGsi';
 
 const emailPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -49,7 +50,7 @@ const panelOptions = [
 const Auth = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, signInWithEmail, signUpWithEmail, signInWithOtp, verifyOtp } = useAuth();
+  const { user, signInWithEmail, signUpWithEmail, signInWithOtp, verifyOtp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   
   const [step, setStep] = useState<AuthStep>('panel-select');
@@ -59,6 +60,7 @@ const Auth = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   useSeo({
     title: 'Sign In | CourierX',
@@ -281,6 +283,62 @@ const Auth = () => {
     }
   };
 
+  const handleGoogleCallback = async (idToken: string) => {
+    setIsLoading(true);
+    const { error } = await signInWithGoogle(idToken);
+
+    if (error) {
+      setIsLoading(false);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    // Get current user (session is now active)
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) { setIsLoading(false); return; }
+
+    // Panel-specific redirect (identical to handleEmailAuth)
+    if (selectedPanel === 'cxbc') {
+      const { data: partner } = await supabase
+        .from('cxbc_partners')
+        .select('id, status')
+        .eq('user_id', currentUser.id)
+        .eq('status', 'approved')
+        .maybeSingle();
+      if (partner) {
+        setIsLoading(false);
+        window.location.href = '/cxbc';
+      } else {
+        toast({ title: 'Access Denied', description: 'Not an approved partner.', variant: 'destructive' });
+        await supabase.auth.signOut();
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Customer panel
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .single();
+
+    if (profileData?.full_name) {
+      const returnUrl = localStorage.getItem('authReturnUrl');
+      if (returnUrl) {
+        localStorage.removeItem('authReturnUrl');
+        setIsLoading(false);
+        window.location.href = returnUrl;
+      } else {
+        setIsLoading(false);
+        window.location.href = from || '/dashboard';
+      }
+    } else {
+      setIsLoading(false);
+      window.location.href = '/onboarding';
+    }
+  };
+
   const handleSendOtp = async (values: PhoneFormValues) => {
     setIsLoading(true);
     const { error } = await signInWithOtp(values.phone);
@@ -306,6 +364,13 @@ const Auth = () => {
     if (error) { toast({ title: 'Error', description: 'Failed to resend.', variant: 'destructive' }); return; }
     toast({ title: 'OTP Resent', description: `New code sent to ${phoneNumber}` });
   };
+
+  useGoogleGsi({
+    enabled: selectedPanel === 'customer' || selectedPanel === 'cxbc',
+    onCredential: handleGoogleCallback,
+    buttonDivRef: googleButtonRef,
+    isLoading,
+  });
 
   return (
     <div className="min-h-screen flex bg-background relative">
@@ -716,6 +781,29 @@ const Auth = () => {
                   </Form>
                 )}
 
+                {/* Google Sign-In Section */}
+                {(selectedPanel === 'customer' || selectedPanel === 'cxbc') && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-sm text-muted-foreground">or continue with</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                    <div ref={googleButtonRef} />
+                  </>
+                )}
+
+                {/* Legal Note */}
+                {(selectedPanel === 'customer' || selectedPanel === 'cxbc') && (
+                  <p className="text-center text-xs text-muted-foreground/70">
+                    By continuing, you agree to the terms of{' '}
+                    <a href="/terms-and-conditions" className="underline hover:text-coke-red transition-colors">
+                      Indiano Ventures Private Limited
+                    </a>
+                    .
+                  </p>
+                )}
+
                 {/* WhatsApp Form */}
                 {selectedPanel === 'customer' && method === 'whatsapp' && (
                   <Form {...phoneForm}>
@@ -816,7 +904,7 @@ const Auth = () => {
 
         {/* Footer */}
         <div className="p-6 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
-          <span className="font-typewriter">© 2026 CourierX Inc.</span>
+          <span className="font-typewriter">© 2026 Indiano Ventures Private Limited</span>
           <div className="flex items-center gap-4">
             <a href="/contact" className="hover:text-coke-red transition-colors">Contact Us</a>
             <span>English</span>
