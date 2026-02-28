@@ -646,6 +646,64 @@ const Contact = () => {
         </div>
       </section>
 
+      {/* Company Identity Section */}
+      <section className="py-16 bg-gradient-to-br from-charcoal/5 via-background to-coke-red/5">
+        <div className="container">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="relative rounded-3xl bg-card border border-border p-8 md:p-12 shadow-xl overflow-hidden"
+          >
+            {/* Subtle background accent */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-coke-red/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+            
+            <div className="relative z-10 grid md:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-coke-red/10 flex items-center justify-center">
+                    <Building2 className="h-6 w-6 text-coke-red" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground font-medium">Operated by</p>
+                    <h3 className="text-2xl font-bold font-typewriter">Indiano Ventures Private Limited</h3>
+                  </div>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  CourierX™ is a brand of Indiano Ventures Private Limited, a registered company in India providing reliable international and domestic courier services.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50">
+                  <MapPin className="h-5 w-5 text-coke-red mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Registered Address</p>
+                    <p className="text-sm text-muted-foreground">A/1801, Gagan Unnati, Kondhwa BK, Pune – 411048, Maharashtra, India</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50">
+                    <Mail className="h-5 w-5 text-primary shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Email</p>
+                      <p className="text-xs text-muted-foreground">info@courierx.in</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50">
+                    <Phone className="h-5 w-5 text-candlestick-green shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Phone</p>
+                      <p className="text-xs text-muted-foreground">+91 8484050057</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Quick Contact Cards */}
       <section className="py-16 bg-muted/30">
         <div className="container">
