@@ -221,7 +221,7 @@ const RateCalculator = () => {
               </div>
 
               {/* Weight */}
-              <div className="space-y-4 isolate-render">
+              <div className="space-y-4 isolate-render" style={{ contain: 'layout style' }}>
                 <Label className="flex items-center gap-2">
                   <Scale className="h-4 w-4" />
                   Package Weight
@@ -273,10 +273,10 @@ const RateCalculator = () => {
                       type="button"
                       onClick={() => setWeightGrams(preset.value)}
                       className={cn(
-                        "relative overflow-hidden rounded-xl p-4 transition-all duration-300 border-2 no-flicker",
+                        "rounded-xl p-4 transition-colors duration-200 border-2 no-flicker",
                         weightGrams === preset.value
-                          ? "bg-primary/10 border-primary shadow-lg shadow-primary/20 scale-105"
-                          : "bg-card border-border hover:border-primary/50 hover:scale-[1.02]"
+                          ? "bg-primary/10 border-primary shadow-md"
+                          : "bg-card border-border hover:border-primary/50"
                       )}
                     >
                       <div className="text-3xl mb-2">{preset.icon}</div>
@@ -286,9 +286,6 @@ const RateCalculator = () => {
                       )}>
                         {preset.label}
                       </div>
-                      {weightGrams === preset.value && (
-                        <div className="absolute inset-0 bg-primary/5 animate-pulse" />
-                      )}
                     </button>
                   ))}
                 </div>

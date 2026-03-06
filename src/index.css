@@ -826,7 +826,6 @@ input[type="range"].slider-thumb::-moz-range-thumb:active {
       hsl(var(--muted)) 100%);
   outline: none;
   cursor: pointer;
-  transition: height 0.2s ease;
   /* Performance optimizations */
   will-change: background;
   transform: translateZ(0);
@@ -835,7 +834,7 @@ input[type="range"].slider-thumb::-moz-range-thumb:active {
 }
 
 .weight-slider:hover {
-  height: 10px;
+  height: 8px;
 }
 
 .weight-slider::-webkit-slider-thumb {
