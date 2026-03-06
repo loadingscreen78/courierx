@@ -362,7 +362,7 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
         if (bookingData.pharmacyBill) files.push({ file: bookingData.pharmacyBill, type: 'pharmacy_bill' });
         if (bookingData.consigneeId) files.push({ file: bookingData.consigneeId, type: 'consignee_id' });
         if (files.length > 0) {
-          await uploadShipmentDocuments(shipmentId, files);
+          await uploadShipmentDocuments(shipmentId, files, user.id);
         }
       } catch (err) {
         console.error('[MedicineBooking] Document upload failed:', err);

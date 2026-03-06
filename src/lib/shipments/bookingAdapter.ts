@@ -275,7 +275,7 @@ export function adaptBookingData(input: AdapterInput): AdaptedBookingRequest {
   const result: AdaptedBookingRequest = {
     bookingReferenceId,
     recipientName: formData.consigneeAddress.fullName,
-    recipientPhone: formData.consigneeAddress.phone,
+    recipientPhone: formData.consigneeAddress.phone.replace(/[\s\-().]/g, ''),
     originAddress,
     destinationAddress,
     destinationCountry: formData.consigneeAddress.country,

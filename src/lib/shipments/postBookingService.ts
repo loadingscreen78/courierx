@@ -145,12 +145,16 @@ export async function insertGiftItems(
 export async function uploadShipmentDocuments(
   shipmentId: string,
   files: Array<{ file: File; type: string }>,
+  userId?: string,
 ): Promise<void> {
   for (const { file, type } of files) {
     try {
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `${shipmentId}/${type}_${timestamp}_${sanitizedName}`;
+      // RLS policy requires first folder = auth.uid(), so prefix with userId
+      const filePath = userId
+        ? `${userId}/${shipmentId}/${type}_${timestamp}_${sanitizedName}`
+        : `${shipmentId}/${type}_${timestamp}_${sanitizedName}`;
 
       const result = await uploadWithValidation({
         bucket: STORAGE_BUCKETS.SHIPMENT_DOCUMENTS,

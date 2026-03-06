@@ -353,7 +353,7 @@ const GiftBooking = () => {
         if (bookingData.passportPhotoPage) files.push({ file: bookingData.passportPhotoPage, type: 'passport_photo' });
         if (bookingData.passportAddressPage) files.push({ file: bookingData.passportAddressPage, type: 'passport_address' });
         if (files.length > 0) {
-          await uploadShipmentDocuments(shipmentId, files);
+          await uploadShipmentDocuments(shipmentId, files, user?.id);
         }
       } catch (err) {
         console.error('[GiftBooking] Document upload failed:', err);

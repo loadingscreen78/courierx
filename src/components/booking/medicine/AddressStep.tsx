@@ -72,8 +72,15 @@ const AddressStepComponent = ({ data, onUpdate }: AddressStepProps) => {
   }, []);
 
   const updateConsigneeAddress = useCallback((field: string, value: string) => {
-    setLocalConsigneeAddress(prev => ({ ...prev, [field]: value }));
-  }, []);
+    setLocalConsigneeAddress(prev => {
+      const updated = { ...prev, [field]: value };
+      // Immediately sync phone to parent so validation uses latest value
+      if (field === 'phone') {
+        onUpdate({ consigneeAddress: updated });
+      }
+      return updated;
+    });
+  }, [onUpdate]);
 
   // Handle PIN code change with auto-fill for pickup address
   const handlePincodeChange = async (pincode: string) => {
