@@ -101,6 +101,10 @@ export async function updateShipmentStatus(
   if (req.newLeg) {
     updatePayload.current_leg = req.newLeg;
   }
+  // Auto-transition leg to COMPLETED when reaching INTL_DELIVERED
+  if (req.newStatus === 'INTL_DELIVERED' && !req.newLeg) {
+    updatePayload.current_leg = 'COMPLETED';
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from('shipments')

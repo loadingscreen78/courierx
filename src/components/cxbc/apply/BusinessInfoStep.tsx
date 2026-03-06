@@ -80,7 +80,7 @@ export const BusinessInfoStep = ({ data, onUpdate, onNext }: BusinessInfoStepPro
             Business Details
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="businessName"
@@ -143,7 +143,7 @@ export const BusinessInfoStep = ({ data, onUpdate, onNext }: BusinessInfoStepPro
             Owner Details
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="ownerName"
@@ -173,7 +173,7 @@ export const BusinessInfoStep = ({ data, onUpdate, onNext }: BusinessInfoStepPro
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="phone"
@@ -225,7 +225,7 @@ export const BusinessInfoStep = ({ data, onUpdate, onNext }: BusinessInfoStepPro
             )}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormField
               control={form.control}
               name="city"

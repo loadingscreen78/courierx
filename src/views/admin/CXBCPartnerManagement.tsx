@@ -98,8 +98,32 @@ const CXBCPartnerManagement = () => {
 
   const approveMutation = useMutation({
     mutationFn: async (application: PartnerApplication) => {
+      // Resolve user_id: use application's user_id, or look up by email
+      let resolvedUserId = application.user_id;
+
+      if (!resolvedUserId) {
+        // Look up existing auth user by email via profiles table
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('email', application.email)
+          .maybeSingle();
+
+        if (profileError) {
+          console.warn('Failed to look up user by email:', profileError.message);
+        }
+
+        if (profile?.user_id) {
+          resolvedUserId = profile.user_id;
+        }
+      }
+
+      if (!resolvedUserId) {
+        throw new Error('NO_LINKED_USER');
+      }
+
       const { error: partnerError } = await supabase.from('cxbc_partners').insert({
-        user_id: application.user_id!, business_name: application.business_name,
+        user_id: resolvedUserId, business_name: application.business_name,
         owner_name: application.owner_name, email: application.email, phone: application.phone,
         pan_number: application.pan_number, gst_number: application.gst_number,
         address: application.address, city: application.city, state: application.state,
@@ -113,7 +137,13 @@ const CXBCPartnerManagement = () => {
       if (updateError) throw updateError;
     },
     onSuccess: () => { toast.success('Partner approved successfully'); queryClient.invalidateQueries({ queryKey: ['cxbc-applications'] }); setSelectedApplication(null); },
-    onError: (error) => { toast.error('Failed to approve partner: ' + error.message); },
+    onError: (error) => {
+      if (error.message === 'NO_LINKED_USER') {
+        toast.warning('This application has no linked user account. The applicant must sign up first, or create the partner directly using "Create Partner".');
+      } else {
+        toast.error('Failed to approve partner: ' + error.message);
+      }
+    },
   });
 
   const createPartnerMutation = useMutation({
@@ -121,8 +151,30 @@ const CXBCPartnerManagement = () => {
       const { data, error } = await supabase.functions.invoke('admin-create-cxbc-partner', {
         body: { email: form.email, password: form.password, businessName: form.businessName, ownerName: form.ownerName, phone: form.phone, panNumber: form.panNumber, gstNumber: form.gstNumber || undefined, address: form.address, city: form.city, state: form.state, pincode: form.pincode, zone: form.zone },
       });
-      if (error) throw new Error(error.message || 'Failed to create partner');
-      if (data?.error) throw new Error(data.error);
+      // supabase.functions.invoke sets error for non-2xx; try to parse response context
+      if (error) {
+        // Try to get the response body for more context
+        let errorBody: any = null;
+        try {
+          if ('context' in error && (error as any).context?.body) {
+            const reader = (error as any).context.body.getReader();
+            const { value } = await reader.read();
+            errorBody = JSON.parse(new TextDecoder().decode(value));
+          }
+        } catch { /* ignore parse errors */ }
+
+        const errorMessage = errorBody?.error || error.message || 'Failed to create partner';
+        const isDuplicate = !!errorBody?.partner_id;
+        const err = new Error(errorMessage);
+        (err as any).isDuplicate = isDuplicate;
+        throw err;
+      }
+      if (data?.error) {
+        const isDuplicate = !!data.partner_id;
+        const err = new Error(data.error);
+        (err as any).isDuplicate = isDuplicate;
+        throw err;
+      }
       if (!data?.user_id || !data?.partner_id) throw new Error('Partner created but response was incomplete');
       return { email: form.email, password: form.password, userId: data.user_id, partnerId: data.partner_id, linkedExisting: data.linked_existing_user || false };
     },
@@ -131,7 +183,15 @@ const CXBCPartnerManagement = () => {
       toast.success(credentials.linkedExisting ? 'Partner linked to existing account' : 'Partner created successfully');
       queryClient.invalidateQueries({ queryKey: ['cxbc-applications'] });
     },
-    onError: (error) => { toast.error(error.message); },
+    onError: (error: any) => {
+      if (error.isDuplicate) {
+        toast.error('This email already has an existing CXBC partner account.');
+      } else if (error.message?.includes('Missing required fields') || error.message?.includes('Invalid')) {
+        toast.error('Invalid input: ' + error.message);
+      } else {
+        toast.error(error.message);
+      }
+    },
   });
 
   const rejectMutation = useMutation({
@@ -151,7 +211,7 @@ const CXBCPartnerManagement = () => {
     app.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleApprove = () => { if (!selectedApplication) return; if (!selectedApplication.user_id) { toast.error('Application has no linked user account'); return; } approveMutation.mutate(selectedApplication); };
+  const handleApprove = () => { if (!selectedApplication) return; approveMutation.mutate(selectedApplication); };
   const handleReject = () => { if (!selectedApplication || !rejectionReason.trim()) return; rejectMutation.mutate({ application: selectedApplication, reason: rejectionReason }); };
   const handleCreatePartner = () => {
     if (!createForm.email || !createForm.password || !createForm.businessName || !createForm.ownerName || !createForm.phone || !createForm.panNumber || !createForm.address || !createForm.city || !createForm.state || !createForm.pincode) { toast.error('Please fill in all required fields'); return; }
@@ -317,7 +377,7 @@ const CXBCPartnerManagement = () => {
                   <button onClick={() => setShowRejectDialog(true)} disabled={rejectMutation.isPending} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-gray-300 hover:bg-white/20 transition-colors">
                     <XCircle className="h-4 w-4" /> Reject
                   </button>
-                  <button onClick={handleApprove} disabled={approveMutation.isPending || !selectedApplication.user_id} className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-white bg-green-600 hover:bg-green-700 shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-40 transition-all">
+                  <button onClick={handleApprove} disabled={approveMutation.isPending} className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-white bg-green-600 hover:bg-green-700 shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-40 transition-all">
                     {approveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Approve Partner
                   </button>
                 </DialogFooter>

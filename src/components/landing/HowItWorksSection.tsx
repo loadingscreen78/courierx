@@ -1,3 +1,5 @@
+"use client";
+
 import { UserPlus, Package, CreditCard, Truck, CheckCircle } from 'lucide-react';
 import { AnimatedSection, StaggerContainer, StaggerItem } from './AnimatedSection';
 import { motion } from 'framer-motion';

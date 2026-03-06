@@ -46,17 +46,7 @@ export async function handleStatusChange(
     return;
   }
 
-  // INTL_DELIVERED on INTERNATIONAL leg → transition to COMPLETED
-  if (newStatus === 'INTL_DELIVERED' && newLeg === 'INTERNATIONAL') {
-    const { updateShipmentStatus } = await import('./stateMachine');
-    await updateShipmentStatus({
-      shipmentId: shipment.id,
-      newStatus: 'INTL_DELIVERED',
-      newLeg: 'COMPLETED',
-      source: 'SYSTEM',
-      metadata: { trigger: 'international_delivered_completion' },
-      expectedVersion: shipment.version,
-    });
-    return;
-  }
+  // INTL_DELIVERED → COMPLETED leg transition is now handled automatically
+  // by the state machine (auto-sets current_leg = 'COMPLETED' when
+  // transitioning to INTL_DELIVERED), so no side-effect needed here.
 }

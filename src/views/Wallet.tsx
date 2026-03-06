@@ -8,11 +8,9 @@ import { useInvoices } from '@/hooks/useInvoices';
 import { generateInvoicePDF, generateAllInvoicesPDF } from '@/lib/generateInvoicePDF';
 import { PaymentLoadingOverlay } from '@/components/wallet/PaymentLoadingOverlay';
 import { PaymentMethod } from '@/lib/wallet/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import {
@@ -32,7 +30,6 @@ import {
   TrendingDown,
   IndianRupee,
   Clock,
-  Filter,
   FileText,
   Download,
   Loader2,
@@ -40,72 +37,105 @@ import {
   CreditCard,
   Building2,
   Receipt,
+  ChevronRight,
+  Shield,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
+import { motion } from 'framer-motion';
 
 type FilterType = 'all' | 'credit' | 'debit' | 'refund';
 type InvoiceStatus = Database['public']['Enums']['invoice_status'];
 
 const TransactionIcon = ({ type }: { type: Transaction['type'] }) => {
-  switch (type) {
-    case 'credit':
-      return <ArrowDownLeft className="h-4 w-4 text-accent-foreground" />;
-    case 'debit':
-      return <ArrowUpRight className="h-4 w-4 text-destructive" />;
-    case 'refund':
-      return <RotateCcw className="h-4 w-4 text-primary" />;
-  }
+  const styles = {
+    credit: 'bg-green-500/10 text-green-600',
+    debit: 'bg-red-500/10 text-red-500',
+    refund: 'bg-blue-500/10 text-blue-600',
+  };
+  const icons = {
+    credit: <ArrowDownLeft className="h-4 w-4" />,
+    debit: <ArrowUpRight className="h-4 w-4" />,
+    refund: <RotateCcw className="h-4 w-4" />,
+  };
+  return (
+    <div className={cn("p-2.5 rounded-xl shrink-0", styles[type])}>
+      {icons[type]}
+    </div>
+  );
 };
 
 const TransactionBadge = ({ type }: { type: Transaction['type'] }) => {
-  switch (type) {
-    case 'credit':
-      return <Badge className="bg-accent/20 text-accent-foreground border-accent">Credit</Badge>;
-    case 'debit':
-      return <Badge variant="destructive">Debit</Badge>;
-    case 'refund':
-      return <Badge className="bg-primary/20 text-primary border-primary">Refund</Badge>;
-  }
+  const styles = {
+    credit: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900',
+    debit: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900',
+    refund: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900',
+  };
+  const labels = { credit: 'Credit', debit: 'Debit', refund: 'Refund' };
+  return (
+    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", styles[type])}>
+      {labels[type]}
+    </span>
+  );
 };
 
 const InvoiceStatusBadge = ({ status }: { status: InvoiceStatus }) => {
-  switch (status) {
-    case 'paid':
-      return <Badge className="bg-success/20 text-success border-success">Paid</Badge>;
-    case 'pending':
-      return <Badge className="bg-warning/20 text-warning border-warning">Pending</Badge>;
-    case 'refunded':
-      return <Badge className="bg-primary/20 text-primary border-primary">Refunded</Badge>;
-  }
+  const styles = {
+    paid: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900',
+    pending: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900',
+    refunded: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900',
+  };
+  const labels = { paid: 'Paid', pending: 'Pending', refunded: 'Refunded' };
+  return (
+    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", styles[status])}>
+      {labels[status]}
+    </span>
+  );
 };
 
 const PaymentMethodButton = ({ 
   method, 
   icon: Icon, 
-  label, 
+  label,
+  description,
   selected, 
   onClick 
 }: { 
   method: PaymentMethod; 
   icon: React.ElementType; 
-  label: string; 
+  label: string;
+  description: string;
   selected: boolean; 
   onClick: () => void;
 }) => (
   <button
     onClick={onClick}
     className={cn(
-      "flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all",
+      "flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all duration-200 text-left w-full",
       selected 
-        ? "border-primary bg-primary/10" 
-        : "border-muted hover:border-primary/50"
+        ? "border-coke-red bg-coke-red/5 shadow-sm shadow-coke-red/10" 
+        : "border-border/60 hover:border-border bg-muted/30 hover:bg-muted/50"
     )}
   >
-    <Icon className={cn("h-6 w-6", selected ? "text-primary" : "text-muted-foreground")} />
-    <span className={cn("text-sm font-medium", selected ? "text-primary" : "text-muted-foreground")}>
-      {label}
-    </span>
+    <div className={cn(
+      "p-2.5 rounded-xl shrink-0 transition-colors",
+      selected ? "bg-coke-red/15 text-coke-red" : "bg-muted text-muted-foreground"
+    )}>
+      <Icon className="h-5 w-5" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className={cn("font-semibold text-sm", selected ? "text-foreground" : "text-muted-foreground")}>
+        {label}
+      </p>
+      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+    </div>
+    <div className={cn(
+      "w-4 h-4 rounded-full border-2 shrink-0 transition-all",
+      selected ? "border-coke-red bg-coke-red" : "border-muted-foreground/30"
+    )}>
+      {selected && <div className="w-full h-full rounded-full bg-white scale-[0.4]" />}
+    </div>
   </button>
 );
 
@@ -127,7 +157,6 @@ const WalletPage = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('upi');
   const [filter, setFilter] = useState<FilterType>('all');
   const [activeTab, setActiveTab] = useState('transactions');
-  const [lastReceipt, setLastReceipt] = useState<{ receiptNumber: string } | null>(null);
 
   const handleRecharge = async () => {
     const amount = parseInt(rechargeAmount);
@@ -135,13 +164,9 @@ const WalletPage = () => {
       toast.error(`Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}`);
       return;
     }
-    
     setShowRechargeDialog(false);
-    
     const result = await addFundsWithPayment(amount, selectedPaymentMethod);
-    
     if (result.success && result.receipt) {
-      setLastReceipt({ receiptNumber: result.receipt.receiptNumber });
       toast.success(
         <div className="flex flex-col gap-1">
           <span>₹{amount.toLocaleString('en-IN')} added to wallet</span>
@@ -156,424 +181,379 @@ const WalletPage = () => {
     } else if (!result.success) {
       toast.error(result.error || 'Payment failed');
     }
-    
     setRechargeAmount('');
   };
 
-  const handlePaymentOverlayClose = () => {
-    resetPaymentState();
-  };
-
-  const handlePaymentRetry = () => {
-    resetPaymentState();
-    setShowRechargeDialog(true);
-  };
-
   const quickRechargeAmounts = [500, 1000, 2000, 5000];
+  const filteredTransactions = transactions.filter(t => filter === 'all' || t.type === filter);
 
-  const filteredTransactions = transactions.filter(t => 
-    filter === 'all' || t.type === filter
-  );
-
-  // Calculate stats
-  const totalCredits = transactions
-    .filter(t => t.type === 'credit')
-    .reduce((sum, t) => sum + t.amount, 0);
-  
-  const totalDebits = transactions
-    .filter(t => t.type === 'debit')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalRefunds = transactions
-    .filter(t => t.type === 'refund')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalCredits = transactions.filter(t => t.type === 'credit').reduce((s, t) => s + t.amount, 0);
+  const totalDebits = transactions.filter(t => t.type === 'debit').reduce((s, t) => s + t.amount, 0);
+  const totalRefunds = transactions.filter(t => t.type === 'refund').reduce((s, t) => s + t.amount, 0);
 
   const handleDownloadInvoice = (invoice: Database['public']['Tables']['invoices']['Row']) => {
     try {
       generateInvoicePDF(invoice);
       toast.success('Invoice downloaded');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
+    } catch {
       toast.error('Failed to generate invoice');
     }
   };
 
   const handleExportAllInvoices = () => {
-    if (invoices.length === 0) {
-      toast.error('No invoices to export');
-      return;
-    }
+    if (invoices.length === 0) { toast.error('No invoices to export'); return; }
     try {
       generateAllInvoicesPDF(invoices);
       toast.success('All invoices exported');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
+    } catch {
       toast.error('Failed to export invoices');
     }
   };
 
-  const handleDownloadTransactionReceipt = (transactionId: string) => {
-    downloadTransactionReceipt(transactionId);
-    toast.success('Receipt downloaded');
-  };
+  const filterOptions: { key: FilterType; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'credit', label: 'Credits' },
+    { key: 'debit', label: 'Debits' },
+    { key: 'refund', label: 'Refunds' },
+  ];
 
   return (
     <AppLayout>
-      <div className="space-y-6 pb-24 md:pb-6">
-        {/* Header */}
-        <div className="space-y-1">
-          <h1 className="font-typewriter text-2xl font-bold">Wallet & Billing</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your balance, transactions, and invoices
-          </p>
+      <div className="space-y-5 pb-24 md:pb-6 max-w-2xl mx-auto">
+        {/* Page Header */}
+        <div>
+          <h1 className="font-typewriter text-2xl font-bold">Wallet</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage balance, transactions & invoices</p>
         </div>
 
-        {/* Balance Card */}
-        <Card className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary-foreground/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary-foreground/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-          <CardContent className="py-8 relative">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm opacity-80 flex items-center gap-2">
-                  <WalletIcon className="h-4 w-4" />
-                  Available Balance
-                </p>
-                <p className="font-typewriter text-4xl font-bold">
+        {/* Balance Hero Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1a1a1a] to-[#2d1010] p-6 text-white shadow-xl shadow-black/20"
+        >
+          {/* Background decoration */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-coke-red/10 rounded-full -translate-y-1/2 translate-x-1/4 blur-2xl" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-red-900/20 rounded-full translate-y-1/2 -translate-x-1/4 blur-xl" />
+          
+          <div className="relative z-10">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <WalletIcon className="h-4 w-4 text-white/60" />
+                  <span className="text-sm text-white/60">Available Balance</span>
+                </div>
+                <p className="font-typewriter text-4xl font-bold tracking-tight">
                   ₹{balance.toLocaleString('en-IN')}
                 </p>
-                <p className="text-xs opacity-60">
-                  Minimum ₹1,000 required for bookings
-                </p>
+                <p className="text-xs text-white/40 mt-1.5">Min. ₹1,000 required for bookings</p>
               </div>
-              <Button 
-                onClick={() => setShowRechargeDialog(true)}
-                size="lg"
-                className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 gap-2"
-              >
-                <Plus className="h-5 w-5" />
-                Add Money
-              </Button>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/10 rounded-xl border border-white/10">
+                <Shield className="h-3.5 w-3.5 text-green-400" />
+                <span className="text-xs text-white/70 font-medium">Secured</span>
+              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-accent/20">
-                  <TrendingUp className="h-4 w-4 text-accent-foreground" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Credits</p>
-                  <p className="font-typewriter font-bold text-accent-foreground">
-                    ₹{totalCredits.toLocaleString('en-IN')}
-                  </p>
-                </div>
+            <button
+              onClick={() => setShowRechargeDialog(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-coke-red hover:bg-red-600 text-white rounded-2xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-coke-red/30 hover:shadow-coke-red/50 active:scale-[0.97]"
+            >
+              <Plus className="h-4 w-4" />
+              Add Money
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Credits', value: totalCredits, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-500/10' },
+            { label: 'Debits', value: totalDebits, icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-500/10' },
+            { label: 'Refunds', value: totalRefunds, icon: RotateCcw, color: 'text-blue-600', bg: 'bg-blue-500/10' },
+          ].map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              className="bg-card border border-border/50 rounded-2xl p-3.5"
+            >
+              <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center mb-2", stat.bg)}>
+                <stat.icon className={cn("h-4 w-4", stat.color)} />
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-destructive/20">
-                  <TrendingDown className="h-4 w-4 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Debits</p>
-                  <p className="font-typewriter font-bold text-destructive">
-                    ₹{totalDebits.toLocaleString('en-IN')}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="py-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-primary/20">
-                  <RotateCcw className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Refunds</p>
-                  <p className="font-typewriter font-bold text-primary">
-                    ₹{totalRefunds.toLocaleString('en-IN')}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{stat.label}</p>
+              <p className={cn("font-typewriter font-bold text-sm mt-0.5", stat.color)}>
+                ₹{stat.value.toLocaleString('en-IN')}
+              </p>
+            </motion.div>
+          ))}
         </div>
 
-        {/* Tabs for Transactions and Invoices */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="transactions" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full h-11 bg-muted/60 rounded-2xl p-1">
+            <TabsTrigger value="transactions" className="flex-1 rounded-xl text-sm data-[state=active]:shadow-sm">
+              <Clock className="h-3.5 w-3.5 mr-1.5" />
               Transactions
             </TabsTrigger>
-            <TabsTrigger value="invoices" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
+            <TabsTrigger value="invoices" className="flex-1 rounded-xl text-sm data-[state=active]:shadow-sm">
+              <FileText className="h-3.5 w-3.5 mr-1.5" />
               Invoices
             </TabsTrigger>
           </TabsList>
 
           {/* Transactions Tab */}
-          <TabsContent value="transactions" className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Transaction History
-                  </CardTitle>
-                  <div className="flex items-center gap-1">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    {(['all', 'credit', 'debit', 'refund'] as FilterType[]).map((f) => (
-                      <Button
-                        key={f}
-                        variant={filter === f ? 'default' : 'ghost'}
-                        size="sm"
-                        className="h-7 px-2 text-xs capitalize"
-                        onClick={() => setFilter(f)}
-                      >
-                        {f}
-                      </Button>
-                    ))}
+          <TabsContent value="transactions" className="mt-4 space-y-3">
+            {/* Filter Pills */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {filterOptions.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={cn(
+                    "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200",
+                    filter === f.key
+                      ? "bg-foreground text-background shadow-sm"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Transaction List */}
+            <div className="bg-card border border-border/50 rounded-3xl overflow-hidden">
+              {filteredTransactions.length === 0 ? (
+                <div className="text-center py-12 px-6">
+                  <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <IndianRupee className="h-6 w-6 text-muted-foreground/50" />
                   </div>
+                  <p className="font-medium text-sm">No transactions yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Add money to get started</p>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {filteredTransactions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <IndianRupee className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                    <p>No transactions found</p>
-                  </div>
-                ) : (
-                  filteredTransactions.map((transaction, index) => (
-                    <div key={transaction.id}>
-                      {index > 0 && <Separator className="my-3" />}
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "p-2 rounded-full",
-                          transaction.type === 'credit' && "bg-accent/20",
-                          transaction.type === 'debit' && "bg-destructive/20",
-                          transaction.type === 'refund' && "bg-primary/20"
-                        )}>
-                          <TransactionIcon type={transaction.type} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{transaction.description}</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>{format(transaction.date, 'dd MMM yyyy, hh:mm a')}</span>
-                            {transaction.referenceId && (
-                              <>
-                                <span>•</span>
-                                <span className="font-mono">{transaction.referenceId}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right flex items-center gap-2">
-                          <div>
-                            <p className={cn(
-                              "font-typewriter font-bold",
-                              transaction.type === 'credit' && "text-accent-foreground",
-                              transaction.type === 'debit' && "text-destructive",
-                              transaction.type === 'refund' && "text-primary"
-                            )}>
-                              {transaction.type === 'debit' ? '-' : '+'}₹{transaction.amount.toLocaleString('en-IN')}
-                            </p>
-                            <TransactionBadge type={transaction.type} />
-                          </div>
-                          {transaction.type === 'credit' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleDownloadTransactionReceipt(transaction.id)}
-                              title="Download Receipt"
-                            >
-                              <Receipt className="h-4 w-4" />
-                            </Button>
+              ) : (
+                <div className="divide-y divide-border/40">
+                  {filteredTransactions.map((transaction, index) => (
+                    <motion.div
+                      key={transaction.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: index * 0.03 }}
+                      className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors"
+                    >
+                      <TransactionIcon type={transaction.type} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{transaction.description}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            {format(transaction.date, 'dd MMM, hh:mm a')}
+                          </span>
+                          {transaction.referenceId && (
+                            <>
+                              <span className="text-muted-foreground/40">·</span>
+                              <span className="text-xs text-muted-foreground font-mono truncate max-w-[80px]">
+                                {transaction.referenceId}
+                              </span>
+                            </>
                           )}
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+                      <div className="text-right flex items-center gap-2 shrink-0">
+                        <div>
+                          <p className={cn(
+                            "font-typewriter font-bold text-sm",
+                            transaction.type === 'credit' && "text-green-600",
+                            transaction.type === 'debit' && "text-red-500",
+                            transaction.type === 'refund' && "text-blue-600"
+                          )}>
+                            {transaction.type === 'debit' ? '-' : '+'}₹{transaction.amount.toLocaleString('en-IN')}
+                          </p>
+                          <div className="flex justify-end mt-1">
+                            <TransactionBadge type={transaction.type} />
+                          </div>
+                        </div>
+                        {transaction.type === 'credit' && (
+                          <button
+                            className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                            onClick={() => downloadTransactionReceipt(transaction.id)}
+                            title="Download Receipt"
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Guidelines */}
+            <div className="flex items-start gap-3 p-4 bg-muted/40 rounded-2xl border border-border/40">
+              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground text-sm">Wallet Guidelines</p>
+                <p>Min. recharge: ₹{MIN_RECHARGE_AMOUNT} · Min. booking balance: ₹1,000</p>
+                <p>Refunds processed in 24–48 hrs · Withdrawals on account closure only</p>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Invoices Tab */}
-          <TabsContent value="invoices" className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Shipment Invoices
-                  </CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-2"
-                    onClick={handleExportAllInvoices}
-                    disabled={invoices.length === 0}
-                  >
-                    <Download className="h-4 w-4" />
-                    Export All
-                  </Button>
+          <TabsContent value="invoices" className="mt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-1.5 rounded-xl h-8 text-xs"
+                onClick={handleExportAllInvoices}
+                disabled={invoices.length === 0}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export All
+              </Button>
+            </div>
+
+            <div className="bg-card border border-border/50 rounded-3xl overflow-hidden">
+              {invoicesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {invoicesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              ) : invoices.length === 0 ? (
+                <div className="text-center py-12 px-6">
+                  <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <FileText className="h-6 w-6 text-muted-foreground/50" />
                   </div>
-                ) : invoices.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                    <p>No invoices yet</p>
-                    <p className="text-sm">Invoices will appear here after your first shipment</p>
-                  </div>
-                ) : (
-                  invoices.map((invoice, index) => (
-                    <div key={invoice.id}>
-                      {index > 0 && <Separator className="my-3" />}
-                      <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-full bg-muted">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{invoice.description}</p>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-mono">{invoice.invoice_number}</span>
-                            <span>•</span>
-                            <span>{format(new Date(invoice.created_at), 'dd MMM yyyy')}</span>
-                          </div>
-                        </div>
-                        <div className="text-right flex items-center gap-3">
-                          <div>
-                            <p className="font-typewriter font-bold">
-                              ₹{Number(invoice.total_amount).toLocaleString('en-IN')}
-                            </p>
-                            <InvoiceStatusBadge status={invoice.status} />
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8"
-                            onClick={() => handleDownloadInvoice(invoice)}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                  <p className="font-medium text-sm">No invoices yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Invoices appear after your first shipment</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/40">
+                  {invoices.map((invoice, index) => (
+                    <motion.div
+                      key={invoice.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: index * 0.03 }}
+                      className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="p-2.5 rounded-xl bg-muted shrink-0">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{invoice.description}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-xs font-mono text-muted-foreground">{invoice.invoice_number}</span>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(invoice.created_at), 'dd MMM yyyy')}
+                          </span>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Invoice Info */}
-            <Card className="bg-muted/50 border-dashed">
-              <CardContent className="py-4">
-                <div className="flex items-start gap-3">
-                  <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p className="font-medium text-foreground">About Invoices</p>
-                    <p>Invoices are automatically generated for each completed shipment and include GST details for business claims.</p>
-                  </div>
+                      <div className="text-right flex items-center gap-2 shrink-0">
+                        <div>
+                          <p className="font-typewriter font-bold text-sm">
+                            ₹{Number(invoice.total_amount).toLocaleString('en-IN')}
+                          </p>
+                          <div className="flex justify-end mt-1">
+                            <InvoiceStatusBadge status={invoice.status} />
+                          </div>
+                        </div>
+                        <button
+                          className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                          onClick={() => handleDownloadInvoice(invoice)}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
-
-        {/* Info Card - Only show on transactions tab */}
-        {activeTab === 'transactions' && (
-          <Card className="bg-muted/50">
-            <CardContent className="py-4">
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Wallet Guidelines</p>
-                <ul className="space-y-1 list-disc list-inside">
-                  <li>Minimum recharge amount: ₹{MIN_RECHARGE_AMOUNT}</li>
-                  <li>Minimum balance of ₹1,000 required for bookings</li>
-                  <li>Refunds are processed within 24-48 hours</li>
-                  <li>Withdrawals only available upon account closure</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
-      {/* Recharge Dialog */}
+      {/* Add Money Dialog */}
       <Dialog open={showRechargeDialog} onOpenChange={setShowRechargeDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-typewriter">Add Money to Wallet</DialogTitle>
-            <DialogDescription>
-              Choose an amount and payment method. Minimum: ₹{MIN_RECHARGE_AMOUNT}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
-            {/* Quick Amount Selection */}
-            <div className="grid grid-cols-4 gap-2">
-              {quickRechargeAmounts.map((amount) => (
-                <Button
-                  key={amount}
-                  variant="outline"
-                  onClick={() => setRechargeAmount(amount.toString())}
-                  className={cn(
-                    "font-typewriter",
-                    rechargeAmount === amount.toString() && "border-primary bg-primary/10"
-                  )}
-                >
-                  ₹{amount}
-                </Button>
-              ))}
+        <DialogContent className="sm:max-w-sm rounded-3xl p-0 overflow-hidden gap-0">
+          {/* Dialog Header */}
+          <div className="bg-gradient-to-br from-[#1a1a1a] to-[#2d1010] p-6 text-white">
+            <DialogHeader>
+              <DialogTitle className="font-typewriter text-xl text-white">Add Money</DialogTitle>
+              <DialogDescription className="text-white/50 text-sm mt-1">
+                Min. ₹{MIN_RECHARGE_AMOUNT} · Secure payment via Razorpay
+              </DialogDescription>
+            </DialogHeader>
+            {rechargeAmount && parseInt(rechargeAmount) >= MIN_RECHARGE_AMOUNT && (
+              <motion.p
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="font-typewriter text-3xl font-bold mt-4"
+              >
+                ₹{parseInt(rechargeAmount).toLocaleString('en-IN')}
+              </motion.p>
+            )}
+          </div>
+
+          <div className="p-5 space-y-5">
+            {/* Quick Amounts */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Quick Select</p>
+              <div className="grid grid-cols-4 gap-2">
+                {quickRechargeAmounts.map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => setRechargeAmount(amount.toString())}
+                    className={cn(
+                      "py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 border",
+                      rechargeAmount === amount.toString()
+                        ? "bg-foreground text-background border-foreground shadow-sm"
+                        : "bg-muted/50 border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    ₹{amount >= 1000 ? `${amount/1000}k` : amount}
+                  </button>
+                ))}
+              </div>
             </div>
-            
-            <Separator />
-            
+
             {/* Custom Amount */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Custom Amount</label>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Custom Amount</p>
               <div className="relative">
-                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground font-medium text-sm">₹</span>
                 <Input
                   type="number"
                   placeholder="Enter amount"
                   value={rechargeAmount}
                   onChange={(e) => setRechargeAmount(e.target.value)}
-                  className="pl-10 font-typewriter"
+                  className="pl-8 font-typewriter rounded-xl h-11 border-border/60 focus:border-coke-red"
                   min={MIN_RECHARGE_AMOUNT}
                 />
               </div>
             </div>
-            
-            <Separator />
-            
-            {/* Payment Method Selection */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Payment Method</label>
-              <div className="grid grid-cols-3 gap-3">
+
+            {/* Payment Method */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">Payment Method</p>
+              <div className="space-y-2">
                 <PaymentMethodButton
                   method="upi"
                   icon={Smartphone}
                   label="UPI"
+                  description="GPay, PhonePe, Paytm & more"
                   selected={selectedPaymentMethod === 'upi'}
                   onClick={() => setSelectedPaymentMethod('upi')}
                 />
                 <PaymentMethodButton
                   method="card"
                   icon={CreditCard}
-                  label="Card"
+                  label="Debit / Credit Card"
+                  description="Visa, Mastercard, RuPay"
                   selected={selectedPaymentMethod === 'card'}
                   onClick={() => setSelectedPaymentMethod('card')}
                 />
@@ -581,20 +561,24 @@ const WalletPage = () => {
                   method="netbanking"
                   icon={Building2}
                   label="Net Banking"
+                  description="All major Indian banks"
                   selected={selectedPaymentMethod === 'netbanking'}
                   onClick={() => setSelectedPaymentMethod('netbanking')}
                 />
               </div>
             </div>
-            
-            <Button 
-              onClick={handleRecharge} 
-              className="w-full gap-2"
+
+            <button
+              onClick={handleRecharge}
               disabled={!rechargeAmount || parseInt(rechargeAmount) < MIN_RECHARGE_AMOUNT}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-coke-red hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold text-sm transition-all duration-200 shadow-md shadow-coke-red/25 hover:shadow-coke-red/40"
             >
-              <Plus className="h-4 w-4" />
-              Pay ₹{rechargeAmount ? parseInt(rechargeAmount).toLocaleString('en-IN') : '0'}
-            </Button>
+              <Shield className="h-4 w-4" />
+              Pay Securely
+              {rechargeAmount && parseInt(rechargeAmount) >= MIN_RECHARGE_AMOUNT && (
+                <span className="font-typewriter">· ₹{parseInt(rechargeAmount).toLocaleString('en-IN')}</span>
+              )}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
@@ -606,8 +590,8 @@ const WalletPage = () => {
         message={paymentMessage}
         amount={parseInt(rechargeAmount) || 0}
         method={selectedPaymentMethod}
-        onClose={handlePaymentOverlayClose}
-        onRetry={handlePaymentRetry}
+        onClose={resetPaymentState}
+        onRetry={() => { resetPaymentState(); setShowRechargeDialog(true); }}
       />
     </AppLayout>
   );

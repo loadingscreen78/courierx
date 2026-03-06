@@ -1,6 +1,6 @@
 "use client";
 
-import { Wallet, Calculator, Bell, Globe, User, LogOut, AlertTriangle, Sparkles } from 'lucide-react';
+import { Wallet, Calculator, Bell, Globe, LogOut, AlertTriangle, Sparkles, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { VerificationBadge } from '@/components/ui/verification-badge';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import logoMain from '@/assets/logo-main.jpeg';
+import { cn } from '@/lib/utils';
 
 export const Header = () => {
   const { user, profile, signOut } = useAuth();
@@ -33,146 +34,136 @@ export const Header = () => {
   const isLowBalance = balance < MIN_BALANCE_REQUIRED;
 
   return (
-    <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50">
-      <div className="flex items-center justify-between h-16 px-4 lg:px-6">
+    <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/40">
+      <div className="flex items-center justify-between h-14 px-4 lg:px-6">
         {/* Logo */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <img 
             src={logoMain.src} 
             alt="CourierX" 
-            className="h-10 w-auto object-contain"
+            className="h-8 w-auto object-contain"
           />
-          <span className="hidden sm:block font-typewriter text-xl font-bold text-foreground">
+          <span className="hidden sm:block font-typewriter text-lg font-bold text-foreground">
             CourierX
           </span>
         </div>
 
         {/* Desktop Quick Actions */}
-        <div className="hidden md:flex items-center gap-3">
-          {/* Wallet Balance - Enhanced */}
+        <div className="hidden md:flex items-center gap-2">
+          {/* Wallet Balance */}
           <button
             onClick={() => router.push('/wallet')}
-            className={`group relative flex items-center gap-2.5 px-4 py-2.5 rounded-xl transition-all duration-300 btn-press ${
+            className={cn(
+              "group flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 border",
               isLowBalance 
-                ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15' 
-                : 'bg-gradient-to-r from-muted/80 to-muted/50 hover:from-muted hover:to-muted/70 border border-border/50'
-            }`}
+                ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 hover:bg-red-100 dark:hover:bg-red-950/50' 
+                : 'bg-muted/60 border-border/50 hover:bg-muted hover:border-border'
+            )}
           >
             {isLowBalance ? (
-              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
             ) : (
-              <div className="p-1 rounded-lg bg-green-500/10">
-                <Wallet className="h-4 w-4 text-green-600" />
+              <div className="w-5 h-5 rounded-md bg-green-500/15 flex items-center justify-center shrink-0">
+                <Wallet className="h-3 w-3 text-green-600" />
               </div>
             )}
-            <div className="flex flex-col items-start">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Balance</span>
-              <span className={`font-typewriter text-sm font-bold ${isLowBalance ? 'text-destructive' : 'text-foreground'}`}>
+            <div className="flex flex-col items-start leading-none">
+              <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Balance</span>
+              <span className={cn(
+                "font-typewriter text-sm font-bold mt-0.5",
+                isLowBalance ? 'text-destructive' : 'text-foreground'
+              )}>
                 ₹{balance.toLocaleString('en-IN')}
               </span>
             </div>
             {isLowBalance && (
-              <span className="absolute -top-1 -right-1 h-3 w-3 bg-destructive rounded-full animate-pulse" />
+              <span className="w-1.5 h-1.5 bg-destructive rounded-full animate-pulse shrink-0" />
             )}
           </button>
 
-          {/* Quick Rate Calculator - Enhanced */}
+          {/* Rate Calculator */}
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm" 
-            className="btn-press gap-2 rounded-xl border-border/50 hover:border-coke-red/30 hover:bg-coke-red/5 transition-all duration-300"
+            className="gap-1.5 rounded-xl text-muted-foreground hover:text-foreground h-9"
             onClick={() => router.push('/rate-calculator')}
           >
             <Calculator className="h-4 w-4" />
-            <span className="hidden lg:inline">Rate Calculator</span>
+            <span className="hidden lg:inline text-sm">Rates</span>
           </Button>
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-1.5">
-          {/* Mobile Wallet (shown on mobile/tablet) */}
+        <div className="flex items-center gap-1">
+          {/* Mobile Wallet */}
           <button
             onClick={() => router.push('/wallet')}
-            className={`relative md:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-300 btn-press ${
+            className={cn(
+              "relative md:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all border text-xs font-bold font-typewriter",
               isLowBalance 
-                ? 'bg-destructive/10 border border-destructive/30' 
-                : 'bg-muted/50 border border-border/50'
-            }`}
-          >
-            {isLowBalance && (
-              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-destructive' 
+                : 'bg-muted/60 border-border/50 text-foreground'
             )}
-            <Wallet className={`h-3.5 w-3.5 ${isLowBalance ? 'text-destructive' : 'text-foreground'}`} />
-            <span className={`font-typewriter text-xs font-bold ${isLowBalance ? 'text-destructive' : ''}`}>
-              ₹{balance.toLocaleString('en-IN')}
-            </span>
+          >
+            {isLowBalance && <AlertTriangle className="h-3 w-3" />}
+            <Wallet className="h-3 w-3" />
+            ₹{balance.toLocaleString('en-IN')}
             {isLowBalance && (
-              <span className="absolute -top-1 -right-1 h-2 w-2 bg-destructive rounded-full animate-pulse" />
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-destructive rounded-full animate-pulse" />
             )}
           </button>
 
-          {/* Theme Toggle */}
           <ThemeToggle />
 
-          {/* Language Selector */}
-          <Button variant="ghost" size="icon" className="btn-press rounded-xl hover:bg-muted/80">
-            <Globe className="h-5 w-5" />
+          {/* Notifications */}
+          <Button variant="ghost" size="icon" className="rounded-xl hover:bg-muted/80 relative h-9 w-9">
+            <Bell className="h-4 w-4" />
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-coke-red rounded-full border-2 border-background" />
           </Button>
 
-          {/* Notifications - Enhanced */}
-          <Button variant="ghost" size="icon" className="btn-press rounded-xl hover:bg-muted/80 relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 bg-coke-red rounded-full border-2 border-background">
-              <span className="absolute inset-0 rounded-full bg-coke-red animate-ping opacity-50" />
-            </span>
-          </Button>
-
-          {/* Profile Dropdown - Enhanced */}
+          {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="btn-press rounded-xl hover:bg-muted/80 relative">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-coke-red to-red-600 flex items-center justify-center text-white text-sm font-bold">
+              <Button variant="ghost" size="sm" className="rounded-xl hover:bg-muted/80 gap-2 h-9 px-2">
+                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-coke-red to-red-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
-                {isVerified !== undefined && (
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background flex items-center justify-center ${isVerified ? 'bg-green-500' : 'bg-amber-500'}`}>
-                    {isVerified && <Sparkles className="h-2 w-2 text-white" />}
-                  </span>
-                )}
+                <span className="hidden sm:block text-sm font-medium max-w-[80px] truncate">{displayName.split(' ')[0]}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60 rounded-xl p-2">
-              <DropdownMenuLabel className="font-normal p-3 bg-muted/50 rounded-lg mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-coke-red to-red-600 flex items-center justify-center text-white font-bold">
+            <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-border/60">
+              <DropdownMenuLabel className="font-normal p-3 bg-muted/50 rounded-xl mb-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-coke-red to-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                     {displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div className="flex flex-col">
-                    <p className="text-sm font-semibold leading-none">{displayName}</p>
-                    <p className="text-xs leading-none text-muted-foreground mt-1">{displayEmail}</p>
+                  <div className="flex flex-col min-w-0">
+                    <p className="text-sm font-semibold leading-none truncate">{displayName}</p>
+                    <p className="text-xs leading-none text-muted-foreground mt-1 truncate">{displayEmail}</p>
                   </div>
                 </div>
               </DropdownMenuLabel>
               
-              {/* Verification Status */}
-              <DropdownMenuItem className="cursor-default focus:bg-transparent rounded-lg">
+              <DropdownMenuItem className="cursor-default focus:bg-transparent rounded-lg py-1.5">
                 <VerificationBadge isVerified={!!isVerified} size="sm" />
               </DropdownMenuItem>
               
               {!isVerified && (
-                <DropdownMenuItem onClick={() => router.push('/auth/kyc')} className="rounded-lg">
+                <DropdownMenuItem onClick={() => router.push('/auth/kyc')} className="rounded-lg text-sm">
+                  <Sparkles className="mr-2 h-3.5 w-3.5 text-amber-500" />
                   Complete KYC
                 </DropdownMenuItem>
               )}
               
-              <DropdownMenuItem onClick={() => router.push('/profile')} className="rounded-lg">
+              <DropdownMenuItem onClick={() => router.push('/profile')} className="rounded-lg text-sm">
                 Profile & Settings
               </DropdownMenuItem>
               
-              <DropdownMenuSeparator className="my-2" />
+              <DropdownMenuSeparator className="my-1" />
               
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 rounded-lg">
-                <LogOut className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 rounded-lg text-sm">
+                <LogOut className="mr-2 h-3.5 w-3.5" />
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -182,4 +173,3 @@ export const Header = () => {
     </header>
   );
 };
-

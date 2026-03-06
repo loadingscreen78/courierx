@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { bookingRequestSchema } from '@/lib/shipment-lifecycle/inputValidator';
 import { checkRateLimit } from '@/lib/shipment-lifecycle/rateLimiter';
 import { createBooking, BookingRequest } from '@/lib/shipment-lifecycle/bookingService';
+
+const extendedBookingSchema = bookingRequestSchema.extend({
+  cxbcPartnerId: z.string().uuid().optional(),
+  source: z.enum(['cxbc', 'customer']).optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +33,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify customer role (reject admins — this endpoint is customer-only)
+    // Check if user is an approved CXBC partner
+    const { data: cxbcPartner } = await supabase
+      .from('cxbc_partners')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .maybeSingle();
+
+    // Verify role: reject admins UNLESS they are also an approved CXBC partner
     const { data: roles } = await supabase
       .from('user_roles')
       .select('role')
@@ -36,7 +50,7 @@ export async function POST(request: NextRequest) {
     const userRoles = (roles || []).map((r) => r.role);
     const isAdmin = userRoles.includes('admin');
 
-    if (isAdmin) {
+    if (isAdmin && !cxbcPartner) {
       return NextResponse.json(
         { success: false, error: 'Admin users cannot create bookings via this endpoint' },
         { status: 403 },
@@ -57,9 +71,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Validate body with bookingRequestSchema
+    // 3. Validate body with extended booking schema (includes CXBC fields)
     const body = await request.json();
-    const validation = bookingRequestSchema.safeParse(body);
+    const validation = extendedBookingSchema.safeParse(body);
 
     if (!validation.success) {
       return NextResponse.json(
@@ -75,10 +89,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { cxbcPartnerId, source, ...bookingData } = validation.data;
+
     // 4. Call createBooking
     const result = await createBooking({
       userId: user.id,
-      ...(validation.data as BookingRequest),
+      ...(bookingData as BookingRequest),
+      ...(cxbcPartnerId && { cxbcPartnerId }),
+      ...(source && { source }),
     });
 
     // 5. Return appropriate response

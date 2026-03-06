@@ -250,8 +250,8 @@ export default function AllShipments() {
                           {shipment.tracking_number || 'No tracking'}
                         </p>
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 border border-white/10">
-                          <span className={`w-2 h-2 rounded-full ${getStatusDotColor(shipment.current_status)}`} />
-                          <span className="text-gray-300">{getStatusLabel(shipment.current_status)}</span>
+                          <span className={`w-2 h-2 rounded-full ${getStatusDotColor(shipment.current_status as any)}`} />
+                          <span className="text-gray-300">{getStatusLabel(shipment.current_status as any)}</span>
                         </span>
                       </div>
                       <p className="text-sm text-gray-400 truncate">

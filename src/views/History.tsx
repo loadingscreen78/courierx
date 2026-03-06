@@ -86,62 +86,55 @@ const ShipmentHistoryCard = ({
   onRebook: (shipment: CompletedShipment) => void;
 }) => {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-accent/20">
-              {TYPE_ICONS[shipment.type]}
+    <div className="bg-card border border-border/50 rounded-2xl p-4 hover:border-border hover:shadow-sm transition-all duration-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-green-500/10 shrink-0">
+            {TYPE_ICONS[shipment.type]}
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-typewriter font-bold text-sm">{shipment.trackingNumber}</p>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 text-[10px] font-semibold">
+                <CheckCircle2 className="h-2.5 w-2.5" />
+                Delivered
+              </span>
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <p className="font-typewriter font-bold text-sm">{shipment.trackingNumber}</p>
-                <Badge className="bg-accent/20 text-accent-foreground text-xs">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Delivered
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                To: {shipment.recipientName}
-              </p>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                {shipment.destination}
-              </div>
+            <p className="text-xs text-muted-foreground">→ {shipment.recipientName}</p>
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <MapPin className="h-2.5 w-2.5" />
+              {shipment.destination}
             </div>
           </div>
-          <div className="text-right">
-            <p className="font-typewriter font-bold">₹{shipment.cost.toLocaleString('en-IN')}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {format(shipment.deliveredAt, 'dd MMM yyyy')}
-            </p>
-          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="font-typewriter font-bold text-sm">₹{shipment.cost.toLocaleString('en-IN')}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {format(shipment.deliveredAt, 'dd MMM yyyy')}
+          </p>
+        </div>
+      </div>
+      
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Truck className="h-2.5 w-2.5" />
+            {shipment.carrier}
+          </span>
+          <span className="capitalize">{shipment.type}</span>
         </div>
         
-        <Separator className="my-3" />
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Truck className="h-3 w-3" />
-              {shipment.carrier}
-            </span>
-            <span className="capitalize">{shipment.type}</span>
-            <span>Booked: {format(shipment.createdAt, 'dd MMM')}</span>
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-xs h-8"
-            onClick={() => onRebook(shipment)}
-          >
-            <Repeat className="h-3 w-3" />
-            Rebook
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs h-7 rounded-xl border-border/60"
+          onClick={() => onRebook(shipment)}
+        >
+          <Repeat className="h-3 w-3" />
+          Rebook
+        </Button>
+      </div>
+    </div>
   );
 };
 

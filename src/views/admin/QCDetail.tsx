@@ -218,7 +218,7 @@ export default function QCDetail() {
     const result = await performAction(shipment.id, action, shipment.version);
     if (result.success) {
       playSuccess();
-      toast({ title: 'Action completed', description: `${getStatusLabel(shipment.current_status)} → next step.` });
+      toast({ title: 'Action completed', description: `${getStatusLabel(shipment.current_status as any)} → next step.` });
       await refreshShipment();
     } else if (result.errorCode === 'VERSION_CONFLICT') {
       toast({ title: 'Version conflict', description: 'This shipment was updated by another process. Refreshing...', variant: 'destructive' });
@@ -302,13 +302,13 @@ export default function QCDetail() {
           <span className="ml-auto px-3 py-1 rounded-full text-xs font-medium bg-white/10 border border-white/10 text-gray-300 capitalize">{shipment.shipment_type}</span>
           {shipment.current_status && (
             <span className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-white/10 border border-white/10 text-gray-300">
-              <span className={`h-2 w-2 rounded-full ${getStatusDotColor(shipment.current_status)}`} />
-              {getStatusLabel(shipment.current_status)}
+              <span className={`h-2 w-2 rounded-full ${getStatusDotColor(shipment.current_status as any)}`} />
+              {getStatusLabel(shipment.current_status as any)}
             </span>
           )}
           {shipment.current_leg && (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 border border-white/10 text-gray-300">
-              {getLegLabel(shipment.current_leg)}
+              {getLegLabel(shipment.current_leg as any)}
             </span>
           )}
         </div>

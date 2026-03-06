@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { FileText, Download, Search, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Skeleton } from '@/components/ui/skeleton';
 import { generateCXBCBillPDF } from '@/lib/generateCXBCBillPDF';
 import { toast } from 'sonner';
+import { getStatusLabel, getStatusDotColor } from '@/lib/shipment-lifecycle/statusLabelMap';
+import type { ShipmentStatus } from '@/lib/shipment-lifecycle/types';
 
 interface Bill {
   id: string;
@@ -28,36 +29,85 @@ interface Bill {
   payment_method: string;
   created_at: string;
   shipment_id: string | null;
+  shipments?: { current_status: string } | null;
 }
 
 const CXBCBills = () => {
   const { partner } = useCXBCAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data: bills, isLoading } = useQuery({
-    queryKey: ['cxbc-bills', partner?.id],
-    queryFn: async () => {
-      if (!partner?.id) return [];
+  // Fetch bills with joined shipment current_status
+  const fetchBills = async () => {
+    if (!partner?.id) return;
+    try {
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('cxbc_customer_bills')
-        .select('*')
+        .select('*, shipments(current_status)')
         .eq('partner_id', partner.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as Bill[];
-    },
-    enabled: !!partner?.id,
-  });
+      setBills((data as Bill[]) || []);
+    } catch (error) {
+      console.error('[CXBCBills] Error fetching bills:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const filteredBills = bills?.filter(bill =>
+  // 10.1 — Initial fetch + Realtime subscription for bills
+  // 10.3 — Reconnection handling and cleanup
+  useEffect(() => {
+    if (!partner?.id) return;
+
+    fetchBills();
+
+    const billsChannel = supabase
+      .channel(`cxbc_bills_${partner.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'cxbc_customer_bills',
+          filter: `partner_id=eq.${partner.id}`,
+        },
+        () => {
+          // Full refresh to get joined shipment data for the new bill
+          fetchBills();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[CXBCBills] Bills channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // Full refresh on (re)connect to catch missed events
+          fetchBills();
+        }
+      });
+
+    return () => {
+      billsChannel.unsubscribe();
+    };
+  }, [partner?.id]);
+
+  const filteredBills = bills.filter(bill =>
     bill.bill_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     bill.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     bill.customer_phone.includes(searchQuery)
-  ) || [];
+  );
 
-  const totalRevenue = bills?.reduce((sum, bill) => sum + bill.partner_margin, 0) || 0;
+  // Stats computed from bills state
+  const totalRevenue = bills.reduce((sum, bill) => sum + bill.partner_margin, 0);
+  const thisMonthCount = bills.filter(
+    (b) => new Date(b.created_at).getMonth() === new Date().getMonth() &&
+            new Date(b.created_at).getFullYear() === new Date().getFullYear()
+  ).length;
 
   const handleDownloadPDF = (bill: Bill) => {
     if (!partner) {
@@ -110,7 +160,7 @@ const CXBCBills = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Bills</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{bills?.length || 0}</p>
+              <p className="text-2xl font-bold">{bills.length}</p>
             </CardContent>
           </Card>
           <Card>
@@ -126,9 +176,7 @@ const CXBCBills = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">This Month</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">
-                {bills?.filter(b => new Date(b.created_at).getMonth() === new Date().getMonth()).length || 0}
-              </p>
+              <p className="text-2xl font-bold">{thisMonthCount}</p>
             </CardContent>
           </Card>
         </div>
@@ -173,49 +221,63 @@ const CXBCBills = () => {
                       <TableHead>Customer</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Your Margin</TableHead>
+                      <TableHead>Shipment Status</TableHead>
                       <TableHead>Payment</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredBills.map((bill) => (
-                      <TableRow key={bill.id}>
-                        <TableCell className="font-mono text-sm">{bill.bill_number}</TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{bill.customer_name}</p>
-                            <p className="text-sm text-muted-foreground">{bill.customer_phone}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">₹{bill.total_amount.toLocaleString()}</TableCell>
-                        <TableCell className="text-success">+₹{bill.partner_margin.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">{bill.payment_method}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(bill.created_at), 'dd MMM yyyy')}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setSelectedBill(bill)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDownloadPDF(bill)}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredBills.map((bill) => {
+                      const shipmentStatus = bill.shipments?.current_status as ShipmentStatus | undefined;
+                      return (
+                        <TableRow key={bill.id}>
+                          <TableCell className="font-mono text-sm">{bill.bill_number}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{bill.customer_name}</p>
+                              <p className="text-sm text-muted-foreground">{bill.customer_phone}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">₹{bill.total_amount.toLocaleString()}</TableCell>
+                          <TableCell className="text-success">+₹{bill.partner_margin.toLocaleString()}</TableCell>
+                          <TableCell>
+                            {shipmentStatus ? (
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-block h-2 w-2 rounded-full ${getStatusDotColor(shipmentStatus)}`} />
+                                <span className="text-sm">{getStatusLabel(shipmentStatus)}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">{bill.payment_method}</Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {format(new Date(bill.created_at), 'dd MMM yyyy')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSelectedBill(bill)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDownloadPDF(bill)}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -248,6 +310,18 @@ const CXBCBills = () => {
                     <span className="text-muted-foreground">Date:</span>
                     <span>{format(new Date(selectedBill.created_at), 'dd MMM yyyy, HH:mm')}</span>
                   </div>
+                  {(() => {
+                    const detailStatus = selectedBill.shipments?.current_status as ShipmentStatus | undefined;
+                    return detailStatus ? (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Shipment Status:</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block h-2 w-2 rounded-full ${getStatusDotColor(detailStatus)}`} />
+                          <span>{getStatusLabel(detailStatus)}</span>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
                 <div className="border-t pt-4 space-y-2">

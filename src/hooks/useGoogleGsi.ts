@@ -41,16 +41,19 @@ export function useGoogleGsi({
       },
       auto_select: true,
       cancel_on_tap_outside: true,
-    });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      use_fedcm_for_prompt: true,
+    } as any);
 
     if (buttonDivRef.current) {
+      const buttonWidth = buttonDivRef.current.offsetWidth || 400;
       google.accounts.id.renderButton(buttonDivRef.current, {
         type: 'standard',
         theme: 'outline',
         size: 'large',
         text: 'continue_with',
         shape: 'pill',
-        width: '100%',
+        width: buttonWidth,
       });
     }
 

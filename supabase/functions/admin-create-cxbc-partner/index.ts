@@ -169,31 +169,59 @@ serve(async (req) => {
       });
     }
 
-    // Check if already a partner
-    const { data: existingPartner, error: partnerCheckErr } = await supabaseAdmin
+    // Check if already a partner — by user_id OR by email
+    const { data: existingPartnerByUserId, error: partnerCheckErr } = await supabaseAdmin
       .from("cxbc_partners")
       .select("id, status")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (partnerCheckErr) {
-      console.error("Failed to check existing partner:", partnerCheckErr.message);
+      console.error("Failed to check existing partner by user_id:", partnerCheckErr.message);
       return json(500, { error: "Failed to check existing partner status" });
     }
+
+    // Also check by email in case user_id wasn't linked yet
+    const { data: existingPartnerByEmail, error: partnerEmailCheckErr } = await supabaseAdmin
+      .from("cxbc_partners")
+      .select("id, status, user_id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (partnerEmailCheckErr) {
+      console.error("Failed to check existing partner by email:", partnerEmailCheckErr.message);
+      return json(500, { error: "Failed to check existing partner status" });
+    }
+
+    const existingPartner = existingPartnerByUserId || existingPartnerByEmail;
 
     if (existingPartner) {
       if (existingPartner.status === "approved") {
         console.log("User is already an approved partner:", existingPartner.id);
-        return json(200, { 
+        // If found by email but user_id not linked, link it now
+        if (existingPartnerByEmail && !existingPartnerByUserId) {
+          const { error: linkErr } = await supabaseAdmin
+            .from("cxbc_partners")
+            .update({ user_id: userId })
+            .eq("id", existingPartner.id);
+          if (linkErr) {
+            console.error("Failed to link user_id to existing partner:", linkErr.message);
+          } else {
+            console.log("Linked user_id to existing partner:", existingPartner.id);
+          }
+        }
+        return json(409, { 
+          error: "This email already has an approved partner account.",
           user_id: userId, 
           partner_id: existingPartner.id,
           linked_existing_user: true
         });
       } else {
-        // Update existing partner to approved
+        // Update existing partner to approved and ensure user_id is set
         const { error: updatePartnerErr } = await supabaseAdmin
           .from("cxbc_partners")
           .update({
+            user_id: userId,
             status: "approved",
             approved_at: new Date().toISOString(),
             business_name: body.businessName,

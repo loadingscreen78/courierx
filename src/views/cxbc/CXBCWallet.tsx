@@ -42,14 +42,16 @@ const quickAmounts = [1000, 2000, 5000, 10000, 25000, 50000];
 export default function CXBCWallet() {
   const { partner, refetch } = useCXBCAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [rechargeAmount, setRechargeAmount] = useState(5000);
   const [isRecharging, setIsRecharging] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Keep walletBalance in sync with partner prop
   useEffect(() => {
     if (partner) {
-      fetchTransactions();
+      setWalletBalance(partner.wallet_balance ?? 0);
     }
   }, [partner]);
 
@@ -73,6 +75,90 @@ export default function CXBCWallet() {
       setIsLoading(false);
     }
   };
+
+  const fetchPartnerBalance = async () => {
+    if (!partner) return;
+    try {
+      const { data, error } = await supabase
+        .from('cxbc_partners')
+        .select('wallet_balance')
+        .eq('id', partner.id)
+        .single();
+      if (error) throw error;
+      if (data) setWalletBalance(data.wallet_balance ?? 0);
+    } catch (err) {
+      console.error('[CXBCWallet] Error fetching partner balance:', err);
+    }
+  };
+
+  // Initial fetch + Realtime subscriptions for transactions and partner balance
+  useEffect(() => {
+    if (!partner?.user_id || !partner?.id) return;
+
+    fetchTransactions();
+
+    // 9.1 — Realtime subscription for wallet transactions (INSERT)
+    const txnChannel = supabase
+      .channel(`cxbc_wallet_txns_${partner.user_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'wallet_transactions',
+          filter: `user_id=eq.${partner.user_id}`,
+        },
+        (payload) => {
+          const newTxn = payload.new as Transaction;
+          if (newTxn) {
+            setTransactions((prev) => [newTxn, ...prev]);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[CXBCWallet] Wallet transactions channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // Full refresh on (re)connect to catch missed events
+          fetchTransactions();
+        }
+      });
+
+    // 9.2 — Realtime subscription for partner balance (UPDATE)
+    const partnerChannel = supabase
+      .channel(`cxbc_partner_${partner.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cxbc_partners',
+          filter: `id=eq.${partner.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as Record<string, any>;
+          if (updated && typeof updated.wallet_balance === 'number') {
+            setWalletBalance(updated.wallet_balance);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[CXBCWallet] Partner balance channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // Full refresh on (re)connect to catch missed balance changes
+          fetchPartnerBalance();
+        }
+      });
+
+    // 9.3 — Cleanup: unsubscribe from both channels
+    return () => {
+      txnChannel.unsubscribe();
+      partnerChannel.unsubscribe();
+    };
+  }, [partner?.user_id, partner?.id]);
 
   const handleRecharge = async () => {
     if (!partner) return;
@@ -157,7 +243,7 @@ export default function CXBCWallet() {
                   Available Balance
                 </p>
                 <p className="text-4xl font-bold mt-2">
-                  {formatCurrency(partner?.wallet_balance || 0)}
+                  {formatCurrency(walletBalance)}
                 </p>
               </div>
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

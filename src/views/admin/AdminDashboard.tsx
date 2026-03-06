@@ -314,7 +314,7 @@ function AdminDashboard() {
                           <div>
                             <h4 className="text-white font-semibold text-sm">{shipment.tracking_number || 'No tracking'}</h4>
                             <p className="text-gray-500 text-xs">
-                              {shipment.recipient_name} • {getLegLabel(shipment.current_leg)}
+                              {shipment.recipient_name} • {getLegLabel(shipment.current_leg as any)}
                             </p>
                           </div>
                         </div>

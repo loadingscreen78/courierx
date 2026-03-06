@@ -116,49 +116,44 @@ const ShipmentCard = ({ shipment, onClick }: { shipment: UIShipment; onClick: ()
   const legLabel = getLegLabel(shipment.currentLeg);
 
   return (
-    <Card
-      className="cursor-pointer hover:shadow-lg transition-all duration-300 card-hover"
+    <button
       onClick={onClick}
+      className="w-full text-left bg-card border border-border/50 rounded-2xl p-4 hover:border-border hover:shadow-md transition-all duration-200 active:scale-[0.99]"
     >
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-1 min-w-0">
-            <div className={cn(
-              "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-muted"
-            )}>
-              {TYPE_ICONS[shipment.type] || <Package className="h-5 w-5" />}
-            </div>
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center shrink-0">
+          {TYPE_ICONS[shipment.type] || <Package className="h-5 w-5 text-muted-foreground" />}
+        </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <p className="font-typewriter font-bold text-sm truncate">{shipment.trackingNumber}</p>
-                <Badge className={cn("text-xs shrink-0", statusInfo?.dotColor ? `${statusInfo.dotColor.replace('bg-', 'bg-')}/20 text-foreground` : 'bg-muted text-muted-foreground')}>
-                  <span className={cn("w-2 h-2 rounded-full mr-1.5 shrink-0", statusInfo?.dotColor ?? 'bg-gray-500')} />
-                  {statusInfo?.label ?? shipment.currentStatus}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground truncate">
-                To: <span className="font-medium">{shipment.recipientName}</span>, {shipment.destination}
-              </p>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1.5">
-                <span className="flex items-center gap-1">
-                  <Truck className="h-3 w-3" />
-                  {legLabel}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  ETA: {format(shipment.estimatedDelivery, 'dd MMM')}
-                </span>
-              </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <p className="font-typewriter font-bold text-sm truncate">{shipment.trackingNumber}</p>
+            <div className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0",
+              statusInfo?.dotColor ? "bg-muted" : "bg-muted"
+            )}>
+              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusInfo?.dotColor ?? 'bg-gray-400')} />
+              <span className="text-foreground/70">{statusInfo?.label ?? shipment.currentStatus}</span>
             </div>
           </div>
-
-          <Button variant="ghost" size="icon" className="shrink-0">
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-          </Button>
+          <p className="text-xs text-muted-foreground truncate">
+            → <span className="font-medium text-foreground/80">{shipment.recipientName}</span>, {shipment.destination}
+          </p>
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-1.5">
+            <span className="flex items-center gap-1">
+              <Truck className="h-3 w-3" />
+              {legLabel}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              ETA {format(shipment.estimatedDelivery, 'dd MMM')}
+            </span>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+
+        <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+      </div>
+    </button>
   );
 };
 

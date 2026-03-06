@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import Link from 'next/link';
 import { CXBCLayout } from '@/components/cxbc/layout';
 import { useCXBCAuth } from '@/hooks/useCXBCAuth';
 import { useCXBCDrafts } from '@/hooks/useCXBCDrafts';
-import { supabase } from '@/integrations/supabase/client';
+import { useCXBCShipments } from '@/hooks/useCXBCShipments';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,81 +23,69 @@ import {
   Edit,
 } from 'lucide-react';
 import { format } from 'date-fns';
-
-interface DashboardStats {
-  todayBookings: number;
-  todayRevenue: number;
-  pendingShipments: number;
-  totalBookings: number;
-}
-
-interface RecentBooking {
-  id: string;
-  recipient_name: string;
-  destination_country: string;
-  shipment_type: string;
-  status: string;
-  total_amount: number;
-  created_at: string;
-}
+import { getStatusLabel, getStatusDotColor, getLegLabel } from '@/lib/shipment-lifecycle/statusLabelMap';
 
 export default function CXBCDashboard() {
   const { partner } = useCXBCAuth();
   const { drafts } = useCXBCDrafts(partner?.id);
-  const [stats, setStats] = useState<DashboardStats>({
-    todayBookings: 0,
-    todayRevenue: 0,
-    pendingShipments: 0,
-    totalBookings: 0,
-  });
-  const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { shipments, activeShipments, todayShipments, loading: isLoading } = useCXBCShipments(partner?.id);
 
+  // Wallet balance state — starts from partner fetch, updated via Realtime
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+
+  // Sync walletBalance when partner data loads/changes
   useEffect(() => {
-    if (partner) {
-      fetchDashboardData();
+    if (partner?.wallet_balance != null) {
+      setWalletBalance(partner.wallet_balance);
     }
-  }, [partner]);
+  }, [partner?.wallet_balance]);
 
-  const fetchDashboardData = async () => {
-    if (!partner) return;
+  // Realtime subscription for wallet balance on cxbc_partners table
+  useEffect(() => {
+    if (!partner?.id) return;
 
-    try {
-      setIsLoading(true);
-      
-      // Fetch today's bookings
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const { data: shipments, error } = await supabase
-        .from('shipments')
-        .select('*')
-        .eq('cxbc_partner_id', partner.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-
-      const todayShipments = shipments?.filter(s => 
-        new Date(s.created_at) >= today
-      ) || [];
-
-      setStats({
-        todayBookings: todayShipments.length,
-        todayRevenue: todayShipments.reduce((sum, s) => sum + s.total_amount, 0),
-        pendingShipments: shipments?.filter(s => 
-          !['delivered', 'cancelled'].includes(s.status)
-        ).length || 0,
-        totalBookings: shipments?.length || 0,
+    const subscription = supabase
+      .channel(`cxbc_partner_${partner.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cxbc_partners',
+          filter: `id=eq.${partner.id}`,
+        },
+        (payload: any) => {
+          if (payload.new && payload.new.wallet_balance != null) {
+            setWalletBalance(payload.new.wallet_balance);
+          }
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[CXBCDashboard] Partner channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          // On initial subscribe or reconnect, use the latest partner balance
+          if (partner?.wallet_balance != null) {
+            setWalletBalance(partner.wallet_balance);
+          }
+        }
       });
 
-      setRecentBookings(shipments?.slice(0, 5) || []);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [partner?.id]);
+
+  // Compute dashboard stats from hook data
+  const stats = useMemo(() => ({
+    todayBookings: todayShipments.length,
+    todayRevenue: todayShipments.reduce((sum, s) => sum + (s.total_amount || 0), 0),
+    pendingShipments: activeShipments.length,
+    totalBookings: shipments.length,
+  }), [todayShipments, activeShipments, shipments]);
+
+  const recentBookings = useMemo(() => shipments.slice(0, 5), [shipments]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -106,14 +95,6 @@ export default function CXBCDashboard() {
     }).format(amount);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered': return 'bg-success text-success-foreground';
-      case 'in_transit': return 'bg-primary text-primary-foreground';
-      case 'cancelled': return 'bg-destructive text-destructive-foreground';
-      default: return 'bg-warning text-warning-foreground';
-    }
-  };
 
   return (
     <CXBCLayout title="Dashboard" subtitle="Welcome back to your partner portal">
@@ -219,7 +200,7 @@ export default function CXBCDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{formatCurrency(partner?.wallet_balance || 0)}</p>
+              <p className="text-3xl font-bold">{formatCurrency(walletBalance)}</p>
             </CardContent>
           </Card>
         </div>
@@ -359,11 +340,17 @@ export default function CXBCDashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-1">
                       <p className="font-bold">{formatCurrency(booking.total_amount)}</p>
-                      <Badge className={getStatusColor(booking.status)}>
-                        {booking.status.replace('_', ' ')}
+                      <Badge variant="outline" className="flex items-center gap-1.5">
+                        <span className={`inline-block h-2 w-2 rounded-full ${getStatusDotColor(booking.current_status as any)}`} />
+                        {getStatusLabel(booking.current_status as any)}
                       </Badge>
+                      {booking.current_leg && (
+                        <Badge variant="secondary" className="text-xs">
+                          {getLegLabel(booking.current_leg as any)}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))}

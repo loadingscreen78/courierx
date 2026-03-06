@@ -28,7 +28,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
       {/* Mobile/Tablet Layout */}
       <div className="lg:hidden flex flex-col min-h-screen">
         <Header />
-        <main className="flex-1 p-4 pb-24 overflow-auto">
+        <main className="flex-1 p-4 pb-28 overflow-auto">
           <PageTransition>
             {children}
           </PageTransition>

@@ -333,36 +333,73 @@ export default function CXBCBooking() {
       setIsSubmitting(true);
 
       const selectedCountryData = countries.find(c => c.code === selectedCountry);
-      
-      // Build sender info string
-      const senderInfo = `${sender.fullName} | ${sender.phone} | ${sender.email} | ${sender.addressLine1}, ${sender.city}, ${sender.state} ${sender.pincode} | ${sender.idType.toUpperCase()}: ${sender.idNumber}`;
 
-      // Create shipment
-      const { data: shipment, error: shipmentError } = await supabase
-        .from('shipments')
-        .insert({
-          user_id: partner.user_id,
-          cxbc_partner_id: partner.id,
-          source: 'cxbc',
-          shipment_type: shipmentType,
-          recipient_name: consignee.fullName,
-          recipient_phone: consignee.phone,
-          recipient_email: consignee.email || null,
-          destination_country: selectedCountryData?.name || selectedCountry,
-          destination_address: `${consignee.addressLine1}${consignee.addressLine2 ? ', ' + consignee.addressLine2 : ''}, ${consignee.city}${consignee.state ? ', ' + consignee.state : ''} ${consignee.zipcode}`,
-          origin_address: partnerAddress,
-          weight_kg: weightGrams / 1000,
-          declared_value: declaredValue,
-          shipping_cost: basePrice,
-          gst_amount: basePrice * 0.18,
-          total_amount: basePrice,
-          notes: `Sender: ${senderInfo}${notes ? ` | Notes: ${notes}` : ''}`,
-          status: shipmentType === 'document' ? 'confirmed' : 'draft',
-        })
-        .select()
-        .single();
+      // Generate deterministic bookingReferenceId for idempotent retries
+      const bookingReferenceId = currentDraftId
+        ? `cxbc-${currentDraftId}`
+        : `cxbc-${crypto.randomUUID()}`;
 
-      if (shipmentError) throw shipmentError;
+      // Build Lifecycle API payload
+      const payload = {
+        bookingReferenceId,
+        recipientName: consignee.fullName,
+        recipientPhone: consignee.phone,
+        ...(consignee.email ? { recipientEmail: consignee.email } : {}),
+        originAddress: partnerAddress,
+        destinationAddress: `${consignee.addressLine1}${consignee.addressLine2 ? ', ' + consignee.addressLine2 : ''}, ${consignee.city}${consignee.state ? ', ' + consignee.state : ''} ${consignee.zipcode}`,
+        destinationCountry: selectedCountryData?.name || selectedCountry,
+        weightKg: weightGrams / 1000,
+        declaredValue,
+        shipmentType,
+        shippingCost: basePrice,
+        gstAmount: basePrice * 0.18,
+        totalAmount: basePrice,
+        cxbcPartnerId: partner.id,
+        source: 'cxbc' as const,
+      };
+
+      // Get session access token for authorization
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast.error('Session expired, please log in again');
+        return;
+      }
+
+      // Call Lifecycle API instead of direct Supabase insert
+      const response = await fetch('/api/shipments/book', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + accessToken,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired, please log in again');
+          return;
+        }
+        if (response.status === 429) {
+          toast.error('Too many requests, please wait');
+          return;
+        }
+        if (response.status === 502) {
+          toast.error('Shipping provider unavailable, please retry');
+          return;
+        }
+        if (response.status === 400 && result.details) {
+          const msg = result.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(', ');
+          toast.error(`Invalid booking data: ${msg}`);
+          return;
+        }
+        throw new Error(result.error || 'Failed to create booking');
+      }
+
+      const shipment = result.shipment;
 
       // Create customer bill with proper GST handling
       const { error: billError } = await supabase

@@ -47,6 +47,66 @@ const panelOptions = [
   { id: 'cxbc' as PanelType, title: 'CXBC Panel', description: 'Partner portal', icon: Briefcase, available: true },
 ];
 
+/**
+ * Dual-lookup helper for CXBC partner access.
+ * 1. Query cxbc_partners by user_id + approved
+ * 2. Fallback: query by email + approved
+ * 3. Auto-link user_id if found by email with null/mismatched user_id
+ * 4. If no approved partner, check cxbc_partner_applications for status feedback
+ */
+async function cxbcDualLookup(userId: string, userEmail: string | undefined) {
+  // Step 1: Query by user_id
+  const { data: byUserId } = await supabase
+    .from('cxbc_partners')
+    .select('id, status, user_id')
+    .eq('user_id', userId)
+    .eq('status', 'approved')
+    .maybeSingle();
+
+  if (byUserId) {
+    return { partner: byUserId, applicationStatus: null as string | null };
+  }
+
+  // Step 2: Fallback — query by email
+  if (userEmail) {
+    const { data: byEmail } = await supabase
+      .from('cxbc_partners')
+      .select('id, status, user_id')
+      .eq('email', userEmail)
+      .eq('status', 'approved')
+      .maybeSingle();
+
+    if (byEmail) {
+      // Step 3: Auto-link user_id if null or mismatched
+      if (!byEmail.user_id || byEmail.user_id !== userId) {
+        await supabase
+          .from('cxbc_partners')
+          .update({ user_id: userId })
+          .eq('id', byEmail.id);
+      }
+      return { partner: byEmail, applicationStatus: null as string | null };
+    }
+  }
+
+  // Step 4: No approved partner — check applications for status feedback
+  let applicationStatus: string | null = null;
+  if (userEmail) {
+    const { data: application } = await supabase
+      .from('cxbc_partner_applications')
+      .select('id, status')
+      .eq('email', userEmail)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (application) {
+      applicationStatus = application.status;
+    }
+  }
+
+  return { partner: null, applicationStatus };
+}
+
 const Auth = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -121,9 +181,18 @@ const Auth = () => {
       }
       
       if (selectedPanel === 'cxbc') {
-        const { data: partner } = await supabase.from('cxbc_partners').select('id, status').eq('user_id', user.id).eq('status', 'approved').maybeSingle();
+        const { partner, applicationStatus } = await cxbcDualLookup(user.id, user.email ?? undefined);
         if (partner) { router.replace('/cxbc'); }
-        else { toast({ title: 'Access Denied', description: 'Not an approved partner.', variant: 'destructive' }); await supabase.auth.signOut(); }
+        else if (applicationStatus === 'pending') {
+          toast({ title: 'Your application is Pending', description: 'Your partner application is being reviewed. We\'ll notify you once approved.' });
+        } else if (applicationStatus === 'under_review') {
+          toast({ title: 'Your application is Under Review', description: 'Your partner application is being reviewed. We\'ll notify you once approved.' });
+        } else if (applicationStatus === 'rejected') {
+          toast({ title: 'Application Rejected', description: 'Your application was rejected. You can re-apply.', variant: 'destructive' });
+          router.replace('/cxbc/apply');
+        } else {
+          router.replace('/cxbc/apply');
+        }
         return;
       }
       
@@ -231,18 +300,30 @@ const Auth = () => {
     }
     
     if (selectedPanel === 'cxbc') {
-      const { data: partner } = await supabase.from('cxbc_partners').select('id, status').eq('user_id', currentUser.id).eq('status', 'approved').maybeSingle();
-      console.log('[Auth] CXBC partner:', partner);
+      const { partner, applicationStatus } = await cxbcDualLookup(currentUser.id, currentUser.email ?? undefined);
+      console.log('[Auth] CXBC dual-lookup result:', { partner, applicationStatus });
       if (partner) { 
-        console.log('[Auth] ✅ CXBC access granted, redirecting to /cxbc');
+        console.log('[Auth] ✅ CXBC access granted (dual-lookup), redirecting to /cxbc');
         setIsLoading(false);
         window.location.href = '/cxbc';
         return;
       } else { 
-        console.log('[Auth] ❌ No CXBC access');
-        toast({ title: 'Access Denied', description: 'Not an approved partner.', variant: 'destructive' }); 
-        await supabase.auth.signOut(); 
-        setIsLoading(false);
+        if (applicationStatus === 'pending') {
+          toast({ title: 'Your application is Pending', description: 'Your partner application is being reviewed. We\'ll notify you once approved.' });
+          setIsLoading(false);
+        } else if (applicationStatus === 'under_review') {
+          toast({ title: 'Your application is Under Review', description: 'Your partner application is being reviewed. We\'ll notify you once approved.' });
+          setIsLoading(false);
+        } else if (applicationStatus === 'rejected') {
+          toast({ title: 'Application Rejected', description: 'Your application was rejected. You can re-apply.', variant: 'destructive' });
+          setIsLoading(false);
+          window.location.href = '/cxbc/apply';
+        } else {
+          console.log('[Auth] No application found, redirecting to apply');
+          toast({ title: 'Welcome!', description: 'Apply to become a CXBC partner to access the portal.' });
+          setIsLoading(false);
+          window.location.href = '/cxbc/apply';
+        }
         return;
       }
     }
@@ -299,19 +380,24 @@ const Auth = () => {
 
     // Panel-specific redirect (identical to handleEmailAuth)
     if (selectedPanel === 'cxbc') {
-      const { data: partner } = await supabase
-        .from('cxbc_partners')
-        .select('id, status')
-        .eq('user_id', currentUser.id)
-        .eq('status', 'approved')
-        .maybeSingle();
+      const { partner, applicationStatus } = await cxbcDualLookup(currentUser.id, currentUser.email ?? undefined);
       if (partner) {
         setIsLoading(false);
         window.location.href = '/cxbc';
-      } else {
-        toast({ title: 'Access Denied', description: 'Not an approved partner.', variant: 'destructive' });
-        await supabase.auth.signOut();
+      } else if (applicationStatus === 'pending') {
+        toast({ title: 'Your application is Pending', description: 'Your partner application is being reviewed. We\'ll notify you once approved.' });
         setIsLoading(false);
+      } else if (applicationStatus === 'under_review') {
+        toast({ title: 'Your application is Under Review', description: 'Your partner application is being reviewed. We\'ll notify you once approved.' });
+        setIsLoading(false);
+      } else if (applicationStatus === 'rejected') {
+        toast({ title: 'Application Rejected', description: 'Your application was rejected. You can re-apply.', variant: 'destructive' });
+        setIsLoading(false);
+        window.location.href = '/cxbc/apply';
+      } else {
+        toast({ title: 'Welcome!', description: 'Apply to become a CXBC partner to access the portal.' });
+        setIsLoading(false);
+        window.location.href = '/cxbc/apply';
       }
       return;
     }

@@ -146,11 +146,12 @@ describe('Feature: shipment-lifecycle-management, Status Handler Property Tests'
   });
 
   /**
-   * Property 12: International INTL_DELIVERED transitions to COMPLETED
+   * Property 12: International INTL_DELIVERED — no side-effect from handler
    *
    * For any shipment on the INTERNATIONAL leg, when handleStatusChange is called
-   * with status INTL_DELIVERED, it should call updateShipmentStatus to transition
-   * the shipment to COMPLETED leg.
+   * with status INTL_DELIVERED, the handler should NOT call updateShipmentStatus
+   * because the state machine automatically sets current_leg = 'COMPLETED' when
+   * transitioning to INTL_DELIVERED (auto-leg logic in stateMachine.ts).
    *
    * Validates: Requirements 4.5, 6.10
    */
@@ -174,13 +175,9 @@ describe('Feature: shipment-lifecycle-management, Status Handler Property Tests'
 
             await handleStatusChange(shipment, 'INTL_DELIVERED', 'INTERNATIONAL');
 
-            // Should call updateShipmentStatus to transition to COMPLETED
-            expect(mockUpdateShipmentStatus).toHaveBeenCalledOnce();
-            const call = mockUpdateShipmentStatus.mock.calls[0][0];
-            expect(call.shipmentId).toBe(shipmentId);
-            expect(call.newLeg).toBe('COMPLETED');
-            expect(call.source).toBe('SYSTEM');
-            expect(call.expectedVersion).toBe(version);
+            // The state machine auto-sets current_leg = 'COMPLETED' when transitioning
+            // to INTL_DELIVERED, so the handler does NOT need to call updateShipmentStatus.
+            expect(mockUpdateShipmentStatus).not.toHaveBeenCalled();
           },
         ),
         { numRuns: 100 },

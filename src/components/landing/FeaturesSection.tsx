@@ -1,3 +1,5 @@
+"use client";
+
 import { Pill, FileText, Gift, Shield, Truck, Clock, Globe, Headphones } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { AnimatedSection, StaggerContainer, StaggerItem } from './AnimatedSection';

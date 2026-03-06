@@ -12,7 +12,8 @@ import {
   Pill,
   FileText,
   Gift,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -25,6 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -52,12 +54,15 @@ const NavItem = ({ icon, label, href, isActive, isPrimary, onClick }: NavItemPro
     return (
       <button
         onClick={handleClick}
-        className="flex flex-col items-center justify-center -mt-6"
+        className="flex flex-col items-center justify-center gap-1 relative"
       >
-        <div className="flex items-center justify-center w-14 h-14 bg-destructive text-destructive-foreground rounded-full shadow-lg shadow-destructive/30 btn-press ring-4 ring-background">
+        <motion.div
+          whileTap={{ scale: 0.92 }}
+          className="flex items-center justify-center w-14 h-14 bg-gradient-to-br from-coke-red to-red-600 text-white rounded-2xl shadow-lg shadow-coke-red/40 ring-4 ring-background"
+        >
           {icon}
-        </div>
-        <span className="text-[10px] font-semibold mt-1 text-foreground">{label}</span>
+        </motion.div>
+        <span className="text-[10px] font-semibold text-foreground/70">{label}</span>
       </button>
     );
   }
@@ -66,20 +71,29 @@ const NavItem = ({ icon, label, href, isActive, isPrimary, onClick }: NavItemPro
     <Link
       href={href}
       onClick={handleClick}
-      className={cn(
-        "flex flex-col items-center justify-center gap-1 py-2 min-w-[60px] btn-press transition-colors",
-        isActive 
-          ? "text-destructive" 
-          : "text-muted-foreground hover:text-foreground"
-      )}
+      className="flex flex-col items-center justify-center gap-1 min-w-[56px] py-2 relative"
     >
-      <div className={cn(
-        "p-1.5 rounded-lg transition-colors",
-        isActive && "bg-destructive/10"
-      )}>
-        {icon}
+      <div className="relative">
+        {isActive && (
+          <motion.div
+            layoutId="nav-pill"
+            className="absolute inset-0 -m-1.5 bg-coke-red/10 rounded-xl"
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          />
+        )}
+        <div className={cn(
+          "relative p-1.5 rounded-xl transition-colors duration-200",
+          isActive ? "text-coke-red" : "text-muted-foreground"
+        )}>
+          {icon}
+        </div>
       </div>
-      <span className="text-[10px] font-medium">{label}</span>
+      <span className={cn(
+        "text-[10px] font-medium transition-colors duration-200",
+        isActive ? "text-coke-red font-semibold" : "text-muted-foreground"
+      )}>
+        {label}
+      </span>
     </Link>
   );
 };
@@ -89,25 +103,28 @@ const shipmentOptions = [
     id: 'medicine',
     icon: Pill,
     title: 'Medicine',
-    description: 'Ship prescription medicines, health supplements & medical supplies',
+    description: 'Prescription medicines & health supplements',
     href: '/book/medicine',
     color: 'bg-blue-500/10 text-blue-600',
+    gradient: 'from-blue-500/20 to-blue-600/5',
   },
   {
     id: 'document',
     icon: FileText,
     title: 'Documents',
-    description: 'Send important documents, certificates & legal papers securely',
+    description: 'Certificates, legal papers & important docs',
     href: '/book/document',
     color: 'bg-amber-500/10 text-amber-600',
+    gradient: 'from-amber-500/20 to-amber-600/5',
   },
   {
     id: 'gift',
     icon: Gift,
     title: 'Gifts & Samples',
-    description: 'Ship personal gifts, product samples & care packages',
+    description: 'Personal gifts & product samples',
     href: '/book/gift',
     color: 'bg-pink-500/10 text-pink-600',
+    gradient: 'from-pink-500/20 to-pink-600/5',
   },
 ];
 
@@ -128,7 +145,7 @@ export const MobileNav = () => {
   return (
     <>
       <nav className="sticky-nav safe-bottom">
-        <div className="flex items-center justify-around h-16 px-2">
+        <div className="flex items-center justify-around h-[60px] px-3">
           <NavItem 
             icon={<Home className="h-5 w-5" />} 
             label="Home" 
@@ -166,26 +183,57 @@ export const MobileNav = () => {
 
       {/* Ship Options Drawer */}
       <Sheet open={shipDrawerOpen} onOpenChange={setShipDrawerOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl pb-8">
-          <SheetHeader className="pb-4">
-            <SheetTitle className="font-typewriter text-lg">What are you shipping?</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-3">
-            {shipmentOptions.map((option) => (
+        <SheetContent side="bottom" className="rounded-t-[2rem] pb-10 px-0">
+          <SheetHeader className="pb-2 px-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <SheetTitle className="font-typewriter text-xl">What are you shipping?</SheetTitle>
+                <p className="text-sm text-muted-foreground mt-0.5">Choose a shipment type to get started</p>
+              </div>
               <button
+                onClick={() => setShipDrawerOpen(false)}
+                className="p-2 rounded-xl hover:bg-muted transition-colors"
+              >
+                <X className="h-5 w-5 text-muted-foreground" />
+              </button>
+            </div>
+          </SheetHeader>
+
+          {/* Drag handle */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 bg-muted-foreground/20 rounded-full" />
+
+          <div className="space-y-2 px-4 mt-4">
+            {shipmentOptions.map((option, i) => (
+              <motion.button
                 key={option.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
                 onClick={() => handleShipmentSelect(option.href, option.id as Draft['type'])}
-                className="w-full flex items-start gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors btn-press text-left"
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-2xl transition-all active:scale-[0.98]",
+                  `bg-gradient-to-r ${option.gradient} border border-border/50 hover:border-border`
+                )}
               >
                 <div className={cn("p-3 rounded-xl", option.color)}>
                   <option.icon className="h-6 w-6" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 text-left">
                   <p className="font-semibold text-foreground">{option.title}</p>
                   <p className="text-sm text-muted-foreground mt-0.5">{option.description}</p>
                 </div>
-              </button>
+                <div className="text-muted-foreground/40">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 12l4-4-4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              </motion.button>
             ))}
+          </div>
+
+          <div className="mx-4 mt-4 p-3 rounded-xl bg-muted/50 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-coke-red shrink-0" />
+            <p className="text-xs text-muted-foreground">All shipments are CSB-IV compliant & fully insured</p>
           </div>
         </SheetContent>
       </Sheet>

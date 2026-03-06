@@ -24,6 +24,8 @@ export interface BookingRequest {
   shippingCost?: number;
   gstAmount?: number;
   totalAmount?: number;
+  cxbcPartnerId?: string;
+  source?: 'cxbc' | 'customer';
 }
 
 export interface BookingResult {
@@ -99,6 +101,7 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
       version: 1,
       recipient_name: req.recipientName,
       recipient_phone: req.recipientPhone,
+      ...(req.recipientEmail && { recipient_email: req.recipientEmail }),
       origin_address: req.originAddress,
       destination_address: req.destinationAddress,
       destination_country: req.destinationCountry,
@@ -109,6 +112,8 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
       ...(req.shippingCost !== undefined && { shipping_cost: req.shippingCost }),
       ...(req.gstAmount !== undefined && { gst_amount: req.gstAmount }),
       ...(req.totalAmount !== undefined && { total_amount: req.totalAmount }),
+      ...(req.cxbcPartnerId && { cxbc_partner_id: req.cxbcPartnerId }),
+      ...(req.source && { source: req.source }),
     })
     .select('*')
     .single();

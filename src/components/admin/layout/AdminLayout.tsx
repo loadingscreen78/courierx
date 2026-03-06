@@ -51,7 +51,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
       {/* Desktop Layout */}
       <div className="hidden lg:flex">
         <AdminSidebar />
-        <div className="flex-1 flex flex-col min-h-screen ml-64">
+        <div className="flex-1 flex flex-col min-h-screen ml-60">
           {/* Glass Header */}
           <header className="h-16 bg-[#0f0f12]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-8 sticky top-0 z-30">
             <div className="flex items-center gap-4">

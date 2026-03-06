@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
-import { Package, Search, Eye, ExternalLink } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Package, Search, Eye, ExternalLink, Clock } from 'lucide-react';
 import { useCXBCAuth } from '@/hooks/useCXBCAuth';
+import { useCXBCShipments } from '@/hooks/useCXBCShipments';
+import { supabase } from '@/integrations/supabase/client';
+import { getStatusLabel, getStatusDotColor, getLegLabel } from '@/lib/shipment-lifecycle/statusLabelMap';
+import type { ShipmentStatus, ShipmentLeg, TimelineEntry } from '@/lib/shipment-lifecycle/types';
 import { CXBCLayout } from '@/components/cxbc/layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,71 +15,125 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Database } from '@/integrations/supabase/types';
+import type { Shipment } from '@/hooks/useShipments';
 
-type Shipment = Database['public']['Tables']['shipments']['Row'];
-type ShipmentStatus = Database['public']['Enums']['shipment_status'];
-
-const statusColors: Record<ShipmentStatus, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  payment_received: 'bg-green-100 text-green-800',
-  pickup_scheduled: 'bg-purple-100 text-purple-800',
-  out_for_pickup: 'bg-orange-100 text-orange-800',
-  picked_up: 'bg-indigo-100 text-indigo-800',
-  at_warehouse: 'bg-cyan-100 text-cyan-800',
-  qc_in_progress: 'bg-yellow-100 text-yellow-800',
-  qc_passed: 'bg-green-100 text-green-800',
-  qc_failed: 'bg-red-100 text-red-800',
-  pending_payment: 'bg-amber-100 text-amber-800',
-  dispatched: 'bg-blue-100 text-blue-800',
-  in_transit: 'bg-blue-100 text-blue-800',
-  customs_clearance: 'bg-orange-100 text-orange-800',
-  out_for_delivery: 'bg-purple-100 text-purple-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
+const SOURCE_LABEL_MAP: Record<string, { label: string; color: string }> = {
+  NIMBUS: { label: 'Domestic Tracking', color: 'text-blue-600' },
+  INTERNAL: { label: 'Warehouse', color: 'text-purple-600' },
+  SIMULATION: { label: 'International', color: 'text-orange-600' },
+  SYSTEM: { label: 'System', color: 'text-gray-500' },
 };
 
 const CXBCShipments = () => {
   const { partner } = useCXBCAuth();
+  const {
+    shipments,
+    activeShipments,
+    deliveredShipments,
+    failedShipments,
+    loading,
+  } = useCXBCShipments(partner?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [activeTab, setActiveTab] = useState('all');
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const timelineSubRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const { data: shipments, isLoading } = useQuery({
-    queryKey: ['cxbc-shipments', partner?.id],
-    queryFn: async () => {
-      if (!partner?.id) return [];
-      const { data, error } = await supabase
-        .from('shipments')
-        .select('*')
-        .eq('cxbc_partner_id', partner.id)
-        .order('created_at', { ascending: false });
+  // Fetch timeline entries and subscribe to Realtime when a shipment is selected
+  useEffect(() => {
+    if (!selectedShipment?.id) {
+      setTimelineEntries([]);
+      return;
+    }
 
-      if (error) throw error;
-      return data as Shipment[];
-    },
-    enabled: !!partner?.id,
-  });
+    const shipmentId = selectedShipment.id;
 
-  const filteredShipments = shipments?.filter(shipment => {
-    const matchesSearch = 
-      shipment.recipient_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shipment.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shipment.destination_country.toLowerCase().includes(searchQuery.toLowerCase());
+    async function fetchTimeline() {
+      setTimelineLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('shipment_timeline')
+          .select('*')
+          .eq('shipment_id', shipmentId)
+          .order('created_at', { ascending: true });
 
-    if (activeTab === 'all') return matchesSearch;
-    if (activeTab === 'active') return matchesSearch && !['delivered', 'cancelled'].includes(shipment.status);
-    if (activeTab === 'delivered') return matchesSearch && shipment.status === 'delivered';
-    if (activeTab === 'cancelled') return matchesSearch && shipment.status === 'cancelled';
-    return matchesSearch;
-  }) || [];
+        if (error) {
+          console.error('[CXBCShipments] Error fetching timeline:', error);
+        } else {
+          setTimelineEntries((data as unknown as TimelineEntry[]) || []);
+        }
+      } catch (err) {
+        console.error('[CXBCShipments] Error fetching timeline:', err);
+      } finally {
+        setTimelineLoading(false);
+      }
+    }
+
+    fetchTimeline();
+
+    // Subscribe to new timeline entries
+    const subscription = supabase
+      .channel(`cxbc_timeline_${shipmentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'shipment_timeline',
+          filter: `shipment_id=eq.${shipmentId}`,
+        },
+        (payload: any) => {
+          const newEntry = payload.new as TimelineEntry;
+          setTimelineEntries((prev) => {
+            // Maintain chronological order — append and sort by created_at ASC
+            const updated = [...prev, newEntry];
+            updated.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            return updated;
+          });
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[CXBCShipments] Timeline channel error, will refresh on reconnect');
+        }
+        if (status === 'SUBSCRIBED') {
+          fetchTimeline();
+        }
+      });
+
+    timelineSubRef.current = subscription;
+
+    return () => {
+      subscription.unsubscribe();
+      timelineSubRef.current = null;
+    };
+  }, [selectedShipment?.id]);
+
+  const filterBySearch = (list: Shipment[]) =>
+    list.filter((shipment) => {
+      const q = searchQuery.toLowerCase();
+      return (
+        shipment.recipient_name.toLowerCase().includes(q) ||
+        shipment.tracking_number?.toLowerCase().includes(q) ||
+        shipment.destination_country.toLowerCase().includes(q)
+      );
+    });
+
+  const filteredShipments = (() => {
+    if (activeTab === 'active') return filterBySearch(activeShipments);
+    if (activeTab === 'delivered') return filterBySearch(deliveredShipments);
+    if (activeTab === 'cancelled') return filterBySearch(failedShipments);
+    return filterBySearch(shipments);
+  })();
 
   const stats = {
-    total: shipments?.length || 0,
-    active: shipments?.filter(s => !['delivered', 'cancelled'].includes(s.status)).length || 0,
-    delivered: shipments?.filter(s => s.status === 'delivered').length || 0,
-    thisMonth: shipments?.filter(s => new Date(s.created_at).getMonth() === new Date().getMonth()).length || 0,
+    total: shipments.length,
+    active: activeShipments.length,
+    delivered: deliveredShipments.length,
+    thisMonth: shipments.filter(
+      (s) => new Date(s.created_at).getMonth() === new Date().getMonth()
+    ).length,
   };
 
   return (
@@ -149,11 +205,11 @@ const CXBCShipments = () => {
                 <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
                 <TabsTrigger value="active">Active ({stats.active})</TabsTrigger>
                 <TabsTrigger value="delivered">Delivered ({stats.delivered})</TabsTrigger>
-                <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                <TabsTrigger value="cancelled">Cancelled/Failed ({failedShipments.length})</TabsTrigger>
               </TabsList>
             </Tabs>
 
-            {isLoading ? (
+            {loading ? (
               <div className="space-y-3">
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
@@ -174,6 +230,7 @@ const CXBCShipments = () => {
                       <TableHead>Destination</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Leg</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Actions</TableHead>
@@ -196,8 +253,14 @@ const CXBCShipments = () => {
                           <Badge variant="outline" className="capitalize">{shipment.shipment_type}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge className={statusColors[shipment.status]}>
-                            {shipment.status.replace(/_/g, ' ')}
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block h-2 w-2 rounded-full ${getStatusDotColor(shipment.current_status as ShipmentStatus)}`} />
+                            <span className="text-sm">{getStatusLabel(shipment.current_status as ShipmentStatus)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">
+                            {getLegLabel(shipment.current_leg as ShipmentLeg)}
                           </Badge>
                         </TableCell>
                         <TableCell className="font-medium">₹{shipment.total_amount.toLocaleString()}</TableCell>
@@ -224,23 +287,43 @@ const CXBCShipments = () => {
 
         {/* Shipment Detail Dialog */}
         <Dialog open={!!selectedShipment} onOpenChange={() => setSelectedShipment(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Shipment Details</DialogTitle>
             </DialogHeader>
             {selectedShipment && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Badge className={statusColors[selectedShipment.status]}>
-                    {selectedShipment.status.replace(/_/g, ' ')}
-                  </Badge>
-                  <Badge variant="outline" className="capitalize">{selectedShipment.shipment_type}</Badge>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block h-2 w-2 rounded-full ${getStatusDotColor(selectedShipment.current_status as ShipmentStatus)}`} />
+                    <span className="text-sm font-medium">{getStatusLabel(selectedShipment.current_status as ShipmentStatus)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {getLegLabel(selectedShipment.current_leg as ShipmentLeg)}
+                    </Badge>
+                    <Badge variant="outline" className="capitalize">{selectedShipment.shipment_type}</Badge>
+                  </div>
                 </div>
 
                 {selectedShipment.tracking_number && (
                   <div className="bg-muted p-3 rounded-lg">
                     <p className="text-sm text-muted-foreground">Tracking Number</p>
                     <p className="font-mono font-medium">{selectedShipment.tracking_number}</p>
+                  </div>
+                )}
+
+                {selectedShipment.domestic_awb && (
+                  <div className="bg-muted p-3 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Domestic AWB</p>
+                    <p className="font-mono font-medium">{selectedShipment.domestic_awb}</p>
+                  </div>
+                )}
+
+                {selectedShipment.international_awb && (
+                  <div className="bg-muted p-3 rounded-lg">
+                    <p className="text-sm text-muted-foreground">International AWB</p>
+                    <p className="font-mono font-medium">{selectedShipment.international_awb}</p>
                   </div>
                 )}
 
@@ -288,6 +371,45 @@ const CXBCShipments = () => {
                   <div className="text-sm text-muted-foreground">
                     Created: {format(new Date(selectedShipment.created_at), 'dd MMM yyyy, HH:mm')}
                   </div>
+                </div>
+
+                {/* Shipment Timeline */}
+                <div className="border-t pt-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">Shipment Timeline</p>
+                  </div>
+                  {timelineLoading ? (
+                    <div className="space-y-2">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-8 w-full" />
+                      ))}
+                    </div>
+                  ) : timelineEntries.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No timeline entries yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {timelineEntries.map((entry) => {
+                        const sourceInfo = SOURCE_LABEL_MAP[entry.source] || { label: entry.source, color: 'text-gray-500' };
+                        return (
+                          <div key={entry.id} className="flex items-start gap-3">
+                            <div className="mt-1.5">
+                              <span className={`inline-block h-2 w-2 rounded-full ${getStatusDotColor(entry.status as ShipmentStatus)}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{getStatusLabel(entry.status as ShipmentStatus)}</p>
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className={sourceInfo.color}>{sourceInfo.label}</span>
+                                <span className="text-muted-foreground">
+                                  {format(new Date(entry.created_at), 'dd MMM yyyy, HH:mm')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {selectedShipment.tracking_number && (
