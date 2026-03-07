@@ -433,7 +433,7 @@ const WalletPage = () => {
       <Sheet open={showRechargeDialog} onOpenChange={setShowRechargeDialog}>
         <SheetContent
           side="bottom"
-          className="p-0 rounded-t-3xl overflow-hidden border-0 max-h-[92vh] flex flex-col sm:max-w-sm sm:mx-auto sm:rounded-3xl sm:max-h-[85vh] sm:fixed sm:bottom-auto sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:inset-auto [&>button]:hidden"
+          className="p-0 rounded-t-3xl overflow-hidden border-0 max-h-[92vh] flex flex-col [&>button]:hidden sm:max-w-sm sm:rounded-3xl sm:max-h-[85vh] sm:!inset-auto sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!w-[400px]"
         >
           {/* Drag handle (mobile) */}
           <div className="flex justify-center pt-3 pb-1 shrink-0 sm:hidden">
