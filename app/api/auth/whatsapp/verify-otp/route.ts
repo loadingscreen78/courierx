@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
     const supabase = getServiceRoleClient();
 
     // Check if user exists with this phone
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(
-      (u) => u.phone === phone
+    const { data: listData } = await supabase.auth.admin.listUsers();
+    const existingUser = (listData?.users ?? []).find(
+      (u: { phone?: string }) => u.phone === phone
     );
 
     let userId: string;
