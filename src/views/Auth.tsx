@@ -44,7 +44,7 @@ type PanelType = 'customer' | 'admin' | 'cxbc';
 const panelOptions = [
   { id: 'customer' as PanelType, title: 'Customer Panel', description: 'Ship internationally', icon: User, available: true },
   { id: 'admin' as PanelType, title: 'Admin Panel', description: 'Manage operations', icon: Settings, available: true },
-  { id: 'cxbc' as PanelType, title: 'CXBC Panel', description: 'Partner portal', icon: Briefcase, available: true },
+  { id: 'cxbc' as PanelType, title: 'CXBC Panel', description: 'Partner portal', icon: Briefcase, available: false },
 ];
 
 /**
@@ -761,20 +761,45 @@ const Auth = () => {
                 </div>
                 <div className="space-y-3">
                   {panelOptions.map((panel) => (
-                    <button
-                      key={panel.id}
-                      onClick={() => handlePanelSelect(panel.id)}
-                      className="w-full p-4 rounded-xl border border-border hover:border-coke-red bg-card hover:bg-coke-red/5 transition-all flex items-center gap-4 group"
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-muted group-hover:bg-coke-red/10 flex items-center justify-center transition-colors">
-                        <panel.icon className="w-6 h-6 text-muted-foreground group-hover:text-coke-red transition-colors" />
-                      </div>
-                      <div className="text-left flex-1">
-                        <p className="font-semibold text-foreground font-typewriter">{panel.title}</p>
-                        <p className="text-sm text-muted-foreground">{panel.description}</p>
-                      </div>
-                      <ArrowRight className="w-5 h-5 text-muted-foreground/50 group-hover:text-coke-red transition-colors" />
-                    </button>
+                    <div key={panel.id} className="relative group/panel">
+                      <button
+                        onClick={() => panel.available && handlePanelSelect(panel.id)}
+                        disabled={!panel.available}
+                        className={`w-full p-4 rounded-xl border transition-all flex items-center gap-4 ${
+                          panel.available
+                            ? 'border-border hover:border-coke-red bg-card hover:bg-coke-red/5 cursor-pointer group'
+                            : 'border-border/50 bg-card/50 cursor-not-allowed opacity-60'
+                        }`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                          panel.available
+                            ? 'bg-muted group-hover:bg-coke-red/10'
+                            : 'bg-muted/50'
+                        }`}>
+                          <panel.icon className={`w-6 h-6 transition-colors ${
+                            panel.available
+                              ? 'text-muted-foreground group-hover:text-coke-red'
+                              : 'text-muted-foreground/50'
+                          }`} />
+                        </div>
+                        <div className="text-left flex-1">
+                          <p className="font-semibold text-foreground font-typewriter">{panel.title}</p>
+                          <p className="text-sm text-muted-foreground">{panel.description}</p>
+                        </div>
+                        <ArrowRight className={`w-5 h-5 transition-colors ${
+                          panel.available
+                            ? 'text-muted-foreground/50 group-hover:text-coke-red'
+                            : 'text-muted-foreground/30'
+                        }`} />
+                      </button>
+                      {!panel.available && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover/panel:opacity-100 transition-opacity">
+                          <div className="bg-charcoal text-paper-white px-4 py-2 rounded-lg text-sm font-semibold shadow-lg border border-coke-red/20">
+                            SOON AVAILABLE
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
