@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'signup',
       email,
+      password: Math.random().toString(36).slice(-12), // Temporary password for link generation
     });
 
     if (error || !data.properties?.action_link) {
