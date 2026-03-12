@@ -366,9 +366,11 @@ const Auth = () => {
 
   const handleGoogleCallback = async (idToken: string) => {
     setIsLoading(true);
+    console.log('[Auth Google] Starting Google sign-in...');
     const { error } = await signInWithGoogle(idToken);
 
     if (error) {
+      console.log('[Auth Google] Sign-in error:', error.message);
       setIsLoading(false);
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       return;
@@ -376,12 +378,19 @@ const Auth = () => {
 
     // Get current user (session is now active)
     const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) { setIsLoading(false); return; }
+    console.log('[Auth Google] Current user:', currentUser?.id);
+    if (!currentUser) { 
+      console.log('[Auth Google] No current user found');
+      setIsLoading(false); 
+      return; 
+    }
 
     // Panel-specific redirect (identical to handleEmailAuth)
     if (selectedPanel === 'cxbc') {
       const { partner, applicationStatus } = await cxbcDualLookup(currentUser.id, currentUser.email ?? undefined);
+      console.log('[Auth Google] CXBC dual-lookup result:', { partner, applicationStatus });
       if (partner) {
+        console.log('[Auth Google] ✅ CXBC access granted, redirecting to /cxbc');
         setIsLoading(false);
         window.location.href = '/cxbc';
       } else if (applicationStatus === 'pending') {
@@ -395,6 +404,7 @@ const Auth = () => {
         setIsLoading(false);
         window.location.href = '/cxbc/apply';
       } else {
+        console.log('[Auth Google] No CXBC application found, redirecting to apply');
         toast({ title: 'Welcome!', description: 'Apply to become a CXBC partner to access the portal.' });
         setIsLoading(false);
         window.location.href = '/cxbc/apply';
@@ -402,26 +412,40 @@ const Auth = () => {
       return;
     }
 
-    // Customer panel
-    const { data: profileData } = await supabase
+    // Customer panel - check if profile exists and is complete
+    console.log('[Auth Google] Fetching profile for customer panel...');
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', currentUser.id)
       .single();
 
-    if (profileData?.full_name) {
-      const returnUrl = localStorage.getItem('authReturnUrl');
-      if (returnUrl) {
-        localStorage.removeItem('authReturnUrl');
-        setIsLoading(false);
-        window.location.href = returnUrl;
-      } else {
-        setIsLoading(false);
-        window.location.href = from || '/dashboard';
-      }
-    } else {
+    console.log('[Auth Google] Profile data:', profileData, 'Error:', profileError?.message);
+
+    // Check if this is a new user (no profile or incomplete profile)
+    if (!profileData || !profileData.full_name) {
+      console.log('[Auth Google] New user or incomplete profile, redirecting to onboarding');
+      toast({ 
+        title: 'Welcome to CourierX!', 
+        description: 'Please complete your profile to get started.' 
+      });
       setIsLoading(false);
       window.location.href = '/onboarding';
+      return;
+    }
+
+    // Existing user with complete profile
+    console.log('[Auth Google] Existing user with complete profile');
+    const returnUrl = localStorage.getItem('authReturnUrl');
+    if (returnUrl) {
+      console.log('[Auth Google] Redirecting to return URL:', returnUrl);
+      localStorage.removeItem('authReturnUrl');
+      setIsLoading(false);
+      window.location.href = returnUrl;
+    } else {
+      console.log('[Auth Google] Redirecting to dashboard');
+      setIsLoading(false);
+      window.location.href = from || '/dashboard';
     }
   };
 
