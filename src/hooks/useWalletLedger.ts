@@ -18,7 +18,6 @@ import {
 import {
   computeBalance,
   computeAvailableBalance,
-  addFunds as addFundsToLedger,
   deductFunds as deductFundsFromLedger,
   processRefund as processRefundInLedger,
   getTransactionHistory,
@@ -27,8 +26,9 @@ import {
   storeReceipt,
   getReceiptByLedgerEntryId,
 } from '@/lib/wallet/supabaseWalletService';
-import { quickPayment, PAYMENT_STATUS_MESSAGES } from '@/lib/wallet/mockPaymentGateway';
+import { loadRazorpayScript } from '@/lib/wallet/razorpayLoader';
 import { generateWalletReceiptPDF } from '@/lib/wallet/generateWalletReceiptPDF';
+import type { CreateOrderResponse, VerifyPaymentResponse } from '@/lib/wallet/razorpayConfig';
 
 export interface UseWalletLedgerReturn {
   balance: number;
@@ -142,96 +142,149 @@ export function useWalletLedger(): UseWalletLedgerReturn {
     };
   }, [refreshBalance, user?.id]);
 
-  const addFunds = useCallback(async (amount: number, method: PaymentMethod) => {
+  const addFunds = useCallback(async (amount: number, _method: PaymentMethod) => {
     if (!user?.id) {
-      console.error('[Wallet] Add funds failed: No user');
       return { success: false, error: 'Not authenticated' };
     }
-    
-    console.log('[Wallet] Adding funds:', { amount, method, userId: user.id });
-    
+
     const validation = validateRecharge(amount);
     if (!validation.valid) {
-      console.error('[Wallet] Validation failed:', validation.error);
       return { success: false, error: validation.error };
     }
 
-    setPaymentState({ isProcessing: true, status: 'pending', message: PAYMENT_STATUS_MESSAGES.pending });
+    setPaymentState({ isProcessing: true, status: 'pending', message: 'Creating payment order...' });
 
     try {
-      console.log('[Wallet] Processing payment...');
-      const paymentResult = await quickPayment(amount, method, (status, message) => {
-        console.log('[Wallet] Payment status update:', { status, message });
-        setPaymentState(prev => ({ ...prev, status, message }));
+      // Get auth token for API calls
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setPaymentState({ isProcessing: false, status: 'failed', message: 'Session expired. Please log in again.' });
+        return { success: false, error: 'Session expired' };
+      }
+
+      // Step 1: Create Razorpay order
+      setPaymentState(prev => ({ ...prev, message: 'Connecting to payment gateway...' }));
+      const orderRes = await fetch('/api/razorpay/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount }),
       });
 
-      if (!paymentResult.success) {
-        console.error('[Wallet] Payment failed:', paymentResult.errorMessage);
-        setPaymentState({ 
-          isProcessing: false, 
-          status: 'failed', 
-          message: paymentResult.errorMessage || PAYMENT_STATUS_MESSAGES.failed 
+      if (!orderRes.ok) {
+        const err = await orderRes.json().catch(() => ({ error: 'Failed to create order' }));
+        setPaymentState({ isProcessing: false, status: 'failed', message: err.error || 'Failed to create order' });
+        return { success: false, error: err.error };
+      }
+
+      const orderData: CreateOrderResponse = await orderRes.json();
+
+      // Step 2: Load Razorpay script
+      setPaymentState(prev => ({ ...prev, message: 'Loading payment interface...' }));
+      await loadRazorpayScript();
+
+      // Step 3: Open Razorpay checkout modal
+      setPaymentState(prev => ({ ...prev, status: 'processing', message: 'Waiting for payment...' }));
+
+      const razorpayResult = await new Promise<{
+        razorpay_payment_id: string;
+        razorpay_order_id: string;
+        razorpay_signature: string;
+      }>((resolve, reject) => {
+        const options = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'CourierX',
+          description: 'Wallet Recharge',
+          order_id: orderData.orderId,
+          prefill: {
+            name: profile?.full_name || '',
+            email: profile?.email || '',
+            contact: profile?.phone_number || '',
+          },
+          theme: { color: '#4F46E5' },
+          handler: (response: any) => resolve(response),
+          modal: {
+            ondismiss: () => reject(new Error('Payment cancelled')),
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', (response: any) => {
+          reject(new Error(response.error?.description || 'Payment failed'));
         });
-        return { success: false, error: paymentResult.errorMessage };
+        rzp.open();
+      });
+
+      // Step 4: Verify payment on server
+      setPaymentState(prev => ({ ...prev, message: 'Verifying payment...' }));
+
+      const verifyRes = await fetch('/api/razorpay/verify-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(razorpayResult),
+      });
+
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json().catch(() => ({ error: 'Verification failed' }));
+        setPaymentState({
+          isProcessing: false,
+          status: 'failed',
+          message: 'Payment was received but verification failed. If money was deducted, it will be refunded automatically.',
+        });
+        return { success: false, error: err.error };
       }
 
-      console.log('[Wallet] Payment successful, adding to ledger:', paymentResult.transactionId);
-      
-      const ledgerEntry = await addFundsToLedger(
-        user.id, 
-        amount, 
-        paymentResult.transactionId, 
-        `Wallet recharge via ${method.toUpperCase()}`
-      );
-      
-      if (!ledgerEntry) {
-        console.error('[Wallet] Failed to create ledger entry');
-        setPaymentState({ isProcessing: false, status: 'failed', message: 'Failed to record transaction' });
-        return { success: false, error: 'Failed to record transaction' };
-      }
+      const verifyData: VerifyPaymentResponse = await verifyRes.json();
+      const resolvedMethod = (verifyData.paymentMethod || 'upi') as PaymentMethod;
 
-      console.log('[Wallet] Ledger entry created:', ledgerEntry.id);
-
-      const baseAmount = amount / (1 + GST_RATE);
-      const gstAmount = amount - baseAmount;
+      // Step 5: Generate receipt
+      const baseAmount = verifyData.amount / (1 + GST_RATE);
+      const gstAmount = verifyData.amount - baseAmount;
       const receipt: Receipt = {
         id: `rcp_${Date.now()}`,
         receiptNumber: generateReceiptNumber(),
-        transactionId: paymentResult.transactionId,
-        ledgerEntryId: ledgerEntry.id,
+        transactionId: razorpayResult.razorpay_payment_id,
+        ledgerEntryId: verifyData.ledgerEntryId,
         amount: Math.round(baseAmount * 100) / 100,
         gstAmount: Math.round(gstAmount * 100) / 100,
-        totalAmount: amount,
-        paymentMethod: method,
-        date: paymentResult.timestamp,
+        totalAmount: verifyData.amount,
+        paymentMethod: resolvedMethod,
+        date: new Date().toISOString(),
         customerName: profile?.full_name || 'Customer',
         customerEmail: profile?.email || undefined,
         companyDetails: COMPANY_DETAILS,
       };
 
-      console.log('[Wallet] Storing receipt...');
-      await storeReceipt(user.id, ledgerEntry.id, {
+      await storeReceipt(user.id, verifyData.ledgerEntryId, {
         receiptNumber: receipt.receiptNumber,
         transactionId: receipt.transactionId,
         amount: receipt.amount,
         gstAmount: receipt.gstAmount,
         totalAmount: receipt.totalAmount,
-        paymentMethod: method,
+        paymentMethod: resolvedMethod,
         customerName: receipt.customerName,
         customerEmail: receipt.customerEmail,
       });
 
-      console.log('[Wallet] Refreshing balance...');
       await refreshBalance();
-      
-      setPaymentState({ isProcessing: false, status: 'success', message: PAYMENT_STATUS_MESSAGES.success });
-      console.log('[Wallet] Add funds completed successfully');
-      
+      setPaymentState({ isProcessing: false, status: 'success', message: 'Payment successful!' });
       return { success: true, receipt };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Payment failed';
-      console.error('[Wallet] Add funds error:', errorMessage, error);
-      setPaymentState({ isProcessing: false, status: 'failed', message: errorMessage });
+      const isCancelled = errorMessage === 'Payment cancelled';
+      setPaymentState({
+        isProcessing: false,
+        status: 'failed',
+        message: isCancelled ? 'Payment cancelled' : errorMessage,
+      });
       return { success: false, error: errorMessage };
     }
   }, [user?.id, profile, refreshBalance]);
