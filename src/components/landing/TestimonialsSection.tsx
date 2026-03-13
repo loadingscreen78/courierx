@@ -210,7 +210,7 @@ function TestimonialCard({ img, name, avatar, location, text, country, rating }:
 
 export const TestimonialsSection = () => {
   return (
-    <section className="py-24 bg-muted/30 relative overflow-hidden">
+    <section className="py-24 bg-background relative overflow-hidden">
       {/* Decorative Quote */}
       <div className="absolute top-20 left-10 opacity-[0.03]">
         <Quote className="w-64 h-64 text-foreground" />
@@ -260,10 +260,10 @@ export const TestimonialsSection = () => {
             </Marquee>
 
             {/* Gradient overlays */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-background/80 to-transparent z-10"></div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-background/80 to-transparent z-10"></div>
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-background/80 to-transparent z-10"></div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-background/80 to-transparent z-10"></div>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-background to-transparent z-10"></div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-background to-transparent z-10"></div>
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-background to-transparent z-10"></div>
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-background to-transparent z-10"></div>
           </div>
         </div>
 
