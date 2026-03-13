@@ -9,13 +9,13 @@ async function requireAdmin(request: NextRequest) {
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) return null;
 
-  const { data: profile } = await supabase
-    .from('profiles')
+  const { data: roles } = await supabase
+    .from('user_roles')
     .select('role')
-    .eq('id', user.id)
-    .single();
+    .eq('user_id', user.id);
 
-  if (profile?.role !== 'admin') return null;
+  const isAdmin = roles?.some((r: any) => r.role === 'admin');
+  if (!isAdmin) return null;
   return user;
 }
 
