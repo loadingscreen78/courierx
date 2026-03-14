@@ -15,6 +15,7 @@ import {
   Zap,
   Tag,
   FileBarChart2,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -28,6 +29,7 @@ const navItems = [
   { title: 'QC Workbench', href: '/admin/qc', icon: ClipboardCheck },
   { title: 'Outbound', href: '/admin/outbound', icon: Truck },
   { title: 'All Shipments', href: '/admin/shipments', icon: Package },
+  { title: 'Customer CRM', href: '/admin/customers', icon: Users, adminOnly: true },
   { title: 'CXBC Partners', href: '/admin/cxbc-partners', icon: Briefcase, adminOnly: true },
   { title: 'Coupons', href: '/admin/coupons', icon: Tag, adminOnly: true },
   { title: 'Role Management', href: '/admin/roles', icon: ShieldCheck, adminOnly: true },

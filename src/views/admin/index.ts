@@ -8,3 +8,4 @@ export { RoleManagement } from './RoleManagement';
 export { default as CXBCPartnerManagement } from './CXBCPartnerManagement';
 export { CouponManagement } from './CouponManagement';
 export { default as AWBLabels } from './AWBLabels';
+export { CustomerCRM } from './CustomerCRM';

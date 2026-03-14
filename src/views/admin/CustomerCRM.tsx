@@ -1,0 +1,929 @@
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { AdminLayout } from '@/components/admin/layout';
+import { supabase } from '@/integrations/supabase/client';
+import { motion } from 'framer-motion';
+import { format, subDays, startOfMonth, parseISO } from 'date-fns';
+import { toast } from 'sonner';
+import {
+  Users, UserCheck, Wallet, Package, Search, Filter, ChevronDown,
+  ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal,
+  Mail, Phone, ShieldCheck, ShieldX, Eye, Edit2, Download,
+  TrendingUp, TrendingDown, Activity, Calendar, X, Loader2,
+  IndianRupee, MapPin, Clock, CheckCircle2, XCircle, AlertCircle,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area,
+} from 'recharts';
+
+// ─── Types ───────────────────────────────────────────────────────────
+interface Customer {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  phone_number: string | null;
+  wallet_balance: number;
+  aadhaar_verified: boolean | null;
+  kyc_completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  avatar_url: string | null;
+  aadhaar_address: string | null;
+  shipment_count: number;
+  total_spent: number;
+  last_shipment_at: string | null;
+  roles: string[];
+}
+
+interface CustomerShipment {
+  id: string;
+  tracking_number: string | null;
+  shipment_type: string;
+  status: string;
+  destination_country: string;
+  total_amount: number;
+  created_at: string;
+}
+
+type SortField = 'full_name' | 'created_at' | 'wallet_balance' | 'shipment_count' | 'total_spent';
+type SortDir = 'asc' | 'desc';
+
+// ─── Constants ───────────────────────────────────────────────────────
+const PIE_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6'];
+const PAGE_SIZE = 20;
+
+// ─── Stat Card ───────────────────────────────────────────────────────
+function StatCard({ label, value, icon: Icon, trend, trendLabel, color }: {
+  label: string; value: string | number; icon: any;
+  trend?: number; trendLabel?: string; color: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.06] transition-colors"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", color)}>
+          <Icon className="h-5 w-5" />
+        </div>
+        {trend !== undefined && (
+          <div className={cn("flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg",
+            trend >= 0 ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
+          )}>
+            {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {Math.abs(trend)}%
+          </div>
+        )}
+      </div>
+      <p className="text-2xl font-bold text-white tracking-tight">{value}</p>
+      <p className="text-xs text-gray-500 mt-1">{trendLabel || label}</p>
+    </motion.div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────
+export function CustomerCRM() {
+  // Data state
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [kycFilter, setKycFilter] = useState<string>('all');
+  const [activityFilter, setActivityFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(0);
+
+  // Detail sheet
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerShipments, setCustomerShipments] = useState<CustomerShipment[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Edit dialog
+  const [editDialog, setEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState({ full_name: '', phone_number: '', email: '' });
+  const [saving, setSaving] = useState(false);
+
+  // ─── Fetch all customers with aggregated data ──────────────────────
+  const fetchCustomers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Fetch profiles
+      const { data: profiles, error: pErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (pErr) throw pErr;
+
+      // Fetch shipment aggregates per user
+      const { data: shipments, error: sErr } = await supabase
+        .from('shipments')
+        .select('user_id, total_amount, created_at');
+      if (sErr) throw sErr;
+
+      // Fetch roles
+      const { data: roles, error: rErr } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+      if (rErr) throw rErr;
+
+      // Build aggregates
+      const shipAgg = new Map<string, { count: number; total: number; lastAt: string | null }>();
+      for (const s of shipments || []) {
+        const agg = shipAgg.get(s.user_id) || { count: 0, total: 0, lastAt: null };
+        agg.count++;
+        agg.total += s.total_amount || 0;
+        if (!agg.lastAt || s.created_at > agg.lastAt) agg.lastAt = s.created_at;
+        shipAgg.set(s.user_id, agg);
+      }
+
+      const roleMap = new Map<string, string[]>();
+      for (const r of roles || []) {
+        const arr = roleMap.get(r.user_id) || [];
+        arr.push(r.role);
+        roleMap.set(r.user_id, arr);
+      }
+
+      const merged: Customer[] = (profiles || []).map((p: any) => {
+        const agg = shipAgg.get(p.user_id) || { count: 0, total: 0, lastAt: null };
+        return {
+          user_id: p.user_id,
+          full_name: p.full_name,
+          email: p.email,
+          phone_number: p.phone_number,
+          wallet_balance: p.wallet_balance || 0,
+          aadhaar_verified: p.aadhaar_verified,
+          kyc_completed_at: p.kyc_completed_at,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          avatar_url: p.avatar_url,
+          aadhaar_address: p.aadhaar_address,
+          shipment_count: agg.count,
+          total_spent: agg.total,
+          last_shipment_at: agg.lastAt,
+          roles: roleMap.get(p.user_id) || [],
+        };
+      });
+
+      setCustomers(merged);
+    } catch (err) {
+      console.error('[CRM] fetch error:', err);
+      toast.error('Failed to load customers');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+
+  // ─── Computed stats ────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const total = customers.length;
+    const kycVerified = customers.filter(c => c.aadhaar_verified).length;
+    const activeShippers = customers.filter(c => c.shipment_count > 0).length;
+    const totalWallet = customers.reduce((s, c) => s + c.wallet_balance, 0);
+    const totalRevenue = customers.reduce((s, c) => s + c.total_spent, 0);
+
+    // 30-day signups
+    const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
+    const recentSignups = customers.filter(c => c.created_at >= thirtyDaysAgo).length;
+    const prevThirty = customers.filter(c => {
+      const d = c.created_at;
+      return d < thirtyDaysAgo && d >= subDays(new Date(), 60).toISOString();
+    }).length;
+    const signupTrend = prevThirty > 0 ? Math.round(((recentSignups - prevThirty) / prevThirty) * 100) : 0;
+
+    return { total, kycVerified, activeShippers, totalWallet, totalRevenue, recentSignups, signupTrend };
+  }, [customers]);
+
+  // ─── Chart data ────────────────────────────────────────────────────
+  const signupChartData = useMemo(() => {
+    const last30 = Array.from({ length: 30 }, (_, i) => {
+      const d = subDays(new Date(), 29 - i);
+      return { date: format(d, 'MMM dd'), count: 0 };
+    });
+    for (const c of customers) {
+      const dayStr = format(parseISO(c.created_at), 'MMM dd');
+      const entry = last30.find(e => e.date === dayStr);
+      if (entry) entry.count++;
+    }
+    return last30;
+  }, [customers]);
+
+  const kycFunnelData = useMemo(() => [
+    { name: 'Total Users', value: stats.total, fill: '#6366f1' },
+    { name: 'KYC Verified', value: stats.kycVerified, fill: '#22c55e' },
+    { name: 'Active Shippers', value: stats.activeShippers, fill: '#ef4444' },
+  ], [stats]);
+
+  const shipmentTypeData = useMemo(() => {
+    const types: Record<string, number> = {};
+    // We don't have shipment types per customer here, so use shipment_count distribution
+    const buckets = [
+      { name: '0 shipments', value: customers.filter(c => c.shipment_count === 0).length },
+      { name: '1-5 shipments', value: customers.filter(c => c.shipment_count >= 1 && c.shipment_count <= 5).length },
+      { name: '6-20 shipments', value: customers.filter(c => c.shipment_count >= 6 && c.shipment_count <= 20).length },
+      { name: '20+ shipments', value: customers.filter(c => c.shipment_count > 20).length },
+    ].filter(b => b.value > 0);
+    return buckets;
+  }, [customers]);
+
+  // ─── Filtered & sorted customers ──────────────────────────────────
+  const filtered = useMemo(() => {
+    let list = [...customers];
+
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(c =>
+        (c.full_name?.toLowerCase().includes(q)) ||
+        (c.email?.toLowerCase().includes(q)) ||
+        (c.phone_number?.includes(q)) ||
+        (c.user_id.toLowerCase().includes(q))
+      );
+    }
+
+    // KYC filter
+    if (kycFilter === 'verified') list = list.filter(c => c.aadhaar_verified);
+    else if (kycFilter === 'pending') list = list.filter(c => !c.aadhaar_verified);
+
+    // Activity filter
+    if (activityFilter === 'active') list = list.filter(c => c.shipment_count > 0);
+    else if (activityFilter === 'inactive') list = list.filter(c => c.shipment_count === 0);
+    else if (activityFilter === 'high_value') list = list.filter(c => c.total_spent >= 5000);
+
+    // Sort
+    list.sort((a, b) => {
+      let av: any = a[sortField];
+      let bv: any = b[sortField];
+      if (av == null) av = '';
+      if (bv == null) bv = '';
+      if (typeof av === 'string') av = av.toLowerCase();
+      if (typeof bv === 'string') bv = bv.toLowerCase();
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [customers, searchQuery, kycFilter, activityFilter, sortField, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('desc'); }
+    setPage(0);
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 text-gray-600" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="h-3 w-3 text-red-400" />
+      : <ArrowDown className="h-3 w-3 text-red-400" />;
+  };
+
+  // ─── Customer detail ───────────────────────────────────────────────
+  const openDetail = async (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setLoadingDetail(true);
+    try {
+      const { data, error } = await supabase
+        .from('shipments')
+        .select('id, tracking_number, shipment_type, status, destination_country, total_amount, created_at')
+        .eq('user_id', customer.user_id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      setCustomerShipments((data as any[]) || []);
+    } catch {
+      toast.error('Failed to load shipment history');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  // ─── Edit customer ─────────────────────────────────────────────────
+  const openEdit = (customer: Customer) => {
+    setEditForm({
+      full_name: customer.full_name || '',
+      phone_number: customer.phone_number || '',
+      email: customer.email || '',
+    });
+    setSelectedCustomer(customer);
+    setEditDialog(true);
+  };
+
+  const saveEdit = async () => {
+    if (!selectedCustomer) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editForm.full_name || null,
+          phone_number: editForm.phone_number || null,
+          email: editForm.email || null,
+        })
+        .eq('user_id', selectedCustomer.user_id);
+      if (error) throw error;
+      toast.success('Customer updated');
+      setEditDialog(false);
+      fetchCustomers();
+    } catch {
+      toast.error('Failed to update customer');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── CSV export ────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const headers = ['Name', 'Email', 'Phone', 'KYC', 'Wallet Balance', 'Shipments', 'Total Spent', 'Joined'];
+    const rows = filtered.map(c => [
+      c.full_name || '', c.email || '', c.phone_number || '',
+      c.aadhaar_verified ? 'Verified' : 'Pending',
+      c.wallet_balance.toFixed(2), c.shipment_count,
+      c.total_spent.toFixed(2), format(parseISO(c.created_at), 'yyyy-MM-dd'),
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `courierx-customers-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    toast.success(`Exported ${filtered.length} customers`);
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-tight">Customer CRM</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{stats.total} total customers</p>
+          </div>
+          <Button
+            onClick={exportCSV}
+            variant="outline"
+            size="sm"
+            className="border-white/10 text-gray-300 hover:bg-white/5 hover:text-white"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard
+            label="Total Customers"
+            value={stats.total}
+            icon={Users}
+            trend={stats.signupTrend}
+            trendLabel={`${stats.recentSignups} new in 30d`}
+            color="bg-blue-500/15 text-blue-400"
+          />
+          <StatCard
+            label="KYC Verified"
+            value={stats.kycVerified}
+            icon={ShieldCheck}
+            trendLabel={`${stats.total > 0 ? Math.round((stats.kycVerified / stats.total) * 100) : 0}% verification rate`}
+            color="bg-green-500/15 text-green-400"
+          />
+          <StatCard
+            label="Active Shippers"
+            value={stats.activeShippers}
+            icon={Package}
+            trendLabel={`${stats.total > 0 ? Math.round((stats.activeShippers / stats.total) * 100) : 0}% conversion`}
+            color="bg-red-500/15 text-red-400"
+          />
+          <StatCard
+            label="Total Wallet Balance"
+            value={`₹${stats.totalWallet.toLocaleString('en-IN')}`}
+            icon={Wallet}
+            trendLabel={`₹${stats.totalRevenue.toLocaleString('en-IN')} total revenue`}
+            color="bg-amber-500/15 text-amber-400"
+          />
+        </div>
+
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Signup Trend */}
+          <div className="lg:col-span-2 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Signup Trend</p>
+                <p className="text-xs text-gray-500">Last 30 days</p>
+              </div>
+              <Badge variant="outline" className="border-white/10 text-gray-400 text-[10px]">
+                <Activity className="h-3 w-3 mr-1" /> Daily
+              </Badge>
+            </div>
+            <div className="h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={signupChartData}>
+                  <defs>
+                    <linearGradient id="signupGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} interval={6} />
+                  <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} width={24} />
+                  <Tooltip
+                    contentStyle={{ background: '#1a1a1f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 12, color: '#fff' }}
+                    labelStyle={{ color: '#9ca3af' }}
+                  />
+                  <Area type="monotone" dataKey="count" stroke="#ef4444" strokeWidth={2} fill="url(#signupGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* KYC Funnel + Activity Distribution */}
+          <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white mb-1">Customer Funnel</p>
+            <p className="text-xs text-gray-500 mb-4">Onboarding → KYC → Active</p>
+            <div className="space-y-3">
+              {kycFunnelData.map((item, i) => (
+                <div key={item.name}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-400">{item.name}</span>
+                    <span className="text-white font-medium">{item.value}</span>
+                  </div>
+                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${stats.total > 0 ? (item.value / stats.total) * 100 : 0}%` }}
+                      transition={{ duration: 0.8, delay: i * 0.15 }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: item.fill }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6">
+              <p className="text-xs text-gray-500 mb-3">Shipment Activity</p>
+              <div className="h-[100px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={shipmentTypeData} cx="50%" cy="50%" innerRadius={25} outerRadius={42} paddingAngle={3} dataKey="value">
+                      {shipmentTypeData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: '#1a1a1f', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 11, color: '#fff' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {shipmentTypeData.map((item, i) => (
+                  <div key={item.name} className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    {item.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters & Search */}
+        <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Search by name, email, phone, or ID..."
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-600 focus:border-red-500/50"
+              />
+            </div>
+            <Select value={kycFilter} onValueChange={v => { setKycFilter(v); setPage(0); }}>
+              <SelectTrigger className="w-[160px] bg-white/5 border-white/10 text-gray-300">
+                <SelectValue placeholder="KYC Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All KYC</SelectItem>
+                <SelectItem value="verified">Verified</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={activityFilter} onValueChange={v => { setActivityFilter(v); setPage(0); }}>
+              <SelectTrigger className="w-[160px] bg-white/5 border-white/10 text-gray-300">
+                <SelectValue placeholder="Activity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Activity</SelectItem>
+                <SelectItem value="active">Has Shipments</SelectItem>
+                <SelectItem value="inactive">No Shipments</SelectItem>
+                <SelectItem value="high_value">High Value (₹5k+)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-xs text-gray-500">{filtered.length} customers match filters</p>
+            {(searchQuery || kycFilter !== 'all' || activityFilter !== 'all') && (
+              <button
+                onClick={() => { setSearchQuery(''); setKycFilter('all'); setActivityFilter('all'); setPage(0); }}
+                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+              >
+                <X className="h-3 w-3" /> Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Customer Table */}
+        <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl overflow-hidden">
+          {isLoading ? (
+            <div className="p-6 space-y-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full bg-white/5 rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-white/5 hover:bg-transparent">
+                      <TableHead className="text-gray-500 text-xs font-semibold">
+                        <button onClick={() => toggleSort('full_name')} className="flex items-center gap-1 hover:text-gray-300">
+                          Customer <SortIcon field="full_name" />
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold">Contact</TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold">KYC</TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold">
+                        <button onClick={() => toggleSort('wallet_balance')} className="flex items-center gap-1 hover:text-gray-300">
+                          Wallet <SortIcon field="wallet_balance" />
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold">
+                        <button onClick={() => toggleSort('shipment_count')} className="flex items-center gap-1 hover:text-gray-300">
+                          Shipments <SortIcon field="shipment_count" />
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold">
+                        <button onClick={() => toggleSort('total_spent')} className="flex items-center gap-1 hover:text-gray-300">
+                          Revenue <SortIcon field="total_spent" />
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold">
+                        <button onClick={() => toggleSort('created_at')} className="flex items-center gap-1 hover:text-gray-300">
+                          Joined <SortIcon field="created_at" />
+                        </button>
+                      </TableHead>
+                      <TableHead className="text-gray-500 text-xs font-semibold w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paged.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-12 text-gray-500">
+                          No customers found
+                        </TableCell>
+                      </TableRow>
+                    ) : paged.map((c, i) => (
+                      <TableRow
+                        key={c.user_id}
+                        className="border-white/5 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                        onClick={() => openDetail(c)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-600/80 to-red-800/80 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                              {(c.full_name || c.email || '?').charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-white truncate max-w-[160px]">
+                                {c.full_name || 'Unnamed'}
+                              </p>
+                              {c.roles.length > 0 && (
+                                <div className="flex gap-1 mt-0.5">
+                                  {c.roles.map(r => (
+                                    <span key={r} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-gray-500">{r}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            {c.email && <p className="text-xs text-gray-400 truncate max-w-[180px]">{c.email}</p>}
+                            {c.phone_number && <p className="text-xs text-gray-500">{c.phone_number}</p>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {c.aadhaar_verified ? (
+                            <Badge className="bg-green-500/10 text-green-400 border border-green-500/20 text-[10px]">
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Verified
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-[10px]">
+                              <Clock className="h-3 w-3 mr-1" /> Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-white font-medium">
+                          ₹{c.wallet_balance.toLocaleString('en-IN')}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-white">{c.shipment_count}</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-white">
+                          ₹{c.total_spent.toLocaleString('en-IN')}
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-500">
+                          {format(parseISO(c.created_at), 'dd MMM yyyy')}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                              <button className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-gray-300">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-[#1a1a1f] border-white/10 text-white">
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); openDetail(c); }}>
+                                <Eye className="h-4 w-4 mr-2" /> View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); openEdit(c); }}>
+                                <Edit2 className="h-4 w-4 mr-2" /> Edit Profile
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-white/5">
+                  <p className="text-xs text-gray-500">
+                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </p>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost" size="sm" disabled={page === 0}
+                      onClick={() => setPage(p => p - 1)}
+                      className="text-gray-400 hover:text-white hover:bg-white/5 h-8 px-3 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      const p = page < 3 ? i : page > totalPages - 4 ? totalPages - 5 + i : page - 2 + i;
+                      if (p < 0 || p >= totalPages) return null;
+                      return (
+                        <Button
+                          key={p} variant="ghost" size="sm"
+                          onClick={() => setPage(p)}
+                          className={cn(
+                            "h-8 w-8 p-0 text-xs",
+                            p === page ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-white hover:bg-white/5"
+                          )}
+                        >
+                          {p + 1}
+                        </Button>
+                      );
+                    })}
+                    <Button
+                      variant="ghost" size="sm" disabled={page >= totalPages - 1}
+                      onClick={() => setPage(p => p + 1)}
+                      className="text-gray-400 hover:text-white hover:bg-white/5 h-8 px-3 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Customer Detail Sheet */}
+      <Sheet open={!!selectedCustomer && !editDialog} onOpenChange={() => setSelectedCustomer(null)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-[#0f0f12] border-white/5 text-white">
+          <SheetHeader>
+            <SheetTitle className="text-white">Customer Details</SheetTitle>
+          </SheetHeader>
+          {selectedCustomer && (
+            <div className="mt-4 space-y-5">
+              {/* Profile Header */}
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center text-white text-xl font-bold shrink-0">
+                  {(selectedCustomer.full_name || selectedCustomer.email || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-lg font-bold text-white truncate">{selectedCustomer.full_name || 'Unnamed'}</p>
+                  <p className="text-xs text-gray-500 truncate">{selectedCustomer.email}</p>
+                  {selectedCustomer.phone_number && (
+                    <p className="text-xs text-gray-500">{selectedCustomer.phone_number}</p>
+                  )}
+                </div>
+                <Button size="sm" variant="outline" className="border-white/10 text-gray-300 hover:bg-white/5" onClick={() => openEdit(selectedCustomer)}>
+                  <Edit2 className="h-3 w-3 mr-1" /> Edit
+                </Button>
+              </div>
+
+              {/* Quick Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white/[0.04] rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold text-white">₹{selectedCustomer.wallet_balance.toLocaleString('en-IN')}</p>
+                  <p className="text-[10px] text-gray-500">Wallet</p>
+                </div>
+                <div className="bg-white/[0.04] rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold text-white">{selectedCustomer.shipment_count}</p>
+                  <p className="text-[10px] text-gray-500">Shipments</p>
+                </div>
+                <div className="bg-white/[0.04] rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold text-white">₹{selectedCustomer.total_spent.toLocaleString('en-IN')}</p>
+                  <p className="text-[10px] text-gray-500">Revenue</p>
+                </div>
+              </div>
+
+              {/* Info Grid */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between py-2 border-b border-white/5">
+                  <span className="text-xs text-gray-500">KYC Status</span>
+                  {selectedCustomer.aadhaar_verified ? (
+                    <Badge className="bg-green-500/10 text-green-400 border border-green-500/20 text-[10px]">
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Verified
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-[10px]">
+                      <Clock className="h-3 w-3 mr-1" /> Pending
+                    </Badge>
+                  )}
+                </div>
+                {selectedCustomer.kyc_completed_at && (
+                  <div className="flex items-center justify-between py-2 border-b border-white/5">
+                    <span className="text-xs text-gray-500">KYC Date</span>
+                    <span className="text-xs text-gray-300">{format(parseISO(selectedCustomer.kyc_completed_at), 'dd MMM yyyy')}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between py-2 border-b border-white/5">
+                  <span className="text-xs text-gray-500">Joined</span>
+                  <span className="text-xs text-gray-300">{format(parseISO(selectedCustomer.created_at), 'dd MMM yyyy, HH:mm')}</span>
+                </div>
+                {selectedCustomer.last_shipment_at && (
+                  <div className="flex items-center justify-between py-2 border-b border-white/5">
+                    <span className="text-xs text-gray-500">Last Shipment</span>
+                    <span className="text-xs text-gray-300">{format(parseISO(selectedCustomer.last_shipment_at), 'dd MMM yyyy')}</span>
+                  </div>
+                )}
+                {selectedCustomer.aadhaar_address && (
+                  <div className="flex items-start justify-between py-2 border-b border-white/5">
+                    <span className="text-xs text-gray-500 shrink-0">Address</span>
+                    <span className="text-xs text-gray-300 text-right ml-4">{selectedCustomer.aadhaar_address}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between py-2 border-b border-white/5">
+                  <span className="text-xs text-gray-500">User ID</span>
+                  <span className="text-[10px] text-gray-500 font-mono">{selectedCustomer.user_id}</span>
+                </div>
+                {selectedCustomer.roles.length > 0 && (
+                  <div className="flex items-center justify-between py-2 border-b border-white/5">
+                    <span className="text-xs text-gray-500">Roles</span>
+                    <div className="flex gap-1">
+                      {selectedCustomer.roles.map(r => (
+                        <Badge key={r} variant="outline" className="border-white/10 text-gray-400 text-[10px]">{r}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Shipment History */}
+              <div>
+                <p className="text-sm font-semibold text-white mb-3">Recent Shipments</p>
+                {loadingDetail ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                  </div>
+                ) : customerShipments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Package className="h-8 w-8 text-gray-700 mx-auto mb-2" />
+                    <p className="text-xs text-gray-500">No shipments yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {customerShipments.map(s => (
+                      <div key={s.id} className="flex items-center justify-between p-3 bg-white/[0.03] rounded-xl hover:bg-white/[0.05] transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0",
+                            s.shipment_type === 'medicine' ? 'bg-blue-500/15 text-blue-400' :
+                            s.shipment_type === 'document' ? 'bg-amber-500/15 text-amber-400' :
+                            'bg-purple-500/15 text-purple-400'
+                          )}>
+                            <Package className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-white truncate">{s.tracking_number || s.id.slice(0, 8)}</p>
+                            <p className="text-[10px] text-gray-500">{s.destination_country} · {s.shipment_type}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className="text-xs font-medium text-white">₹{s.total_amount.toLocaleString('en-IN')}</p>
+                          <p className="text-[10px] text-gray-500">{format(parseISO(s.created_at), 'dd MMM')}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialog} onOpenChange={setEditDialog}>
+        <DialogContent className="bg-[#16161a] border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Customer</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Update customer profile information
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Full Name</label>
+              <Input
+                value={editForm.full_name}
+                onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Email</label>
+              <Input
+                value={editForm.email}
+                onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Phone Number</label>
+              <Input
+                value={editForm.phone_number}
+                onChange={e => setEditForm(f => ({ ...f, phone_number: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditDialog(false)} className="text-gray-400">Cancel</Button>
+            <Button onClick={saveEdit} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AdminLayout>
+  );
+}
