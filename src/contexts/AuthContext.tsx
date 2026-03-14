@@ -112,42 +112,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: error as Error };
       }
 
-      return { error: nullrror cases with user-friendly messages
-      if (error) {
-        // Check for duplicate email error
-        if (error.message.includes('duplicate key') || 
-            error.message.includes('already registered') ||
-            error.message.includes('users_email_partial_key')) {
-          return { 
-            error: new Error('This email is already registered. Please sign in instead or use a different email.') 
-          };
-        }
-        
-        // Check for generic database errors
-        if (error.message.includes('Database error')) {
-          return { 
-            error: new Error('Unable to create account. Please try again or contact support if the issue persists.') 
-          };
-        }
-        
-        return { error: error as Error };
-      }
-      
-      // Auto-complete KYC for new users (MOCK MODE)
-      if (data.user) {
-        console.log('[Auth] New user created, auto-completing KYC (mock mode)...');
-        
-        // Set aadhaar_verified to true by default for mock mode
-        await supabase
-          .from('profiles')
-          .update({
-            aadhaar_verified: true,
-            aadhaar_address: '123, Mock Street, Sample City, Sample State - 123456',
-            kyc_completed_at: new Date().toISOString(),
-          })
-          .eq('user_id', data.user.id);
-      }
-      
       return { error: null };
     } catch (err) {
       const error = err as Error;

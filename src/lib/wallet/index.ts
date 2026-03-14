@@ -3,7 +3,7 @@ export * from './types';
 export * from './ledgerStore';
 export * from './walletService';
 export * from './razorpayLoader';
-export * from './razorpayConfig';
+// razorpayConfig types removed — replaced by cashfreeConfig
 export * from './cashfreeLoader';
 export * from './cashfreeConfig';
 export * from './receiptGenerator';

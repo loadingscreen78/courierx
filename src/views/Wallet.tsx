@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
 } from '@/components/ui/sheet';
 import {
   Wallet as WalletIcon,
@@ -538,7 +539,9 @@ const WalletPage = () => {
         <SheetContent
           side="bottom"
           className="p-0 rounded-t-3xl overflow-hidden border-0 max-h-[92vh] flex flex-col [&>button]:hidden sm:max-w-sm sm:rounded-3xl sm:max-h-[85vh] sm:!inset-auto sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:!w-[400px]"
+          aria-describedby={undefined}
         >
+          <SheetTitle className="sr-only">Add Money to Wallet</SheetTitle>
           {/* Drag handle (mobile) */}
           <div className="flex justify-center pt-3 pb-1 shrink-0 sm:hidden">
             <div className="w-10 h-1 rounded-full bg-muted-foreground/20" />

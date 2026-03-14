@@ -6,7 +6,7 @@ import { CXBCSidebar } from './CXBCSidebar';
 import { useCXBCAuth } from '@/hooks/useCXBCAuth';
 import { Menu, Bell, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import logoSymbol from '@/assets/logo-symbol.jpeg';
 
@@ -51,7 +51,8 @@ export const CXBCLayout = ({ children, title, subtitle }: CXBCLayoutProps) => {
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-72 p-0 bg-sidebar-background" onInteractOutside={handleSheetClose}>
+                <SheetContent side="left" className="w-72 p-0 bg-sidebar-background" onInteractOutside={handleSheetClose} aria-describedby={undefined}>
+                  <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                   <CXBCSidebar onNavigate={handleSheetClose} />
                 </SheetContent>
               </Sheet>

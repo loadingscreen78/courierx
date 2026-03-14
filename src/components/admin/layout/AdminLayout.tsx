@@ -13,7 +13,7 @@ import {
   Package
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -126,7 +126,8 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-72 bg-[#16161a] border-white/5">
+              <SheetContent side="left" className="p-0 w-72 bg-[#16161a] border-white/5" aria-describedby={undefined}>
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                 <AdminSidebar isMobile onNavigate={() => setMobileMenuOpen(false)} />
               </SheetContent>
             </Sheet>

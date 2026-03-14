@@ -28,7 +28,7 @@ import {
 } from '@/lib/wallet/supabaseWalletService';
 import { loadCashfreeScript } from '@/lib/wallet/cashfreeLoader';
 import { generateWalletReceiptPDF } from '@/lib/wallet/generateWalletReceiptPDF';
-import type { VerifyPaymentResponse } from '@/lib/wallet/cashfreeConfig';
+import type { CreateOrderResponse, VerifyPaymentResponse } from '@/lib/wallet/cashfreeConfig';
 
 export interface UseWalletLedgerReturn {
   balance: number;
