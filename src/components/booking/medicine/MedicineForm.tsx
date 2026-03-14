@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format, addMonths, isSameDay } from 'date-fns';
 import { Medicine, getDefaultExpiryDate } from './MedicineCard';
 import { ManufacturerSearch } from './ManufacturerSearch';
@@ -82,10 +82,10 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
   const isOver90Days = supplyDays > 90;
   const isOverValueCap = totalValue > 25000;
 
-  const updateField = <K extends keyof Medicine>(key: K, value: Medicine[K]) => {
+  const updateField = useCallback(<K extends keyof Medicine>(key: K, value: Medicine[K]) => {
     setFormData(prev => ({ ...prev, [key]: value }));
     setErrors([]);
-  };
+  }, []);
 
   const validateAndSave = () => {
     const newErrors: string[] = [];

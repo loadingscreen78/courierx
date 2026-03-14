@@ -146,7 +146,7 @@ const AddressStepComponent = ({ data, onUpdate }: AddressStepProps) => {
   };
 
   // Handle consignee phone with validation
-  const handleConsigneePhoneBlur = () => {
+  const handleConsigneePhoneBlur = useCallback(() => {
     const phone = localConsigneeAddress.phone;
     const cc = localConsigneeAddress.country;
     if (!phone || !cc) return;
@@ -161,10 +161,10 @@ const AddressStepComponent = ({ data, onUpdate }: AddressStepProps) => {
     if (cc && phone.length > 3 && !validatePhone(phone, cc)) {
       setPhoneError(`Expected format: ${countryInfo?.phone.format || 'international format'}`);
     }
-  };
+  }, [localConsigneeAddress, countryInfo]);
 
   // When country changes, auto-prefix phone
-  const handleCountryChange = (countryCode: string) => {
+  const handleCountryChange = useCallback((countryCode: string) => {
     const info = getCountryByCode(countryCode);
     setPhoneError(null);
     setZipcodeError(null);
@@ -173,7 +173,7 @@ const AddressStepComponent = ({ data, onUpdate }: AddressStepProps) => {
       country: countryCode,
       phone: prev.phone || (info ? `${info.phone.dialCode} ` : ''),
     }));
-  };
+  }, []);
 
   const validatePincode = (pincode: string) => {
     return /^\d{6}$/.test(pincode);
@@ -376,6 +376,7 @@ const AddressStepComponent = ({ data, onUpdate }: AddressStepProps) => {
                   placeholder={countryInfo?.phone.example || 'With country code (e.g., +971 50 123 4567)'}
                   value={localConsigneeAddress.phone}
                   onChange={(value) => updateConsigneeAddress('phone', value)}
+                  onBlur={handleConsigneePhoneBlur}
                   className={cn("input-premium pl-10", phoneError && "border-destructive")}
                 />
               </div>

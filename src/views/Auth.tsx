@@ -121,6 +121,9 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const [forgotStep, setForgotStep] = useState<'idle' | 'form' | 'sent'>('idle');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   useSeo({
     title: 'Sign In | CourierX',
@@ -467,6 +470,23 @@ const Auth = () => {
     setIsLoading(false);
     if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'Welcome!', description: 'Signed in.' });
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) {
+      toast({ title: 'Invalid email', description: 'Please enter a valid email address.', variant: 'destructive' });
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail, panel: selectedPanel }),
+      });
+    } catch (_) { /* silent */ }
+    setForgotLoading(false);
+    setForgotStep('sent');
   };
 
   const handleResendOtp = async () => {
@@ -886,10 +906,69 @@ const Auth = () => {
                       />
                       
                       <div className="text-right">
-                        <button type="button" className="text-sm text-coke-red hover:text-coke-red/80 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForgotEmail(emailPasswordForm.getValues('email') || '');
+                            setForgotStep('form');
+                          }}
+                          className="text-sm text-coke-red hover:text-coke-red/80 transition-colors"
+                        >
                           Forgot password?
                         </button>
                       </div>
+
+                      {/* Forgot Password Inline Flow */}
+                      {forgotStep !== 'idle' && (
+                        <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+                          {forgotStep === 'form' ? (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                Enter your email and we'll send a reset link
+                                {selectedPanel === 'customer' ? ' via email and WhatsApp' : ''}.
+                              </p>
+                              <input
+                                type="email"
+                                value={forgotEmail}
+                                onChange={(e) => setForgotEmail(e.target.value)}
+                                placeholder="your@email.com"
+                                className="w-full h-10 rounded-full border border-border bg-background px-4 text-sm focus:outline-none focus:border-coke-red"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setForgotStep('idle')}
+                                  className="flex-1 h-9 rounded-full border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleForgotPassword}
+                                  disabled={forgotLoading}
+                                  className="flex-1 h-9 rounded-full bg-coke-red text-white text-sm font-medium hover:bg-coke-red/90 transition-colors disabled:opacity-60"
+                                >
+                                  {forgotLoading ? 'Sending...' : 'Send Reset Link'}
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-green-600 dark:text-green-400 font-medium">Reset link sent!</p>
+                              <p className="text-sm text-muted-foreground">
+                                Check your email{selectedPanel === 'customer' ? ' and WhatsApp' : ''} for the reset link. It expires in 1 hour.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setForgotStep('idle')}
+                                className="text-sm text-coke-red hover:text-coke-red/80 transition-colors"
+                              >
+                                Back to sign in
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
 
                       <Button
                         type="submit"

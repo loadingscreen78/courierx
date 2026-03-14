@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback, memo } from 'react';
 import { GiftBookingData } from '@/views/GiftBooking';
 import { Label } from '@/components/ui/label';
 import { DebouncedInput } from '@/components/ui/debounced-input';
@@ -48,24 +48,39 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
 
+  // Local state to prevent parent re-renders on every keystroke
+  const [localPickupAddress, setLocalPickupAddress] = useState(data.pickupAddress);
+  const [localConsigneeAddress, setLocalConsigneeAddress] = useState(data.consigneeAddress);
+
   // Get cities for selected state
-  const availableCities = data.pickupAddress.state
-    ? CITIES_BY_STATE[data.pickupAddress.state] || []
+  const availableCities = localPickupAddress.state
+    ? CITIES_BY_STATE[localPickupAddress.state] || []
     : [];
 
   // Get selected country info with phone/postal rules
   const selectedCountry = useMemo(() =>
-    COUNTRIES.find(c => c.code === data.consigneeAddress.country),
-    [data.consigneeAddress.country]
+    COUNTRIES.find(c => c.code === localConsigneeAddress.country),
+    [localConsigneeAddress.country]
   );
   const countryInfo = useMemo(() =>
-    getCountryByCode(data.consigneeAddress.country),
-    [data.consigneeAddress.country]
+    getCountryByCode(localConsigneeAddress.country),
+    [localConsigneeAddress.country]
   );
 
-  const updatePickupAddress = (field: string, value: string) => {
-    onUpdate({ pickupAddress: { ...data.pickupAddress, [field]: value } });
-  };
+  // Sync to parent on blur (leaving the address section)
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+      onUpdate({
+        pickupAddress: localPickupAddress,
+        consigneeAddress: localConsigneeAddress,
+      });
+    }
+  }, [localPickupAddress, localConsigneeAddress, onUpdate]);
+
+  const updatePickupAddress = useCallback((field: string, value: string) => {
+    setLocalPickupAddress(prev => ({ ...prev, [field]: value }));
+  }, []);
 
   // Handle PIN code change with auto-fill
   const handlePincodeChange = async (pincode: string) => {
@@ -78,9 +93,15 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       try {
         const result = await lookupPincode(cleanPincode);
         if (result) {
+          setLocalPickupAddress(prev => ({
+            ...prev,
+            pincode: cleanPincode,
+            city: result.city,
+            state: result.state,
+          }));
           onUpdate({
             pickupAddress: {
-              ...data.pickupAddress,
+              ...localPickupAddress,
               pincode: cleanPincode,
               city: result.city,
               state: result.state,
@@ -97,20 +118,25 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
     }
   };
 
-  const updateConsigneeAddress = (field: string, value: string) => {
-    onUpdate({ consigneeAddress: { ...data.consigneeAddress, [field]: value } });
-  };
+  const updateConsigneeAddress = useCallback((field: string, value: string) => {
+    setLocalConsigneeAddress(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'phone') {
+        onUpdate({ consigneeAddress: updated });
+      }
+      return updated;
+    });
+  }, [onUpdate]);
 
   // Handle ZIP/Postal code change with auto-fill for consignee
   const handleZipcodeChange = async (zipcode: string) => {
-    const cc = data.consigneeAddress.country;
+    const cc = localConsigneeAddress.country;
     const postalRule = countryInfo?.postal;
     const maxLen = postalRule?.maxLength || 10;
     const cleanZip = zipcode.slice(0, maxLen);
     updateConsigneeAddress('zipcode', cleanZip);
     setZipcodeError(null);
 
-    // Only auto-lookup if country is selected and zip looks complete enough
     if (!cc || cleanZip.length < 3) return;
     if (postalRule && !postalRule.regex.test(cleanZip)) return;
 
@@ -119,16 +145,17 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       try {
         const result = await lookupZipcode(cleanZip, cc);
         if (result) {
+          setLocalConsigneeAddress(prev => ({ ...prev, zipcode: cleanZip, city: result.city }));
           onUpdate({
             consigneeAddress: {
-              ...data.consigneeAddress,
+              ...localConsigneeAddress,
               zipcode: cleanZip,
               city: result.city,
             }
           });
         }
       } catch {
-        // Silent fail - user can still type manually
+        // Silent fail
       } finally {
         setZipcodeLoading(false);
       }
@@ -136,41 +163,43 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   };
 
   // Handle consignee phone with country dial code auto-prefix
-  const handleConsigneePhoneChange = (phone: string) => {
+  const handleConsigneePhoneChange = useCallback((phone: string) => {
     updateConsigneeAddress('phone', phone);
     setPhoneError(null);
-  };
+  }, [updateConsigneeAddress]);
 
-  const handleConsigneePhoneBlur = () => {
-    const phone = data.consigneeAddress.phone;
-    const cc = data.consigneeAddress.country;
+  const handleConsigneePhoneBlur = useCallback(() => {
+    const phone = localConsigneeAddress.phone;
+    const cc = localConsigneeAddress.country;
     if (!phone || !cc) return;
-    // Auto-prefix dial code if user forgot
     if (countryInfo && !phone.startsWith('+') && phone.length > 3) {
       updateConsigneeAddress('phone', `${countryInfo.phone.dialCode} ${phone}`);
     }
-    // Validate
     if (cc && phone.length > 3 && !validatePhone(phone, cc)) {
       setPhoneError(`Expected format: ${countryInfo?.phone.format || 'international format'}`);
     }
-  };
+  }, [localConsigneeAddress, countryInfo, updateConsigneeAddress]);
 
   // When country changes, reset phone prefix hint and clear zip auto-fill
-  const handleCountryChange = (countryCode: string) => {
+  const handleCountryChange = useCallback((countryCode: string) => {
     const info = getCountryByCode(countryCode);
     setPhoneError(null);
     setZipcodeError(null);
+    setLocalConsigneeAddress(prev => ({
+      ...prev,
+      country: countryCode,
+      phone: prev.phone || (info ? `${info.phone.dialCode} ` : ''),
+    }));
     onUpdate({
       consigneeAddress: {
-        ...data.consigneeAddress,
+        ...localConsigneeAddress,
         country: countryCode,
-        // Auto-prefix phone with dial code if phone is empty
-        phone: data.consigneeAddress.phone || (info ? `${info.phone.dialCode} ` : ''),
+        phone: localConsigneeAddress.phone || (info ? `${info.phone.dialCode} ` : ''),
       }
     });
-  };
+  }, [localConsigneeAddress, onUpdate]);
 
-  const handleFileUpload = (file: File | null, type: 'front' | 'back') => {
+  const handleFileUpload = useCallback((file: File | null, type: 'front' | 'back') => {
     if (!file) return;
 
     const reader = new FileReader();
@@ -186,9 +215,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       }
     };
     reader.readAsDataURL(file);
-  };
+  }, [onUpdate]);
 
-  const removeFile = (type: 'front' | 'back') => {
+  const removeFile = useCallback((type: 'front' | 'back') => {
     lightTap();
     if (type === 'front') {
       setPassportFront(null);
@@ -201,7 +230,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       if (backInputRef.current) backInputRef.current.value = '';
       onUpdate({ passportAddressPage: null });
     }
-  };
+  }, [lightTap, onUpdate]);
 
   return (
     <div className="space-y-8">
@@ -231,7 +260,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             Pickup Address
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4" onBlur={handleBlur}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Contact Name *</Label>
@@ -239,7 +268,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <DebouncedInput
                   placeholder="Full name"
-                  value={data.pickupAddress.fullName}
+                  value={localPickupAddress.fullName}
                   onChange={(value) => updatePickupAddress('fullName', value)}
                   className="input-premium pl-10"
                 />
@@ -252,7 +281,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 <DebouncedInput
                   type="tel"
                   placeholder="+91 98765 43210"
-                  value={data.pickupAddress.phone}
+                  value={localPickupAddress.phone}
                   onChange={(value) => updatePickupAddress('phone', value)}
                   className="input-premium pl-10"
                 />
@@ -264,7 +293,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <Label>Address Line 1 *</Label>
             <DebouncedInput
               placeholder="House/Flat number, Building name"
-              value={data.pickupAddress.addressLine1}
+              value={localPickupAddress.addressLine1}
               onChange={(value) => updatePickupAddress('addressLine1', value)}
               className="input-premium"
             />
@@ -274,7 +303,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <Label>Address Line 2</Label>
             <DebouncedInput
               placeholder="Street, Area, Landmark"
-              value={data.pickupAddress.addressLine2}
+              value={localPickupAddress.addressLine2}
               onChange={(value) => updatePickupAddress('addressLine2', value)}
               className="input-premium"
             />
@@ -287,14 +316,14 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 <DebouncedInput
                   placeholder="6-digit PIN"
                   maxLength={6}
-                  value={data.pickupAddress.pincode}
+                  value={localPickupAddress.pincode}
                   onChange={handlePincodeChange}
                   className="input-premium font-typewriter pr-10"
                 />
                 {pincodeLoading && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                 )}
-                {!pincodeLoading && data.pickupAddress.pincode.length === 6 && !pincodeError && data.pickupAddress.city && (
+                {!pincodeLoading && localPickupAddress.pincode.length === 6 && !pincodeError && localPickupAddress.city && (
                   <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                 )}
               </div>
@@ -305,10 +334,10 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <div className="space-y-2">
               <Label>State *</Label>
               <Select
-                value={data.pickupAddress.state}
+                value={localPickupAddress.state}
                 onValueChange={(value) => {
                   updatePickupAddress('state', value);
-                  updatePickupAddress('city', ''); // Reset city when state changes
+                  updatePickupAddress('city', '');
                 }}
               >
                 <SelectTrigger className="input-premium">
@@ -324,20 +353,19 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <div className="space-y-2">
               <Label>City *</Label>
               <Select
-                value={data.pickupAddress.city}
+                value={localPickupAddress.city}
                 onValueChange={(value) => updatePickupAddress('city', value)}
-                disabled={!data.pickupAddress.state}
+                disabled={!localPickupAddress.state}
               >
                 <SelectTrigger className="input-premium">
-                  <SelectValue placeholder={data.pickupAddress.state ? "Select city" : "Select state first"} />
+                  <SelectValue placeholder={localPickupAddress.state ? "Select city" : "Select state first"} />
                 </SelectTrigger>
                 <SelectContent className="bg-popover max-h-60">
                   {availableCities.map((city) => (
                     <SelectItem key={city} value={city}>{city}</SelectItem>
                   ))}
-                  {/* Allow custom city if not in list */}
-                  {data.pickupAddress.city && !availableCities.includes(data.pickupAddress.city) && (
-                    <SelectItem value={data.pickupAddress.city}>{data.pickupAddress.city}</SelectItem>
+                  {localPickupAddress.city && !availableCities.includes(localPickupAddress.city) && (
+                    <SelectItem value={localPickupAddress.city}>{localPickupAddress.city}</SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -354,13 +382,13 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             Consignee (Recipient) Address
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4" onBlur={handleBlur}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Full Name *</Label>
               <DebouncedInput
                 placeholder="Recipient name"
-                value={data.consigneeAddress.fullName}
+                value={localConsigneeAddress.fullName}
                 onChange={(value) => updateConsigneeAddress('fullName', value)}
                 className="input-premium"
               />
@@ -372,8 +400,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 <DebouncedInput
                   type="tel"
                   placeholder={countryInfo?.phone.example || 'With country code (e.g., +971 50 123 4567)'}
-                  value={data.consigneeAddress.phone}
+                  value={localConsigneeAddress.phone}
                   onChange={handleConsigneePhoneChange}
+                  onBlur={handleConsigneePhoneBlur}
                   className={cn("input-premium pl-10", phoneError && "border-destructive")}
                 />
               </div>
@@ -393,7 +422,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <DebouncedInput
               type="email"
               placeholder="For delivery updates"
-              value={data.consigneeAddress.email}
+              value={localConsigneeAddress.email}
               onChange={(value) => updateConsigneeAddress('email', value)}
               className="input-premium"
             />
@@ -442,7 +471,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                           <Check
                             className={cn(
                               "mr-2 h-4 w-4",
-                              data.consigneeAddress.country === country.code ? "opacity-100" : "opacity-0"
+                              localConsigneeAddress.country === country.code ? "opacity-100" : "opacity-0"
                             )}
                           />
                           {country.name}
@@ -459,7 +488,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <Label>Address Line 1 *</Label>
             <DebouncedInput
               placeholder="Street address"
-              value={data.consigneeAddress.addressLine1}
+              value={localConsigneeAddress.addressLine1}
               onChange={(value) => updateConsigneeAddress('addressLine1', value)}
               className="input-premium"
             />
@@ -469,7 +498,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             <Label>Address Line 2</Label>
             <DebouncedInput
               placeholder="Apartment, suite, etc."
-              value={data.consigneeAddress.addressLine2}
+              value={localConsigneeAddress.addressLine2}
               onChange={(value) => updateConsigneeAddress('addressLine2', value)}
               className="input-premium"
             />
@@ -481,7 +510,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
               <div className="relative">
                 <DebouncedInput
                   placeholder={countryInfo?.postal.example || 'ZIP code'}
-                  value={data.consigneeAddress.zipcode}
+                  value={localConsigneeAddress.zipcode}
                   onChange={handleZipcodeChange}
                   maxLength={countryInfo?.postal.maxLength || 10}
                   className="input-premium font-typewriter pr-10"
@@ -489,7 +518,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 {zipcodeLoading && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                 )}
-                {!zipcodeLoading && data.consigneeAddress.zipcode && data.consigneeAddress.city && !zipcodeError && (
+                {!zipcodeLoading && localConsigneeAddress.zipcode && localConsigneeAddress.city && !zipcodeError && (
                   <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                 )}
               </div>
@@ -501,7 +530,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
               <Label>City *</Label>
               <DebouncedInput
                 placeholder="City (auto-filled from postal code)"
-                value={data.consigneeAddress.city}
+                value={localConsigneeAddress.city}
                 onChange={(value) => updateConsigneeAddress('city', value)}
                 className="input-premium"
               />

@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -13,17 +13,25 @@ export const DebouncedInput = memo(({
   ...props 
 }: DebouncedInputProps) => {
   const [localValue, setLocalValue] = useState(String(value ?? ''));
+  const isFocused = useRef(false);
 
-  // Sync when value changes externally (not from typing)
+  // Only sync external value when the input is NOT focused (i.e. programmatic update)
   useEffect(() => {
-    setLocalValue(String(value ?? ''));
+    if (!isFocused.current) {
+      setLocalValue(String(value ?? ''));
+    }
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLocalValue(e.target.value);
   };
 
+  const handleFocus = () => {
+    isFocused.current = true;
+  };
+
   const handleBlur = () => {
+    isFocused.current = false;
     if (localValue !== String(value)) {
       onChange(localValue);
     }
@@ -34,6 +42,7 @@ export const DebouncedInput = memo(({
       {...props}
       value={localValue}
       onChange={handleChange}
+      onFocus={handleFocus}
       onBlur={handleBlur}
     />
   );
@@ -51,16 +60,24 @@ export const DebouncedTextarea = memo(({
   ...props 
 }: DebouncedTextareaProps) => {
   const [localValue, setLocalValue] = useState(value ?? '');
+  const isFocused = useRef(false);
 
   useEffect(() => {
-    setLocalValue(value ?? '');
+    if (!isFocused.current) {
+      setLocalValue(value ?? '');
+    }
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setLocalValue(e.target.value);
   };
 
+  const handleFocus = () => {
+    isFocused.current = true;
+  };
+
   const handleBlur = () => {
+    isFocused.current = false;
     if (localValue !== value) {
       onChange(localValue);
     }
@@ -71,6 +88,7 @@ export const DebouncedTextarea = memo(({
       {...props}
       value={localValue}
       onChange={handleChange}
+      onFocus={handleFocus}
       onBlur={handleBlur}
     />
   );

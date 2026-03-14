@@ -186,8 +186,15 @@ const GiftBooking = () => {
   }, [setData]);
 
   const updateBookingData = useCallback((updates: Partial<GiftBookingData>) => {
-    setData(prev => ({ ...prev, ...updates }));
-    setValidationErrors([]);
+    setData(prev => {
+      const hasChanges = Object.keys(updates).some(key => {
+        const k = key as keyof GiftBookingData;
+        return JSON.stringify(prev[k]) !== JSON.stringify(updates[k]);
+      });
+      if (!hasChanges) return prev;
+      return { ...prev, ...updates };
+    });
+    setValidationErrors(prev => prev.length > 0 ? [] : prev);
   }, [setData]);
 
   const validateStep = (step: number): boolean => {

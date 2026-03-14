@@ -10,8 +10,27 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    // Validate required fields
-    const { email, type, token_hash, redirect_to } = body;
+    // Support both GoTrue hook payload format and our direct format
+    // GoTrue hook sends: { user: { email }, email_data: { token_hash, email_action_type, redirect_to, ... } }
+    // Our direct format: { email, type, token_hash, redirect_to }
+    let email: string;
+    let type: string;
+    let token_hash: string;
+    let redirect_to: string | undefined;
+
+    if (body.email_data) {
+      // GoTrue hook format
+      email = body.user?.email || body.email;
+      type = body.email_data.email_action_type;
+      token_hash = body.email_data.token_hash;
+      redirect_to = body.email_data.redirect_to;
+    } else {
+      // Direct format
+      email = body.email;
+      type = body.type;
+      token_hash = body.token_hash;
+      redirect_to = body.redirect_to;
+    }
     
     if (!email || !type || !token_hash) {
       return NextResponse.json(
@@ -33,7 +52,7 @@ export async function POST(request: NextRequest) {
         confirmationUrl = `${baseUrl}/auth/v1/verify?token=${token_hash}&type=signup${redirect_to ? `&redirect_to=${encodeURIComponent(redirect_to)}` : ''}`;
         break;
       case 'recovery':
-        confirmationUrl = `${siteUrl}/auth/reset-password?token=${token_hash}${redirect_to ? `&redirect_to=${encodeURIComponent(redirect_to)}` : ''}`;
+        confirmationUrl = `${siteUrl}/auth/reset-password?token_hash=${token_hash}&type=recovery`;
         break;
       case 'email_change':
         confirmationUrl = `${baseUrl}/auth/v1/verify?token=${token_hash}&type=email_change${redirect_to ? `&redirect_to=${encodeURIComponent(redirect_to)}` : ''}`;
