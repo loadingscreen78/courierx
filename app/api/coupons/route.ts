@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     max_uses_per_user = 1,
     valid_from,
     valid_until,
+    bypass_min_recharge = false,
   } = body;
 
   if (!code || !discount_value) {
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
       max_uses_per_user: max_uses_per_user ? Number(max_uses_per_user) : null,
       valid_from: valid_from || new Date().toISOString(),
       valid_until: valid_until || null,
+      bypass_min_recharge: Boolean(bypass_min_recharge),
     })
     .select()
     .single();
