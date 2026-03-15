@@ -9,7 +9,8 @@ import {
   AlertTriangle,
   Clock,
   CheckCircle2,
-  MoreHorizontal
+  MoreHorizontal,
+  IndianRupee,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getStatusLabel, getStatusDotColor, getLegLabel } from '@/lib/shipment-lifecycle/statusLabelMap';
@@ -26,6 +27,7 @@ interface DashboardStats {
   onHold: number;
   todayProcessed: number;
   avgQCTime: string;
+  totalRevenue: number;
 }
 
 const fallbackChartData: DayOfWeekEntry[] = [
@@ -89,6 +91,7 @@ function AdminDashboard() {
           onHold,
           todayProcessed,
           avgQCTime: '~12 min',
+          totalRevenue: shipments?.reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0) || 0,
         });
 
         // Group shipments by leg for queue tabs, sorted by updated_at desc
@@ -264,6 +267,21 @@ function AdminDashboard() {
               </div>
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                 <Clock className="h-6 w-6 text-blue-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Total Revenue */}
+          <div className="bg-gradient-to-br from-emerald-950/60 to-[#16161a] rounded-[2rem] border border-emerald-500/20 p-8 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">Total Shipment Revenue</p>
+                <p className="text-2xl font-mono font-bold text-emerald-400">
+                  {isLoading ? '—' : `₹${(stats?.totalRevenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <IndianRupee className="h-6 w-6 text-emerald-500" />
               </div>
             </div>
           </div>
