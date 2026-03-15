@@ -29,10 +29,8 @@ export const Header = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    router.push('/auth');
-  };
-
-  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
+    router.replace('/auth');
+  };  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
   const displayEmail = user?.email || profile?.phone_number || '';
   const isVerified = profile?.aadhaar_verified;
   const isLowBalance = balance < MIN_BALANCE_REQUIRED;

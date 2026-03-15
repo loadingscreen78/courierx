@@ -214,6 +214,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch {
       // GSI not loaded, safe to ignore
     }
+    // Mark explicit logout so Auth page ignores the `from` redirect param
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('explicit_logout', '1');
+    }
     await supabase.auth.signOut();
     setProfile(null);
   }, []);

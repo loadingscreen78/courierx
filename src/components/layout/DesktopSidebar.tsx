@@ -83,7 +83,7 @@ export const DesktopSidebar = () => {
   const handleSignOut = async () => {
     mediumTap();
     await signOut();
-    router.push('/auth');
+    router.replace('/auth');
   };
 
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';

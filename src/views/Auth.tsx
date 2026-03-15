@@ -132,6 +132,13 @@ const Auth = () => {
   });
 
   const from = searchParams.get('from');
+  // If user explicitly logged out, ignore the `from` redirect to prevent back-button loops
+  const explicitLogout = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('explicit_logout') === '1';
+  const safeFrom = explicitLogout ? null : from;
+  // Clear the flag once read
+  if (explicitLogout && typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem('explicit_logout');
+  }
   const initialPanel = searchParams.get('panel') as PanelType | null;
   const initialMode = searchParams.get('mode') as AuthMode | null;
 
@@ -223,7 +230,7 @@ const Auth = () => {
             } else {
               console.log('[Auth useEffect] ❌ No return URL, redirecting to dashboard');
               // Default redirect
-              router.replace(from || '/dashboard');
+              router.replace(safeFrom || '/dashboard');
             }
           }
         } else {
@@ -234,7 +241,7 @@ const Auth = () => {
     };
     
     handleRedirect();
-  }, [user, selectedPanel, router, from, toast, isLoading]);
+  }, [user, selectedPanel, router, safeFrom, toast, isLoading]);
 
   const emailPasswordForm = useForm<EmailPasswordFormValues>({ resolver: zodResolver(emailPasswordSchema), defaultValues: { email: '', password: '' } });
   const phoneForm = useForm<PhoneFormValues>({ resolver: zodResolver(phoneSchema), defaultValues: { phone: '+91' } });
@@ -451,7 +458,7 @@ const Auth = () => {
     } else {
       console.log('[Auth Google] Redirecting to dashboard');
       setIsLoading(false);
-      window.location.href = from || '/dashboard';
+      window.location.href = safeFrom || '/dashboard';
     }
   };
 

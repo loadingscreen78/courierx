@@ -93,7 +93,7 @@ export const MobileMoreDrawer = ({ open, onOpenChange }: MobileMoreDrawerProps) 
   const handleSignOut = async () => {
     mediumTap();
     await signOut();
-    router.push('/auth');
+    router.replace('/auth');
     onOpenChange(false);
   };
 
