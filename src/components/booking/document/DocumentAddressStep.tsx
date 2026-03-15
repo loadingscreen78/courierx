@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useMemo } from 'react';
+import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { DocumentBookingData } from '@/views/DocumentBooking';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -54,32 +54,44 @@ const DocumentAddressStepComponent = ({ data, onUpdate }: DocumentAddressStepPro
     ? CITIES_BY_STATE[localPickupAddress.state] || []
     : [];
 
+  // Debounced sync to parent — fires 400ms after last change, not on every keystroke
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      onUpdateRef.current({
+        pickupAddress: localPickupAddress,
+        consigneeAddress: localConsigneeAddress,
+      });
+    }, 400);
+  }, [localPickupAddress, localConsigneeAddress]);
+
+  useEffect(() => {
+    scheduleSync();
+    return () => { if (syncTimerRef.current) clearTimeout(syncTimerRef.current); };
+  }, [scheduleSync]);
+
   const handleBlur = useCallback((e: React.FocusEvent) => {
-    // Only sync when leaving the entire address section, not when moving between inputs
     const relatedTarget = e.relatedTarget as HTMLElement;
     if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
-      onUpdate({
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      onUpdateRef.current({
         pickupAddress: localPickupAddress,
-        consigneeAddress: localConsigneeAddress
+        consigneeAddress: localConsigneeAddress,
       });
     }
-  }, [localPickupAddress, localConsigneeAddress, onUpdate]);
+  }, [localPickupAddress, localConsigneeAddress]);
 
   const updatePickupAddress = useCallback((field: string, value: string) => {
-    setLocalPickupAddress(prev => {
-      const updated = { ...prev, [field]: value };
-      onUpdate({ pickupAddress: updated });
-      return updated;
-    });
-  }, [onUpdate]);
+    setLocalPickupAddress(prev => ({ ...prev, [field]: value }));
+  }, []);
 
   const updateConsigneeAddress = useCallback((field: string, value: string) => {
-    setLocalConsigneeAddress(prev => {
-      const updated = { ...prev, [field]: value };
-      onUpdate({ consigneeAddress: updated });
-      return updated;
-    });
-  }, [onUpdate]);
+    setLocalConsigneeAddress(prev => ({ ...prev, [field]: value }));
+  }, []);
 
   // PIN code auto-fill for pickup address
   const handlePincodeChange = async (pincode: string) => {
