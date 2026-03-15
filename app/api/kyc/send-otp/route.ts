@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
-import { CASHFREE_API_BASE, CASHFREE_API_VERSION } from '@/lib/wallet/cashfreeConfig';
+import { CASHFREE_VERIFICATION_BASE } from '@/lib/wallet/cashfreeConfig';
 
 /**
  * POST /api/kyc/send-otp
- * Initiates Cashfree Aadhaar OTP verification.
- * Cashfree sends OTP to the mobile number linked to the Aadhaar via UIDAI.
+ * Step 1: Check if DigiLocker account exists for the given Aadhaar number.
+ * Step 2: Create a DigiLocker consent URL and return it to the client.
  */
 export async function POST(request: NextRequest) {
   try {
-    const appId = process.env.CASHFREE_APP_ID?.trim();
-    const secretKey = process.env.CASHFREE_SECRET_KEY?.trim();
+    const appId = process.env.CASHFREE_KYC_CLIENT_ID?.trim();
+    const secretKey = process.env.CASHFREE_KYC_CLIENT_SECRET?.trim();
 
     if (!appId || !secretKey) {
       return NextResponse.json({ error: 'KYC service not configured' }, { status: 500 });
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('aadhaar_verified')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (profile?.aadhaar_verified) {
@@ -44,31 +44,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid Aadhaar number' }, { status: 400 });
     }
 
-    // Cashfree Aadhaar OTP initiation
-    const cfRes = await fetch(`${CASHFREE_API_BASE}/verification/offline-aadhaar/otp`, {
+    const verificationId = `kyc_${user.id.slice(0, 8)}_${Date.now()}`;
+    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/kyc/callback`;
+
+    const cfHeaders = {
+      'Content-Type': 'application/json',
+      'x-client-id': appId,
+      'x-client-secret': secretKey,
+    };
+
+    // Step 1: Check if DigiLocker account exists (best-effort, don't fail on error)
+    let userFlow = 'signup';
+    try {
+      const verifyRes = await fetch(`${CASHFREE_VERIFICATION_BASE}/digilocker/verify-account`, {
+        method: 'POST',
+        headers: cfHeaders,
+        body: JSON.stringify({
+          verification_id: `${verificationId.slice(0, 45)}_v`,
+          aadhaar_number: aadhaarNumber,
+        }),
+      });
+      const verifyData = await verifyRes.json();
+      console.log('[kyc/send-otp] verify-account response:', verifyData);
+      if (verifyData?.status === 'ACCOUNT_EXISTS') userFlow = 'signin';
+    } catch (e) {
+      console.warn('[kyc/send-otp] verify-account failed, defaulting to signup:', e);
+    }
+
+    // Step 2: Create DigiLocker consent URL
+    const createBody = {
+      verification_id: verificationId,
+      document_requested: ['AADHAAR'],
+      redirect_url: redirectUrl,
+      user_flow: userFlow,
+    };
+    console.log('[kyc/send-otp] Creating DigiLocker URL:', `${CASHFREE_VERIFICATION_BASE}/digilocker`, createBody);
+
+    const urlRes = await fetch(`${CASHFREE_VERIFICATION_BASE}/digilocker`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-version': CASHFREE_API_VERSION,
-        'x-client-id': appId,
-        'x-client-secret': secretKey,
-      },
-      body: JSON.stringify({ aadhaar_number: aadhaarNumber }),
+      headers: cfHeaders,
+      body: JSON.stringify(createBody),
     });
 
-    const cfData = await cfRes.json();
+    const urlData = await urlRes.json();
+    console.log('[kyc/send-otp] DigiLocker URL response:', urlRes.status, urlData);
 
-    if (!cfRes.ok) {
-      console.error('[kyc/send-otp] Cashfree error:', cfData);
-      const msg = cfData?.message || cfData?.error || 'Failed to send OTP';
+    if (!urlRes.ok || !urlData?.url) {
+      const msg = urlData?.message || urlData?.error || `Cashfree error ${urlRes.status}`;
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
-    // ref_id is needed for OTP verification step
     return NextResponse.json({
       success: true,
-      refId: cfData.ref_id,
-      message: 'OTP sent to Aadhaar-linked mobile number',
+      digilockerUrl: urlData.url,
+      verificationId: urlData.verification_id,
+      referenceId: urlData.reference_id,
     });
   } catch (error) {
     console.error('[kyc/send-otp] Unexpected error:', error);

@@ -13,7 +13,7 @@ import {
   Briefcase,
   ChevronRight,
   Zap,
-  Tag,
+  DollarSign,
   FileBarChart2,
   Users,
 } from 'lucide-react';
@@ -31,7 +31,7 @@ const navItems = [
   { title: 'All Shipments', href: '/admin/shipments', icon: Package },
   { title: 'Customer CRM', href: '/admin/customers', icon: Users, adminOnly: true },
   { title: 'CXBC Partners', href: '/admin/cxbc-partners', icon: Briefcase, adminOnly: true },
-  { title: 'Coupons', href: '/admin/coupons', icon: Tag, adminOnly: true },
+  { title: 'Finance', href: '/admin/finance', icon: DollarSign, adminOnly: true },
   { title: 'Role Management', href: '/admin/roles', icon: ShieldCheck, adminOnly: true },
 ];
 

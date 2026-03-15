@@ -7,6 +7,13 @@ export const CASHFREE_API_BASE =
     ? 'https://sandbox.cashfree.com/pg'
     : 'https://api.cashfree.com/pg';
 
+// Cashfree Secure ID / Verification API base (separate from payments)
+// Routed through VPS (76.13.242.163 / supabase.courierx.in) which is IP-whitelisted by Cashfree
+export const CASHFREE_VERIFICATION_BASE =
+  process.env.CASHFREE_ENV === 'sandbox'
+    ? 'https://sandbox.cashfree.com/verification'
+    : 'https://supabase.courierx.in/cashfree-kyc/verification';
+
 export const CASHFREE_SDK_MODE =
   process.env.CASHFREE_ENV === 'sandbox' ? 'sandbox' : 'production';
 

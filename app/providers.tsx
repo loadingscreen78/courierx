@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { WalletProvider } from "@/contexts/WalletContext";
+import { ShippingModeProvider } from "@/contexts/ShippingModeContext";
 import { useState } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         storageKey="courierx-theme"
       >
         <AuthProvider>
+          <ShippingModeProvider>
           <WalletProvider>
             <TooltipProvider>
               {children}
@@ -37,6 +39,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <Sonner />
             </TooltipProvider>
           </WalletProvider>
+          </ShippingModeProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

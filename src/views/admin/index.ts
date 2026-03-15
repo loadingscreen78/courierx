@@ -7,5 +7,6 @@ export { default as AllShipments } from './AllShipments';
 export { RoleManagement } from './RoleManagement';
 export { default as CXBCPartnerManagement } from './CXBCPartnerManagement';
 export { CouponManagement } from './CouponManagement';
+export { FinanceManagement } from './FinanceManagement';
 export { default as AWBLabels } from './AWBLabels';
 export { CustomerCRM } from './CustomerCRM';

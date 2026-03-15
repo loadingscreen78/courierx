@@ -18,6 +18,7 @@ import {
   Box,
   ChevronRight,
   Sparkles,
+  Globe,
 } from 'lucide-react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +32,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+import { useShippingMode } from '@/contexts/ShippingModeContext';
+import { ShippingModeToggle } from '@/components/ui/ShippingModeToggle';
 
 // Remove mock data - now using real data from database
 
@@ -218,6 +221,8 @@ const Index = () => {
   const { balance } = useWallet();
   const { activeShipments, deliveredShipments, loading } = useShipments();
   const { addresses } = useAddresses();
+  const { mode, isSwitching } = useShippingMode();
+  const isInternational = mode === 'international';
   
   const displayName = profile?.full_name?.split(' ')[0] || 'there';
   const isKycComplete = profile?.aadhaar_verified;
@@ -229,12 +234,15 @@ const Index = () => {
 
   return (
     <AppLayout>
-      <motion.div 
-        className="space-y-8 pb-8"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={mode}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: isSwitching ? 0 : 1, y: isSwitching ? -8 : 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.35, ease: 'easeInOut' }}
+          className="space-y-8 pb-8"
+        >
         {/* KYC Banner */}
         <AnimatePresence>
           {!isKycComplete && (
@@ -243,6 +251,39 @@ const Index = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Mode Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`flex items-center justify-between px-5 py-3 rounded-2xl border ${
+            isInternational
+              ? 'bg-blue-950/20 border-blue-900/30'
+              : 'bg-green-950/20 border-green-900/30'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl ${isInternational ? 'bg-blue-500/15' : 'bg-green-500/15'}`}>
+              {isInternational
+                ? <Globe className={`h-4 w-4 text-blue-400`} />
+                : <Truck className={`h-4 w-4 text-green-400`} />
+              }
+            </div>
+            <div>
+              <p className={`text-xs font-bold uppercase tracking-widest ${isInternational ? 'text-blue-400' : 'text-green-400'}`}>
+                {isInternational ? '🌍 International Mode' : '🇮🇳 Domestic Mode'}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {isInternational
+                  ? 'Shipping to 150+ countries — medicines, documents & gifts'
+                  : 'Fast delivery across India — same-day & next-day options'}
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:block">
+            <ShippingModeToggle compact />
+          </div>
+        </motion.div>
 
         {/* Welcome Header - Metallic Card */}
         <motion.header variants={itemVariants}>
@@ -264,9 +305,11 @@ const Index = () => {
                   Welcome back, <span className="text-coke-red">{displayName}</span>
                 </h1>
                 <p className="text-muted-foreground mt-2">
-                  {activeShipments.length > 0 
-                    ? `You have ${activeShipments.length} active shipment${activeShipments.length > 1 ? 's' : ''} in transit`
-                    : 'Ready to ship internationally? Create your first shipment'
+                  {isInternational
+                    ? activeShipments.length > 0
+                      ? `You have ${activeShipments.length} active international shipment${activeShipments.length > 1 ? 's' : ''} in transit`
+                      : 'Ready to ship internationally? Create your first shipment'
+                    : 'Domestic shipping — fast, reliable delivery across India'
                   }
                 </p>
               </div>
@@ -302,6 +345,36 @@ const Index = () => {
             href="/vault"
           />
         </motion.div>
+
+        {/* Domestic-only notice */}
+        {!isInternational && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-border via-muted to-border p-[1px] shadow-lg"
+          >
+            <div className="relative rounded-3xl bg-card p-6 overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-green-500/5 to-transparent" />
+              <div className="relative flex items-center gap-4">
+                <div className="p-3 rounded-2xl bg-green-500/10">
+                  <Truck className="h-6 w-6 text-green-500" />
+                </div>
+                <div>
+                  <p className="font-bold text-foreground font-typewriter">Domestic Shipping</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Book same-day, next-day, or standard delivery across all Indian pin codes.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => router.push('/new-shipment')}
+                  className="ml-auto shrink-0 bg-green-600 hover:bg-green-700 text-white rounded-full px-5 hidden sm:flex"
+                >
+                  Book Now
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Active Shipments */}
         {activeShipments.length > 0 && (
@@ -340,7 +413,11 @@ const Index = () => {
                     <Package className="h-8 w-8 text-coke-red" />
                   </div>
                   <h3 className="text-xl font-bold text-foreground mb-2">No Active Shipments</h3>
-                  <p className="text-muted-foreground mb-6">Start shipping your medicines, documents, or gifts internationally</p>
+                  <p className="text-muted-foreground mb-6">
+                    {isInternational
+                      ? 'Start shipping your medicines, documents, or gifts internationally'
+                      : 'Book a domestic shipment to get started'}
+                  </p>
                   <Button 
                     onClick={() => router.push('/new-shipment')}
                     className="bg-coke-red hover:bg-coke-red/90 text-white rounded-full px-6"
@@ -419,12 +496,15 @@ const Index = () => {
             <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-muted/50 border border-border">
               <div className="w-2 h-2 rounded-full bg-coke-red animate-pulse" />
               <p className="text-xs text-muted-foreground font-medium">
-                CSB IV Compliant • Personal Use Only • Insured Shipments
+                {isInternational
+                  ? 'CSB IV Compliant • Personal Use Only • Insured Shipments'
+                  : 'Pan-India Coverage • Same-Day Available • Insured Shipments'}
               </p>
             </div>
           </div>
         </motion.footer>
-      </motion.div>
+        </motion.div>
+      </AnimatePresence>
     </AppLayout>
   );
 };

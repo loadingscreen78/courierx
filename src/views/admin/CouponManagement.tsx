@@ -66,7 +66,7 @@ const emptyCoupon = {
   bypass_min_recharge: false,
 };
 
-export function CouponManagement() {
+export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -284,8 +284,7 @@ export function CouponManagement() {
     } catch { toast.error('Failed to remove'); }
   };
 
-  return (
-    <AdminLayout>
+  const content = (
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -629,6 +628,8 @@ export function CouponManagement() {
           </div>
         </SheetContent>
       </Sheet>
-    </AdminLayout>
+    </div>
   );
+
+  return embedded ? content : <AdminLayout>{content}</AdminLayout>;
 }

@@ -17,11 +17,15 @@ import { VerificationBadge } from '@/components/ui/verification-badge';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import logoMain from '@/assets/logo-main.jpeg';
 import { cn } from '@/lib/utils';
+import { ShippingModeToggle } from '@/components/ui/ShippingModeToggle';
+import { ModeSwitchLoader } from '@/components/ui/ModeSwitchLoader';
+import { useShippingMode } from '@/contexts/ShippingModeContext';
 
 export const Header = () => {
   const { user, profile, signOut } = useAuth();
   const { balance } = useWallet();
   const router = useRouter();
+  const { mode, isSwitching } = useShippingMode();
 
   const handleSignOut = async () => {
     await signOut();
@@ -50,6 +54,9 @@ export const Header = () => {
 
         {/* Desktop Quick Actions */}
         <div className="hidden md:flex items-center gap-2">
+          {/* Shipping Mode Toggle */}
+          <ShippingModeToggle />
+
           {/* Wallet Balance */}
           <button
             onClick={() => router.push('/wallet')}
@@ -113,6 +120,11 @@ export const Header = () => {
             )}
           </button>
 
+          {/* Mobile Mode Toggle */}
+          <div className="md:hidden">
+            <ShippingModeToggle compact />
+          </div>
+
           <ThemeToggle />
 
           {/* Notifications */}
@@ -170,6 +182,7 @@ export const Header = () => {
           </DropdownMenu>
         </div>
       </div>
+      <ModeSwitchLoader visible={isSwitching} targetMode={mode} />
     </header>
   );
 };

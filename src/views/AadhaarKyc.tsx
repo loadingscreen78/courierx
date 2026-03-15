@@ -5,18 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Shield, ArrowRight, Loader2, CheckCircle2, MapPin, RotateCcw, Lock } from 'lucide-react';
+import { Shield, ArrowRight, Loader2, CheckCircle2, MapPin, ExternalLink, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { useHaptics } from '@/hooks/useHaptics';
-import { useSoundEffects } from '@/hooks/useSoundEffects';
 import logoMain from '@/assets/logo-main.jpeg';
 
 // Verhoeff algorithm for Aadhaar checksum validation
@@ -53,39 +50,47 @@ const aadhaarSchema = z.object({
     .regex(/^\d{12}$/, 'Must be exactly 12 digits')
     .refine(validateVerhoeff, 'Invalid Aadhaar number'),
 });
-const otpSchema = z.object({ otp: z.string().length(6, 'Enter the 6-digit OTP') });
 
 type AadhaarFormValues = z.infer<typeof aadhaarSchema>;
-type OtpFormValues = z.infer<typeof otpSchema>;
-type KycStep = 'aadhaar' | 'otp' | 'success';
-
-const RESEND_COOLDOWN = 30;
+type KycStep = 'aadhaar' | 'redirect' | 'verifying' | 'success';
 
 function AadhaarKycInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { profile, loading } = useAuth();
   const { toast } = useToast();
-  const { successFeedback, heavyTap } = useHaptics();
-  const { playSuccess } = useSoundEffects();
 
   const [step, setStep] = useState<KycStep>('aadhaar');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [formattedAadhaar, setFormattedAadhaar] = useState('');
-  const [refId, setRefId] = useState('');
+  const [digilockerUrl, setDigilockerUrl] = useState('');
+  const [referenceId, setReferenceId] = useState<number | null>(null);
+  const [verificationId, setVerificationId] = useState('');
   const [verifiedAddress, setVerifiedAddress] = useState('');
   const [verifiedName, setVerifiedName] = useState('');
+  const [maskedAadhaar, setMaskedAadhaar] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
 
   const from = searchParams.get('from') || '/';
 
+  // Handle DigiLocker callback — params injected by /auth/kyc/callback
   useEffect(() => {
-    if (resendCooldown > 0) {
-      const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
-      return () => clearTimeout(t);
+    const cbVerificationId = searchParams.get('verification_id');
+    const cbReferenceId = searchParams.get('reference_id');
+    if (cbVerificationId || cbReferenceId) {
+      if (cbVerificationId) setVerificationId(cbVerificationId);
+      if (cbReferenceId) setReferenceId(Number(cbReferenceId));
+      setStep('verifying');
     }
-  }, [resendCooldown]);
+  }, [searchParams]);
+
+  // Auto-complete verification after DigiLocker redirect
+  useEffect(() => {
+    if (step === 'verifying' && (referenceId || verificationId)) {
+      completeVerification();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, referenceId, verificationId]);
 
   useEffect(() => {
     if (!loading && profile?.aadhaar_verified) router.replace(from);
@@ -94,10 +99,6 @@ function AadhaarKycInner() {
   const aadhaarForm = useForm<AadhaarFormValues>({
     resolver: zodResolver(aadhaarSchema),
     defaultValues: { aadhaarNumber: '' },
-  });
-  const otpForm = useForm<OtpFormValues>({
-    resolver: zodResolver(otpSchema),
-    defaultValues: { otp: '' },
   });
 
   const getToken = async () => {
@@ -111,53 +112,36 @@ function AadhaarKycInner() {
     aadhaarForm.setValue('aadhaarNumber', value, { shouldValidate: value.length === 12 });
   };
 
-  const sendOtp = async (aadhaar: string) => {
-    const token = await getToken();
-    if (!token) throw new Error('Session expired. Please log in again.');
-    const res = await fetch('/api/kyc/send-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ aadhaarNumber: aadhaar }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
-    return data.refId as string;
-  };
-
-  const handleSendAadhaarOtp = async (values: AadhaarFormValues) => {
+  const handleInitiateKyc = async (values: AadhaarFormValues) => {
     setIsLoading(true);
-    heavyTap();
     try {
-      const id = await sendOtp(values.aadhaarNumber);
-      setRefId(id);
+      const token = await getToken();
+      if (!token) throw new Error('Session expired. Please log in again.');
+      const res = await fetch('/api/kyc/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ aadhaarNumber: values.aadhaarNumber }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to initiate KYC');
       setAadhaarNumber(values.aadhaarNumber);
-      setStep('otp');
-      setResendCooldown(RESEND_COOLDOWN);
-      toast({ title: 'OTP Sent', description: 'Check the mobile number linked to your Aadhaar.' });
+      setDigilockerUrl(data.digilockerUrl);
+      setVerificationId(data.verificationId);
+      setReferenceId(data.referenceId ?? null);
+      setStep('redirect');
     } catch (err) {
-      toast({ title: 'Failed to send OTP', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' });
+      toast({
+        title: 'KYC initiation failed',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'destructive',
+        duration: 8000,
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0 || isLoading) return;
-    setIsLoading(true);
-    heavyTap();
-    try {
-      const id = await sendOtp(aadhaarNumber);
-      setRefId(id);
-      setResendCooldown(RESEND_COOLDOWN);
-      toast({ title: 'OTP Resent', description: 'A new OTP has been sent to your Aadhaar-linked mobile.' });
-    } catch (err) {
-      toast({ title: 'Resend failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyAadhaarOtp = async (values: OtpFormValues) => {
+  const completeVerification = async () => {
     setIsLoading(true);
     try {
       const token = await getToken();
@@ -165,18 +149,24 @@ function AadhaarKycInner() {
       const res = await fetch('/api/kyc/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ otp: values.otp, refId, aadhaarNumber }),
+        body: JSON.stringify({ referenceId, verificationId, aadhaarNumber }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Verification failed');
-      successFeedback();
-      playSuccess();
       setVerifiedName(data.verifiedName || '');
       setVerifiedAddress(data.verifiedAddress || '');
+      setMaskedAadhaar(data.maskedAadhaar || '');
       setStep('success');
       toast({ title: 'KYC Complete', description: 'Your Aadhaar has been verified successfully.' });
     } catch (err) {
-      toast({ title: 'Verification Failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' });
+      toast({
+        title: 'Verification Failed',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'destructive',
+      });
+      setStep('aadhaar');
+      setFormattedAadhaar('');
+      aadhaarForm.reset();
     } finally {
       setIsLoading(false);
     }
@@ -205,8 +195,9 @@ function AadhaarKycInner() {
               Aadhaar KYC Verification
             </CardTitle>
             <CardDescription>
-              {step === 'aadhaar' && 'Enter your 12-digit Aadhaar number to receive an OTP'}
-              {step === 'otp' && 'Enter the OTP sent to your Aadhaar-linked mobile number'}
+              {step === 'aadhaar' && 'Enter your 12-digit Aadhaar number to begin'}
+              {step === 'redirect' && 'Complete verification on DigiLocker'}
+              {step === 'verifying' && 'Completing your verification...'}
               {step === 'success' && 'Your identity has been verified successfully'}
             </CardDescription>
           </CardHeader>
@@ -214,7 +205,7 @@ function AadhaarKycInner() {
           <CardContent>
             {step === 'aadhaar' && (
               <Form {...aadhaarForm}>
-                <form onSubmit={aadhaarForm.handleSubmit(handleSendAadhaarOtp)} className="space-y-4">
+                <form onSubmit={aadhaarForm.handleSubmit(handleInitiateKyc)} className="space-y-4">
                   <FormField
                     control={aadhaarForm.control}
                     name="aadhaarNumber"
@@ -240,62 +231,48 @@ function AadhaarKycInner() {
                   <Alert>
                     <Lock className="h-4 w-4" />
                     <AlertDescription className="text-xs">
-                      Verified via UIDAI through Cashfree. We never store your full Aadhaar number.
+                      Verified via DigiLocker (UIDAI). We never store your full Aadhaar number.
                     </AlertDescription>
                   </Alert>
                   <Button type="submit" className="w-full btn-press" disabled={isLoading}>
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
-                    Send OTP
+                    {isLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      : <ArrowRight className="h-4 w-4 mr-2" />}
+                    Continue with DigiLocker
                   </Button>
                 </form>
               </Form>
             )}
 
-            {step === 'otp' && (
-              <Form {...otpForm}>
-                <form onSubmit={otpForm.handleSubmit(handleVerifyAadhaarOtp)} className="space-y-6">
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">
-                      OTP sent for Aadhaar:{' '}
-                      <span className="font-mono font-semibold">XXXX XXXX {aadhaarNumber.slice(-4)}</span>
-                    </p>
-                  </div>
-                  <FormField
-                    control={otpForm.control}
-                    name="otp"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col items-center">
-                        <FormLabel className="sr-only">Aadhaar OTP</FormLabel>
-                        <FormControl>
-                          <InputOTP maxLength={6} {...field}>
-                            <InputOTPGroup>
-                              {[0,1,2,3,4,5].map(i => <InputOTPSlot key={i} index={i} />)}
-                            </InputOTPGroup>
-                          </InputOTP>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="space-y-3">
-                    <Button type="submit" className="w-full btn-press" disabled={isLoading}>
-                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
-                      Verify & Complete KYC
-                    </Button>
-                    <div className="flex items-center justify-between">
-                      <Button type="button" variant="ghost" size="sm"
-                        onClick={() => { setStep('aadhaar'); setFormattedAadhaar(''); aadhaarForm.reset(); }}>
-                        Change Aadhaar
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm"
-                        onClick={handleResendOtp} disabled={resendCooldown > 0 || isLoading}>
-                        <RotateCcw className="h-3 w-3 mr-1" />
-                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
-                      </Button>
-                    </div>
-                  </div>
-                </form>
-              </Form>
+            {step === 'redirect' && (
+              <div className="space-y-6 text-center">
+                <div className="bg-secondary/50 rounded-lg p-4 text-sm text-muted-foreground space-y-2">
+                  <p>You&apos;ll be redirected to DigiLocker to log in with your Aadhaar-linked mobile number and grant consent.</p>
+                  <p className="text-xs">The link expires in 10 minutes.</p>
+                </div>
+                <Button
+                  className="w-full btn-press"
+                  onClick={() => window.location.href = digilockerUrl}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open DigiLocker
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => { setStep('aadhaar'); setFormattedAadhaar(''); aadhaarForm.reset(); }}
+                >
+                  Change Aadhaar number
+                </Button>
+              </div>
+            )}
+
+            {step === 'verifying' && (
+              <div className="flex flex-col items-center gap-4 py-6">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Fetching your verified Aadhaar data...</p>
+              </div>
             )}
 
             {step === 'success' && (
@@ -308,7 +285,7 @@ function AadhaarKycInner() {
                 <div className="space-y-1">
                   <h3 className="font-typewriter font-semibold">Verification Complete</h3>
                   {verifiedName && <p className="text-sm font-medium text-foreground">{verifiedName}</p>}
-                  <p className="text-sm text-muted-foreground">Your Aadhaar has been verified successfully.</p>
+                  {maskedAadhaar && <p className="text-xs text-muted-foreground font-mono">{maskedAadhaar}</p>}
                 </div>
                 {verifiedAddress && (
                   <div className="bg-secondary/50 rounded-lg p-4 text-left">
@@ -321,9 +298,6 @@ function AadhaarKycInner() {
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  This address will be used for customs declarations and sender verification.
-                </p>
                 <Button onClick={() => router.replace(from)} className="w-full btn-press">
                   Continue to Dashboard
                   <ArrowRight className="h-4 w-4 ml-2" />
@@ -334,7 +308,7 @@ function AadhaarKycInner() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground">
-          Powered by Cashfree Verification · Secured by UIDAI
+          Powered by Cashfree DigiLocker · Secured by UIDAI
         </p>
       </div>
     </div>
