@@ -145,7 +145,7 @@ export async function dispatchStatusEmail(
 ): Promise<NotificationResult> {
   const result: NotificationResult = { userEmailSent: false, adminEmailSent: false, errors: [] };
 
-  if (newStatus === 'draft') {
+  if (newStatus === 'draft' || newStatus === 'PENDING') {
     return result;
   }
 

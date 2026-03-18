@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
+import { dispatchWalletRechargeEmail, dispatchPaymentFailedEmail } from '@/lib/email/walletDispatcher';
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,6 +91,19 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('[razorpay/webhook] payment.captured processed:', paymentId);
+
+      // Send wallet recharge email (fire-and-forget)
+      // Resolve user email from auth
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      const userEmail = authUser?.user?.email;
+      if (userEmail) {
+        dispatchWalletRechargeEmail({
+          userEmail,
+          amount: amountInRupees,
+          paymentMethod: method,
+          paymentId,
+        }).catch((err) => console.error('[razorpay/webhook] Email failed:', err));
+      }
     } else if (eventType === 'payment.failed') {
       const paymentEntity = event.payload?.payment?.entity;
       console.log('[razorpay/webhook] payment.failed:', {
@@ -97,7 +111,22 @@ export async function POST(request: NextRequest) {
         error_code: paymentEntity?.error_code,
         error_description: paymentEntity?.error_description,
       });
-      // No ledger modification for failed payments
+
+      // Send payment failed email (fire-and-forget)
+      const failedUserId = paymentEntity?.notes?.user_id;
+      if (failedUserId) {
+        const supabaseFailed = getServiceRoleClient();
+        const { data: failedAuthUser } = await supabaseFailed.auth.admin.getUserById(failedUserId);
+        const failedEmail = failedAuthUser?.user?.email;
+        if (failedEmail) {
+          dispatchPaymentFailedEmail({
+            userEmail: failedEmail,
+            amount: paymentEntity?.amount ? paymentEntity.amount / 100 : undefined,
+            paymentMethod: paymentEntity?.method,
+            errorDescription: paymentEntity?.error_description,
+          }).catch((err) => console.error('[razorpay/webhook] Failed payment email failed:', err));
+        }
+      }
     } else {
       console.log('[razorpay/webhook] Unhandled event type:', eventType);
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { CASHFREE_API_BASE, CASHFREE_API_VERSION } from '@/lib/wallet/cashfreeConfig';
+import { dispatchWalletRechargeEmail } from '@/lib/email/walletDispatcher';
 
 export async function POST(request: NextRequest) {
   try {
@@ -164,6 +165,19 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+    }
+
+    // Send wallet recharge email notification (fire-and-forget)
+    const userEmail = user.email;
+    if (userEmail) {
+      dispatchWalletRechargeEmail({
+        userEmail,
+        amount: amountInRupees,
+        paymentMethod,
+        paymentId: cfPaymentId,
+        bonusAmount: bonusAmount || undefined,
+        couponCode: resolvedCouponCode?.toUpperCase() || undefined,
+      }).catch((err) => console.error('[cashfree/verify] Email notification failed:', err));
     }
 
     return NextResponse.json({

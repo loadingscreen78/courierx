@@ -90,3 +90,78 @@ export async function sendWhatsAppInvoiceNotification(
     console.error('[Notify] WhatsApp invoice request failed:', err);
   }
 }
+
+/**
+ * Sends a wallet recharge success email notification (fire-and-forget).
+ */
+export async function sendWalletRechargeNotification(params: {
+  userEmail: string;
+  amount: number;
+  paymentMethod: string;
+  paymentId: string;
+  bonusAmount?: number;
+  couponCode?: string;
+}): Promise<void> {
+  try {
+    const res = await fetch('/api/email/send-wallet-recharge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error('[Notify] Wallet recharge email failed:', data.error || res.statusText);
+    }
+  } catch (err) {
+    console.error('[Notify] Wallet recharge email request failed:', err);
+  }
+}
+
+/**
+ * Sends a payment failed email notification (fire-and-forget).
+ */
+export async function sendPaymentFailedNotification(params: {
+  userEmail: string;
+  amount?: number;
+  paymentMethod?: string;
+  errorDescription?: string;
+}): Promise<void> {
+  try {
+    const res = await fetch('/api/email/send-payment-failed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error('[Notify] Payment failed email failed:', data.error || res.statusText);
+    }
+  } catch (err) {
+    console.error('[Notify] Payment failed email request failed:', err);
+  }
+}
+
+/**
+ * Sends a welcome email to a newly registered user (fire-and-forget).
+ */
+export async function sendWelcomeNotification(params: {
+  userEmail: string;
+  fullName?: string;
+}): Promise<void> {
+  try {
+    const res = await fetch('/api/email/send-welcome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error('[Notify] Welcome email failed:', data.error || res.statusText);
+    }
+  } catch (err) {
+    console.error('[Notify] Welcome email request failed:', err);
+  }
+}

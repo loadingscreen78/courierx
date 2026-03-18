@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
+import { dispatchWalletRechargeEmail, dispatchPaymentFailedEmail } from '@/lib/email/walletDispatcher';
 
 // Cashfree webhook signature verification (2025-01-01 version)
 // Signature = HMAC-SHA256(timestamp + rawBody, secretKey) → base64
@@ -100,12 +101,40 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('[cashfree/webhook] PAYMENT_SUCCESS processed:', cfPaymentId);
+
+      // Send wallet recharge email (fire-and-forget)
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      const userEmail = authUser?.user?.email;
+      if (userEmail) {
+        dispatchWalletRechargeEmail({
+          userEmail,
+          amount: amountInRupees,
+          paymentMethod,
+          paymentId: cfPaymentId,
+        }).catch((err) => console.error('[cashfree/webhook] Email failed:', err));
+      }
     } else if (eventType === 'PAYMENT_FAILED_WEBHOOK') {
       const paymentData = event.data?.payment;
       console.log('[cashfree/webhook] PAYMENT_FAILED:', {
         cf_payment_id: paymentData?.cf_payment_id,
         payment_message: paymentData?.payment_message,
       });
+
+      // Send payment failed email (fire-and-forget)
+      const failedUserId = event.data?.order?.order_tags?.user_id;
+      if (failedUserId) {
+        const supabaseFailed = getServiceRoleClient();
+        const { data: failedAuthUser } = await supabaseFailed.auth.admin.getUserById(failedUserId);
+        const failedEmail = failedAuthUser?.user?.email;
+        if (failedEmail) {
+          dispatchPaymentFailedEmail({
+            userEmail: failedEmail,
+            amount: event.data?.order?.order_amount ? Number(event.data.order.order_amount) : undefined,
+            paymentMethod: paymentData?.payment_group?.toLowerCase(),
+            errorDescription: paymentData?.payment_message,
+          }).catch((err) => console.error('[cashfree/webhook] Failed payment email failed:', err));
+        }
+      }
     } else {
       console.log('[cashfree/webhook] Unhandled event type:', eventType);
     }

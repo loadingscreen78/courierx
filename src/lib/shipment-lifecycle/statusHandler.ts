@@ -1,6 +1,7 @@
 import { ShipmentRow, ShipmentStatus, ShipmentLeg } from './types';
 import { getServiceRoleClient } from './supabaseAdmin';
 import { dispatchStatusWhatsApp } from '@/lib/whatsapp/dispatcher';
+import { dispatchStatusEmail } from '@/lib/email/dispatcher';
 
 const WAREHOUSE_ADDRESS = process.env.WAREHOUSE_ADDRESS ?? 'CourierX Warehouse';
 
@@ -42,6 +43,11 @@ export async function handleStatusChange(
         console.error('[statusHandler] WhatsApp notification failed:', err);
       });
 
+      // Send email notification (fire-and-forget)
+      dispatchStatusEmail(shipment.id, newStatus).catch((err) => {
+        console.error('[statusHandler] Email notification failed:', err);
+      });
+
       const supabase = getServiceRoleClient();
       await supabase
         .from('shipments')
@@ -59,5 +65,10 @@ export async function handleStatusChange(
   // Send WhatsApp notification for all meaningful status changes (fire-and-forget)
   dispatchStatusWhatsApp(shipment.id, newStatus).catch((err) => {
     console.error('[statusHandler] WhatsApp notification failed:', err);
+  });
+
+  // Send email notification for all meaningful status changes (fire-and-forget)
+  dispatchStatusEmail(shipment.id, newStatus).catch((err) => {
+    console.error('[statusHandler] Email notification failed:', err);
   });
 }

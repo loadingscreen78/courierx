@@ -274,6 +274,14 @@ const Auth = () => {
     if (mode === 'signup') {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) { setIsLoading(false); return; }
+
+      // Send welcome email (fire-and-forget)
+      fetch('/api/email/send-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: values.email }),
+      }).catch(() => {});
+
       setIsLoading(false);
       window.location.href = '/onboarding';
       return;

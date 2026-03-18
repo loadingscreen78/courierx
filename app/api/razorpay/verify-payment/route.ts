@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { RAZORPAY_API_BASE } from '@/lib/wallet/razorpayConfig';
+import { dispatchWalletRechargeEmail } from '@/lib/email/walletDispatcher';
 
 export async function POST(request: NextRequest) {
   try {
@@ -181,6 +182,19 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+    }
+
+    // Send wallet recharge email notification (fire-and-forget)
+    const userEmail = user.email;
+    if (userEmail) {
+      dispatchWalletRechargeEmail({
+        userEmail,
+        amount: amountInRupees,
+        paymentMethod,
+        paymentId: razorpay_payment_id,
+        bonusAmount: bonusAmount || undefined,
+        couponCode: couponCode || undefined,
+      }).catch((err) => console.error('[razorpay/verify] Email notification failed:', err));
     }
 
     return NextResponse.json({
