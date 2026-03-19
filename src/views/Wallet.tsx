@@ -123,6 +123,7 @@ const WalletPage = () => {
     bonusAmount?: number;
     discountType?: string;
     discountValue?: number;
+    bypassMinRecharge?: boolean;
     error?: string;
   } | null>(null);
 
@@ -175,8 +176,9 @@ const WalletPage = () => {
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
     const amount = Number(rechargeAmount);
-    if (!Number.isFinite(amount) || amount < MIN_RECHARGE_AMOUNT) {
-      toast.error(`Enter an amount of at least ₹${MIN_RECHARGE_AMOUNT} first`);
+    // Allow any positive amount — bypass coupons skip the platform minimum
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter a recharge amount first');
       return;
     }
     setCouponLoading(true);
@@ -193,7 +195,13 @@ const WalletPage = () => {
       });
       const data = await res.json();
       if (data.valid) {
-        setCouponResult({ valid: true, bonusAmount: data.bonusAmount, discountType: data.discountType, discountValue: data.discountValue });
+        setCouponResult({
+          valid: true,
+          bonusAmount: data.bonusAmount,
+          discountType: data.discountType,
+          discountValue: data.discountValue,
+          bypassMinRecharge: data.bypassMinRecharge,
+        });
       } else {
         setCouponResult({ valid: false, error: data.error || 'Invalid coupon' });
       }
@@ -211,7 +219,12 @@ const WalletPage = () => {
 
   const handleRecharge = async () => {
     const amount = Number(rechargeAmount);
-    if (!Number.isFinite(amount) || amount < MIN_RECHARGE_AMOUNT) {
+    const isBypass = couponResult?.valid && couponResult?.bypassMinRecharge;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    if (!isBypass && amount < MIN_RECHARGE_AMOUNT) {
       toast.error(`Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}`);
       return;
     }
@@ -551,13 +564,13 @@ const WalletPage = () => {
           <div className="bg-gradient-to-br from-[#1a1a1a] to-[#2d1010] px-5 py-5 text-white shrink-0">
             <p className="font-typewriter text-lg font-bold text-white">Add Money</p>
             <p className="text-white/50 text-xs mt-0.5">Min. ₹{MIN_RECHARGE_AMOUNT} · Secured by Cashfree</p>
-            {rechargeAmount && parseInt(rechargeAmount) >= MIN_RECHARGE_AMOUNT && (
+            {rechargeAmount && Number(rechargeAmount) >= MIN_RECHARGE_AMOUNT && (
               <motion.p
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="font-typewriter text-2xl font-bold mt-3"
               >
-                ₹{parseInt(rechargeAmount).toLocaleString('en-IN')}
+                ₹{Number(rechargeAmount).toLocaleString('en-IN')}
               </motion.p>
             )}
           </div>
@@ -610,7 +623,11 @@ const WalletPage = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-green-700 dark:text-green-400">{couponCode.toUpperCase()}</p>
-                    <p className="text-xs text-green-600/80">+₹{couponResult.bonusAmount?.toLocaleString('en-IN')} bonus will be credited</p>
+                    {couponResult.bypassMinRecharge && !couponResult.bonusAmount ? (
+                      <p className="text-xs text-green-600/80">Coupon applied — recharge any amount</p>
+                    ) : (
+                      <p className="text-xs text-green-600/80">+₹{couponResult.bonusAmount?.toLocaleString('en-IN')} bonus will be credited</p>
+                    )}
                   </div>
                   <button onClick={handleRemoveCoupon} className="p-1 rounded-lg hover:bg-muted transition-colors">
                     <X className="h-4 w-4 text-muted-foreground" />
@@ -686,14 +703,18 @@ const WalletPage = () => {
 
             <button
               onClick={handleRecharge}
-              disabled={!rechargeAmount || parseInt(rechargeAmount) < MIN_RECHARGE_AMOUNT}
+              disabled={
+                !rechargeAmount ||
+                Number(rechargeAmount) <= 0 ||
+                (!couponResult?.bypassMinRecharge && Number(rechargeAmount) < MIN_RECHARGE_AMOUNT)
+              }
               className="w-full flex items-center justify-center gap-2 py-3 bg-coke-red hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold text-sm transition-all duration-200 shadow-md shadow-coke-red/25"
             >
               <Shield className="h-4 w-4 shrink-0" />
               <span>Pay Securely</span>
-              {rechargeAmount && parseInt(rechargeAmount) >= MIN_RECHARGE_AMOUNT && (
+              {rechargeAmount && Number(rechargeAmount) > 0 && (
                 <span className="font-typewriter">
-                  · ₹{parseInt(rechargeAmount).toLocaleString('en-IN')}
+                  · ₹{Number(rechargeAmount).toLocaleString('en-IN')}
                   {couponResult?.valid && couponResult.bonusAmount ? ` + ₹${couponResult.bonusAmount.toLocaleString('en-IN')} bonus` : ''}
                 </span>
               )}

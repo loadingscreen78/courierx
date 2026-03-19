@@ -462,8 +462,8 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {form.is_min_recharge_type
-                    ? 'Only coupon code needed — no discount fields'
-                    : 'Enable for a simple recharge-trigger coupon'}
+                    ? 'Coupon code only — user can recharge any amount, no bonus'
+                    : 'Enable to let users recharge any amount with this code (no platform minimum)'}
                 </p>
               </div>
               <div className={cn(
@@ -594,7 +594,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               >
                 <div>
                   <p className="text-sm font-medium text-amber-300">Bypass Min Recharge</p>
-                  <p className="text-xs text-amber-400/70 mt-0.5">Allow coupon on any recharge amount</p>
+                  <p className="text-xs text-amber-400/70 mt-0.5">User can recharge any amount — platform minimum is waived</p>
                 </div>
                 <div className={cn(
                   "w-10 h-6 rounded-full transition-colors flex items-center px-1",

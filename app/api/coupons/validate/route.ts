@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { code, amount } = await request.json();
-    if (!code || !amount) {
+    if (!code || amount === undefined || amount === null) {
       return NextResponse.json({ error: 'Coupon code and amount are required' }, { status: 400 });
     }
 
@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
       discountType: result.discount_type,
       discountValue: result.discount_value,
       bonusAmount: result.bonus_amount,
+      bypassMinRecharge: result.bypass_min_recharge ?? false,
     });
   } catch (error) {
     console.error('[coupons/validate] Unexpected error:', error);
