@@ -478,7 +478,7 @@ const Auth = () => {
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
     setPhoneNumber(values.phone);
     setStep('otp');
-    toast({ title: 'OTP Sent', description: `Code sent to ${values.phone} via WhatsApp` });
+    toast({ title: 'OTP Sent', description: `Verification code sent to ${values.phone}` });
   };
 
   const handleVerifyOtp = async (values: OtpFormValues) => {

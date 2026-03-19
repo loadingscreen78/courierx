@@ -29,12 +29,18 @@ export async function POST(request: NextRequest) {
 
     if (!result.success) {
       return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 500 }
+        { success: false, error: result.error || 'Failed to send OTP' },
+        { status: 400 }
       );
     }
 
-    return NextResponse.json({ success: true, message: 'OTP sent via WhatsApp' });
+    return NextResponse.json({
+      success: true,
+      message: result.channel === 'sms'
+        ? 'OTP sent via SMS (WhatsApp unavailable)'
+        : 'OTP sent via WhatsApp',
+      channel: result.channel,
+    });
   } catch (error) {
     console.error('[WhatsApp Auth] send-otp error:', error);
     return NextResponse.json(
