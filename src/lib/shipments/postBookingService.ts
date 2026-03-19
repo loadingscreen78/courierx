@@ -148,6 +148,10 @@ export async function uploadShipmentDocuments(
   userId?: string,
 ): Promise<void> {
   for (const { file, type } of files) {
+    if (!file || !(file instanceof File)) {
+      console.warn(`[PostBookingService] Skipping upload for type "${type}" — file is undefined`);
+      continue;
+    }
     try {
       const timestamp = Date.now();
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
