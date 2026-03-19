@@ -94,23 +94,19 @@ const SidebarModeCard = ({ isInternational, onClick, isSwitching }: { isInternat
           : "bg-sidebar-foreground/8"
       )}>
         {isInternational ? (
-          // Globe with orbit ring — international
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-[#F40000]">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M12 3C12 3 8 7 8 12C8 17 12 21 12 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            <path d="M12 3C12 3 16 7 16 12C16 17 12 21 12 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            <path d="M3 12H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            <path d="M4.5 7.5H19.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="1 2"/>
-            <path d="M4.5 16.5H19.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="1 2"/>
+          // Clean globe — international
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-[#F40000]">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6"/>
+            <path d="M12 3c0 0-3.5 4-3.5 9s3.5 9 3.5 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path d="M12 3c0 0 3.5 4 3.5 9s-3.5 9-3.5 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path d="M3.5 12h17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path d="M5 7.5h14M5 16.5h14" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.5"/>
           </svg>
         ) : (
-          // Truck with India flag pin — domestic
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-sidebar-foreground/70">
-            <path d="M1 3h13v13H1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-            <path d="M14 8h4l3 3v5h-7V8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-            <circle cx="5.5" cy="18.5" r="2" stroke="currentColor" strokeWidth="1.5"/>
-            <circle cx="18.5" cy="18.5" r="2" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M9 3v13" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.4"/>
+          // Clean map pin — domestic India
+          <svg width="18" height="20" viewBox="0 0 20 24" fill="none" className="text-sidebar-foreground/65">
+            <path d="M10 2C6.13 2 3 5.13 3 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+            <circle cx="10" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.6"/>
           </svg>
         )}
       </div>
