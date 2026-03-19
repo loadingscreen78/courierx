@@ -18,7 +18,6 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import logoMain from '@/assets/logo-main.jpeg';
 import { cn } from '@/lib/utils';
 import { ShippingModeToggle } from '@/components/ui/ShippingModeToggle';
-import { ModeSwitchLoader } from '@/components/ui/ModeSwitchLoader';
 import { useShippingMode } from '@/contexts/ShippingModeContext';
 
 export const Header = () => {
@@ -175,7 +174,6 @@ export const Header = () => {
           </DropdownMenu>
         </div>
       </div>
-      <ModeSwitchLoader visible={isSwitching} targetMode={mode} />
     </header>
   );
 };

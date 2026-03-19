@@ -3,14 +3,21 @@ import { DesktopSidebar } from './DesktopSidebar';
 import { MobileNav } from './MobileNav';
 import { Header } from './Header';
 import { PageTransition } from '@/components/ui/loading/PageTransition';
+import { ModeSwitchLoader } from '@/components/ui/ModeSwitchLoader';
+import { useShippingMode } from '@/contexts/ShippingModeContext';
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 export const AppLayout = ({ children }: AppLayoutProps) => {
+  const { mode, isSwitching } = useShippingMode();
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Global mode switch loader — fixed full-screen, always at root */}
+      <ModeSwitchLoader visible={isSwitching} targetMode={mode} />
+
       {/* Desktop Layout */}
       <div className="hidden lg:flex">
         <DesktopSidebar />
