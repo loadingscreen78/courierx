@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
             p_code: resolvedCouponCodeEarly,
             p_user_id: user.id,
             p_amount: amountInRupees,
-          });
+          }).returns<any[]>();
           if (validation?.[0]?.is_valid) {
             const bonusAmt = Number(validation[0].bonus_amount);
             const couponId = validation[0].coupon_id;
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
         p_code: resolvedCouponCode,
         p_user_id: user.id,
         p_amount: amountInRupees,
-      });
+      }).returns<any[]>();
 
       if (!valError && validation?.[0]?.is_valid) {
         bonusAmount = Number(validation[0].bonus_amount);

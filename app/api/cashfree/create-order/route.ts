@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         p_code: couponCode,
         p_user_id: user.id,
         p_amount: amount,
-      });
+      }).returns<any[]>();
       if (valError || !validation?.[0]?.is_valid) {
         return NextResponse.json(
           { error: validation?.[0]?.error_message || 'Invalid coupon' },

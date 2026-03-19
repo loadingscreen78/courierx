@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       p_code: code,
       p_user_id: user.id,
       p_amount: Number(amount),
-    });
+    }).returns<any[]>();
 
     if (error) {
       console.error('[coupons/validate] RPC error:', error);

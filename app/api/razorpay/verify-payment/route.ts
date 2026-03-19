@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         p_code: couponCode,
         p_user_id: user.id,
         p_amount: amountInRupees,
-      });
+      }).returns<any[]>();
 
       if (!valError && validation?.[0]?.is_valid) {
         bonusAmount = Number(validation[0].bonus_amount);
