@@ -575,8 +575,12 @@ const WalletPage = () => {
           {/* Sheet Header */}
           <div className="bg-gradient-to-br from-[#1a1a1a] to-[#2d1010] px-5 py-5 text-white shrink-0">
             <p className="font-typewriter text-lg font-bold text-white">Add Money</p>
-            <p className="text-white/50 text-xs mt-0.5">Min. ₹{MIN_RECHARGE_AMOUNT} · Secured by Cashfree</p>
-            {rechargeAmount && Number(rechargeAmount) >= MIN_RECHARGE_AMOUNT && (
+            <p className="text-white/50 text-xs mt-0.5">
+              {couponResult?.valid && couponResult.bypassMinRecharge
+                ? 'Any amount · Secured by Cashfree'
+                : `Min. ₹${MIN_RECHARGE_AMOUNT} · Secured by Cashfree`}
+            </p>
+            {rechargeAmount && Number(rechargeAmount) > 0 && (couponResult?.bypassMinRecharge || Number(rechargeAmount) >= MIN_RECHARGE_AMOUNT) && (
               <motion.p
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
