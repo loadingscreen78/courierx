@@ -111,34 +111,28 @@ const SidebarModeCard = ({ isInternational, onClick, isSwitching }: { isInternat
         )}
       </div>
 
-      {/* Text */}
+      {/* Text + switch row */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={cn(
-            "text-[11px] font-bold uppercase tracking-widest",
-            isInternational ? "text-[#F40000]" : "text-sidebar-foreground/80"
-          )}>
-            {isInternational ? 'International' : 'Domestic'}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={cn(
+              "text-[11px] font-bold uppercase tracking-widest truncate",
+              isInternational ? "text-[#F40000]" : "text-sidebar-foreground/80"
+            )}>
+              {isInternational ? 'International' : 'Domestic'}
+            </span>
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full shrink-0",
+              isInternational ? "bg-[#F40000] animate-pulse" : "bg-sidebar-foreground/30"
+            )} />
+          </div>
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60 transition-colors shrink-0">
+            Switch
           </span>
-          {/* Live dot */}
-          <span className={cn(
-            "w-1.5 h-1.5 rounded-full shrink-0",
-            isInternational ? "bg-[#F40000] animate-pulse" : "bg-sidebar-foreground/30"
-          )} />
         </div>
         <p className="text-[10px] text-sidebar-foreground/40 mt-0.5 leading-tight">
           {isInternational ? '150+ countries' : 'Across India'}
         </p>
-      </div>
-
-      {/* Switch hint */}
-      <div className={cn(
-        "text-[9px] font-semibold uppercase tracking-wider px-2 py-1 rounded-lg border transition-all duration-200",
-        isInternational
-          ? "text-sidebar-foreground/30 border-sidebar-border/30 group-hover:text-sidebar-foreground/60 group-hover:border-sidebar-border/60"
-          : "text-sidebar-foreground/30 border-sidebar-border/30 group-hover:text-sidebar-foreground/60 group-hover:border-sidebar-border/60"
-      )}>
-        Switch
       </div>
     </div>
   </motion.button>
