@@ -12,13 +12,11 @@ import {
   CheckCircle2,
   Wallet,
   MapPin,
-  Truck,
   Eye,
   Plane,
   Box,
   ChevronRight,
   Sparkles,
-  Globe,
 } from 'lucide-react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,7 +31,6 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { useShippingMode } from '@/contexts/ShippingModeContext';
-import { ShippingModeToggle } from '@/components/ui/ShippingModeToggle';
 
 // Remove mock data - now using real data from database
 
@@ -252,36 +249,44 @@ const Index = () => {
           )}
         </AnimatePresence>
 
-        {/* Mode Banner */}
+        {/* Mode Banner — info only, no toggle (toggle lives in sidebar + header) */}
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`flex items-center justify-between px-5 py-3 rounded-2xl border transition-all duration-300 ${
+          className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-300 ${
             isInternational
               ? 'bg-[#F40000]/5 border-[#F40000]/20'
               : 'bg-muted/40 border-border/60'
           }`}
         >
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${isInternational ? 'bg-[#F40000]/10' : 'bg-foreground/8'}`}>
-              {isInternational
-                ? <Globe className="h-4 w-4 text-[#F40000]" />
-                : <Truck className="h-4 w-4 text-foreground/60" />
-              }
-            </div>
-            <div>
-              <p className={`text-xs font-bold uppercase tracking-widest ${isInternational ? 'text-[#F40000]' : 'text-foreground/70'}`}>
-                {isInternational ? '🌍 International Mode' : '🇮🇳 Domestic Mode'}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {isInternational
-                  ? 'Shipping to 150+ countries — medicines, documents & gifts'
-                  : 'Fast delivery across India — same-day & next-day options'}
-              </p>
-            </div>
+          <div className={`p-2 rounded-xl shrink-0 ${isInternational ? 'bg-[#F40000]/10' : 'bg-foreground/8'}`}>
+            {isInternational
+              ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#F40000]">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M12 3C12 3 8.5 7 8.5 12C8.5 17 12 21 12 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  <path d="M12 3C12 3 15.5 7 15.5 12C15.5 17 12 21 12 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  <path d="M3.5 12H20.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-foreground/60">
+                  <path d="M1 4h13v12H1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M14 9h4.5L22 12.5V16h-8V9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <circle cx="5.5" cy="19" r="2" stroke="currentColor" strokeWidth="1.8"/>
+                  <circle cx="18.5" cy="19" r="2" stroke="currentColor" strokeWidth="1.8"/>
+                </svg>
+              )
+            }
           </div>
-          <div className="hidden sm:block">
-            <ShippingModeToggle compact />
+          <div>
+            <p className={`text-xs font-bold uppercase tracking-widest ${isInternational ? 'text-[#F40000]' : 'text-foreground/70'}`}>
+              {isInternational ? 'International Mode' : 'Domestic Mode'}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {isInternational
+                ? 'Shipping to 150+ countries — medicines, documents & gifts'
+                : 'Fast delivery across India — same-day & next-day options'}
+            </p>
           </div>
         </motion.div>
 

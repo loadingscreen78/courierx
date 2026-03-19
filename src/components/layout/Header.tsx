@@ -118,11 +118,6 @@ export const Header = () => {
             )}
           </button>
 
-          {/* Mobile Mode Toggle */}
-          <div className="md:hidden">
-            <ShippingModeToggle compact />
-          </div>
-
           <ThemeToggle />
 
           {/* Notifications */}

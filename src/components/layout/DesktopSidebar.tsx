@@ -11,7 +11,6 @@ import {
   Home,
   FileEdit,
   ChevronRight,
-  Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +21,6 @@ import { useHaptics } from '@/hooks/useHaptics';
 import logoSymbol from '@/assets/logo-symbol.jpeg';
 import { useShipments } from '@/hooks/useShipments';
 import { motion } from 'framer-motion';
-import { ShippingModeToggle } from '@/components/ui/ShippingModeToggle';
 import { ModeSwitchLoader } from '@/components/ui/ModeSwitchLoader';
 import { useShippingMode } from '@/contexts/ShippingModeContext';
 
@@ -48,11 +46,9 @@ const NavItem = ({ icon, label, href, isActive, badge }: NavItemProps) => {
           : "text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
       )}
     >
-      {/* Active left bar */}
       {isActive && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-sidebar-primary rounded-r-full" />
       )}
-
       <div className={cn(
         "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 shrink-0",
         isActive 
@@ -71,13 +67,95 @@ const NavItem = ({ icon, label, href, isActive, badge }: NavItemProps) => {
   );
 };
 
+// Bold mode card — clickable, no toggle widget
+const SidebarModeCard = ({ isInternational, onClick, isSwitching }: { isInternational: boolean; onClick: () => void; isSwitching: boolean }) => (
+  <motion.button
+    onClick={onClick}
+    disabled={isSwitching}
+    whileTap={{ scale: 0.97 }}
+    className={cn(
+      "w-full rounded-2xl border p-3.5 transition-all duration-400 text-left group relative overflow-hidden",
+      "disabled:opacity-60 disabled:cursor-not-allowed",
+      isInternational
+        ? "bg-[#F40000]/8 border-[#F40000]/25 hover:bg-[#F40000]/12 hover:border-[#F40000]/40"
+        : "bg-sidebar-accent/60 border-sidebar-border/60 hover:bg-sidebar-accent hover:border-sidebar-border"
+    )}
+  >
+    {/* Subtle glow for international */}
+    {isInternational && (
+      <div className="absolute -top-4 -right-4 w-16 h-16 bg-[#F40000]/10 rounded-full blur-xl pointer-events-none" />
+    )}
+
+    <div className="flex items-center gap-3 relative z-10">
+      {/* Icon */}
+      <div className={cn(
+        "flex items-center justify-center w-10 h-10 rounded-xl shrink-0 transition-all duration-300",
+        isInternational
+          ? "bg-[#F40000]/15"
+          : "bg-sidebar-foreground/8"
+      )}>
+        {isInternational ? (
+          // Globe with orbit ring — international
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-[#F40000]">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M12 3C12 3 8 7 8 12C8 17 12 21 12 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M12 3C12 3 16 7 16 12C16 17 12 21 12 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M3 12H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M4.5 7.5H19.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="1 2"/>
+            <path d="M4.5 16.5H19.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="1 2"/>
+          </svg>
+        ) : (
+          // Truck with India flag pin — domestic
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-sidebar-foreground/70">
+            <path d="M1 3h13v13H1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+            <path d="M14 8h4l3 3v5h-7V8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+            <circle cx="5.5" cy="18.5" r="2" stroke="currentColor" strokeWidth="1.5"/>
+            <circle cx="18.5" cy="18.5" r="2" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M9 3v13" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.4"/>
+          </svg>
+        )}
+      </div>
+
+      {/* Text */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className={cn(
+            "text-[11px] font-bold uppercase tracking-widest",
+            isInternational ? "text-[#F40000]" : "text-sidebar-foreground/80"
+          )}>
+            {isInternational ? 'International' : 'Domestic'}
+          </span>
+          {/* Live dot */}
+          <span className={cn(
+            "w-1.5 h-1.5 rounded-full shrink-0",
+            isInternational ? "bg-[#F40000] animate-pulse" : "bg-sidebar-foreground/30"
+          )} />
+        </div>
+        <p className="text-[10px] text-sidebar-foreground/40 mt-0.5 leading-tight">
+          {isInternational ? '150+ countries' : 'Across India'}
+        </p>
+      </div>
+
+      {/* Switch hint */}
+      <div className={cn(
+        "text-[9px] font-semibold uppercase tracking-wider px-2 py-1 rounded-lg border transition-all duration-200",
+        isInternational
+          ? "text-sidebar-foreground/30 border-sidebar-border/30 group-hover:text-sidebar-foreground/60 group-hover:border-sidebar-border/60"
+          : "text-sidebar-foreground/30 border-sidebar-border/30 group-hover:text-sidebar-foreground/60 group-hover:border-sidebar-border/60"
+      )}>
+        Switch
+      </div>
+    </div>
+  </motion.button>
+);
+
 export const DesktopSidebar = () => {
   const { user, profile, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { mediumTap, lightTap } = useHaptics();
   const { activeShipments } = useShipments();
-  const { mode, isSwitching } = useShippingMode();
+  const { mode, toggleMode, isSwitching } = useShippingMode();
   const isInternational = mode === 'international';
 
   const handleSignOut = async () => {
@@ -144,35 +222,13 @@ export const DesktopSidebar = () => {
         </Link>
       </div>
 
-      {/* Shipping Mode Switcher */}
+      {/* Shipping Mode Card */}
       <div className="px-4 pb-3">
-        <div className={cn(
-          "rounded-2xl border p-3 transition-all duration-500",
-          isInternational
-            ? "bg-blue-950/20 border-blue-900/30"
-            : "bg-green-950/20 border-green-900/30"
-        )}>
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              {isInternational
-                ? <Globe className="h-3.5 w-3.5 text-blue-400" />
-                : <Truck className="h-3.5 w-3.5 text-green-400" />
-              }
-              <span className={cn(
-                "text-[11px] font-bold uppercase tracking-wider",
-                isInternational ? "text-blue-400" : "text-green-400"
-              )}>
-                {isInternational ? 'International' : 'Domestic'}
-              </span>
-            </div>
-            <ShippingModeToggle compact />
-          </div>
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            {isInternational
-              ? '🌍 Shipping to 150+ countries worldwide'
-              : '🇮🇳 Fast delivery across India'}
-          </p>
-        </div>
+        <SidebarModeCard
+          isInternational={isInternational}
+          onClick={toggleMode}
+          isSwitching={isSwitching}
+        />
       </div>
 
       {/* Navigation */}
