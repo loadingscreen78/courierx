@@ -183,17 +183,28 @@ const WalletPage = () => {
     }
     setCouponLoading(true);
     try {
+      // Force refresh session to get a valid token
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
+      if (!token) {
+        setCouponResult({ valid: false, error: 'Please log in to apply a coupon' });
+        return;
+      }
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ code: couponCode.trim(), amount }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch {
+        console.error('[coupon validate] non-JSON response:', res.status, text.slice(0, 300));
+        setCouponResult({ valid: false, error: `Server error (${res.status}) — try again` });
+        return;
+      }
       if (data.valid) {
         setCouponResult({
           valid: true,
@@ -205,8 +216,9 @@ const WalletPage = () => {
       } else {
         setCouponResult({ valid: false, error: data.error || 'Invalid coupon' });
       }
-    } catch {
-      setCouponResult({ valid: false, error: 'Failed to validate coupon' });
+    } catch (err) {
+      console.error('[coupon validate] fetch error:', err);
+      setCouponResult({ valid: false, error: 'Network error — check connection and try again' });
     } finally {
       setCouponLoading(false);
     }
