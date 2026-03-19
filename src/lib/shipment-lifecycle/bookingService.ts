@@ -128,46 +128,57 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
   const shipment = created as unknown as ShipmentRow;
 
   // 4. Call Nimbus createShipment (retries + logging handled internally)
+  // If NIMBUS_BASE_URL is not configured, use mock mode (dev/staging without Nimbus account)
+  const skipNimbus = !process.env.NIMBUS_BASE_URL && !process.env.NIMBUS_TOKEN;
+
   let nimbusResponse: nimbusClient.NimbusCreateResponse;
-  try {
-    nimbusResponse = await nimbusClient.createShipment({
-      senderName: 'CourierX',
-      senderPhone: '',
-      senderAddress: req.originAddress,
-      recipientName: req.recipientName,
-      recipientPhone: req.recipientPhone,
-      recipientAddress: req.destinationAddress,
-      weightKg: req.weightKg,
-      declaredValue: req.declaredValue,
-      shipmentType: req.shipmentType,
-    });
-  } catch {
-    // 6. Nimbus failed after retries — mark FAILED
-    await supabase
-      .from('shipments')
-      .update({ current_status: 'FAILED' })
-      .eq('id', shipment.id)
-      .eq('version', 1);
-
-    return {
-      success: false,
-      error: 'Nimbus API call failed after retries',
-      errorCode: 'NIMBUS_API_FAILURE',
+  if (skipNimbus) {
+    // Mock AWB for development — real Nimbus integration requires env vars
+    nimbusResponse = {
+      success: true,
+      awb: `CX-MOCK-${Date.now()}`,
     };
-  }
+  } else {
+    try {
+      nimbusResponse = await nimbusClient.createShipment({
+        senderName: 'CourierX',
+        senderPhone: '',
+        senderAddress: req.originAddress,
+        recipientName: req.recipientName,
+        recipientPhone: req.recipientPhone,
+        recipientAddress: req.destinationAddress,
+        weightKg: req.weightKg,
+        declaredValue: req.declaredValue,
+        shipmentType: req.shipmentType,
+      });
+    } catch {
+      // Nimbus failed after retries — mark FAILED
+      await supabase
+        .from('shipments')
+        .update({ current_status: 'FAILED' })
+        .eq('id', shipment.id)
+        .eq('version', 1);
 
-  if (!nimbusResponse.success || !nimbusResponse.awb) {
-    await supabase
-      .from('shipments')
-      .update({ current_status: 'FAILED' })
-      .eq('id', shipment.id)
-      .eq('version', 1);
+      return {
+        success: false,
+        error: 'Nimbus API call failed after retries',
+        errorCode: 'NIMBUS_API_FAILURE',
+      };
+    }
 
-    return {
-      success: false,
-      error: nimbusResponse.error ?? 'Nimbus API returned no AWB',
-      errorCode: 'NIMBUS_API_FAILURE',
-    };
+    if (!nimbusResponse.success || !nimbusResponse.awb) {
+      await supabase
+        .from('shipments')
+        .update({ current_status: 'FAILED' })
+        .eq('id', shipment.id)
+        .eq('version', 1);
+
+      return {
+        success: false,
+        error: nimbusResponse.error ?? 'Nimbus API returned no AWB',
+        errorCode: 'NIMBUS_API_FAILURE',
+      };
+    }
   }
 
   // 5. Update domestic_awb and transition to BOOKING_CONFIRMED
@@ -176,20 +187,22 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
     .update({ domestic_awb: nimbusResponse.awb })
     .eq('id', shipment.id);
 
-  // 5a. Fetch AWB label from Nimbus (non-blocking — failure doesn't abort booking)
-  try {
-    const labelResponse = await nimbusClient.fetchLabel(nimbusResponse.awb!);
-    if (labelResponse.success) {
-      const labelValue = labelResponse.labelUrl ?? labelResponse.labelBase64 ?? null;
-      if (labelValue) {
-        await supabase
-          .from('shipments')
-          .update({ domestic_label_url: labelValue })
-          .eq('id', shipment.id);
+  // 5a. Fetch AWB label from Nimbus (non-blocking — failure doesn't abort booking, skip in mock mode)
+  if (!skipNimbus) {
+    try {
+      const labelResponse = await nimbusClient.fetchLabel(nimbusResponse.awb!);
+      if (labelResponse.success) {
+        const labelValue = labelResponse.labelUrl ?? labelResponse.labelBase64 ?? null;
+        if (labelValue) {
+          await supabase
+            .from('shipments')
+            .update({ domestic_label_url: labelValue })
+            .eq('id', shipment.id);
+        }
       }
+    } catch (err) {
+      console.warn('[bookingService] Label fetch failed (non-fatal):', err instanceof Error ? err.message : err);
     }
-  } catch (err) {
-    console.warn('[bookingService] Label fetch failed (non-fatal):', err instanceof Error ? err.message : err);
   }
 
   const result = await updateShipmentStatus({
