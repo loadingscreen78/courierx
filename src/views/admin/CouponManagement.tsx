@@ -64,6 +64,7 @@ const emptyCoupon = {
   max_uses_per_user: '1',
   valid_until: '',
   bypass_min_recharge: false,
+  is_min_recharge_type: false,
 };
 
 export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
@@ -128,6 +129,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
 
   const handleEdit = (coupon: Coupon) => {
     setEditingCoupon(coupon);
+    const isMinRechargeType = coupon.bypass_min_recharge && coupon.discount_value === 0;
     setForm({
       code: coupon.code,
       description: coupon.description || '',
@@ -139,30 +141,48 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
       max_uses_per_user: coupon.max_uses_per_user?.toString() || '',
       valid_until: coupon.valid_until ? coupon.valid_until.slice(0, 16) : '',
       bypass_min_recharge: coupon.bypass_min_recharge || false,
+      is_min_recharge_type: isMinRechargeType,
     });
     setShowDialog(true);
   };
 
   const handleSave = async () => {
-    if (!form.code.trim() || !form.discount_value) {
-      toast.error('Code and discount value are required');
+    if (!form.code.trim()) {
+      toast.error('Coupon code is required');
+      return;
+    }
+    if (!form.is_min_recharge_type && !form.discount_value) {
+      toast.error('Discount value is required');
       return;
     }
     setSaving(true);
     try {
       const headers = await getAuthHeaders();
-      const payload = {
-        code: form.code,
-        description: form.description || null,
-        discount_type: form.discount_type,
-        discount_value: Number(form.discount_value),
-        min_recharge_amount: Number(form.min_recharge_amount) || 500,
-        max_discount: form.max_discount ? Number(form.max_discount) : null,
-        max_uses: form.max_uses ? Number(form.max_uses) : null,
-        max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
-        valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
-        bypass_min_recharge: form.bypass_min_recharge,
-      };
+      const payload = form.is_min_recharge_type
+        ? {
+            code: form.code,
+            description: form.description || null,
+            discount_type: 'fixed',
+            discount_value: 0,
+            min_recharge_amount: 0,
+            max_discount: null,
+            max_uses: form.max_uses ? Number(form.max_uses) : null,
+            max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
+            valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
+            bypass_min_recharge: true,
+          }
+        : {
+            code: form.code,
+            description: form.description || null,
+            discount_type: form.discount_type,
+            discount_value: Number(form.discount_value),
+            min_recharge_amount: Number(form.min_recharge_amount) || 500,
+            max_discount: form.max_discount ? Number(form.max_discount) : null,
+            max_uses: form.max_uses ? Number(form.max_uses) : null,
+            max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
+            valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
+            bypass_min_recharge: form.bypass_min_recharge,
+          };
       const url = editingCoupon ? `/api/coupons/${editingCoupon.id}` : '/api/coupons';
       const method = editingCoupon ? 'PATCH' : 'POST';
       const res = await fetch(url, { method, headers, body: JSON.stringify(payload) });
@@ -358,16 +378,20 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                     )}
                     <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
-                        {coupon.discount_type === 'percentage' ? (
+                        {coupon.bypass_min_recharge && coupon.discount_value === 0 ? (
+                          <><ShieldCheck className="h-3 w-3 text-blue-400" /><span className="text-blue-400">Min Recharge Coupon</span></>
+                        ) : coupon.discount_type === 'percentage' ? (
                           <><Percent className="h-3 w-3" />{coupon.discount_value}% off</>
                         ) : (
                           <><IndianRupee className="h-3 w-3" />₹{coupon.discount_value} flat</>
                         )}
-                        {coupon.max_discount && ` (max ₹${coupon.max_discount})`}
+                        {coupon.max_discount && coupon.discount_value !== 0 && ` (max ₹${coupon.max_discount})`}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <IndianRupee className="h-3 w-3" />Min ₹{coupon.min_recharge_amount}
-                      </span>
+                      {!(coupon.bypass_min_recharge && coupon.discount_value === 0) && (
+                        <span className="flex items-center gap-1">
+                          <IndianRupee className="h-3 w-3" />Min ₹{coupon.min_recharge_amount}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3" />{coupon.total_uses}{coupon.max_uses ? `/${coupon.max_uses}` : ''} used
                       </span>
@@ -418,6 +442,42 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Min Recharge Type toggle — at the top so it collapses the form */}
+            <div
+              className={cn(
+                "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
+                form.is_min_recharge_type
+                  ? "bg-blue-500/15 border-blue-500/40"
+                  : "bg-white/[0.03] border-white/10 hover:border-white/20"
+              )}
+              onClick={() => setForm({
+                ...form,
+                is_min_recharge_type: !form.is_min_recharge_type,
+                bypass_min_recharge: !form.is_min_recharge_type ? true : form.bypass_min_recharge,
+              })}
+            >
+              <div>
+                <p className={cn("text-sm font-semibold", form.is_min_recharge_type ? "text-blue-300" : "text-gray-300")}>
+                  Min Recharge Coupon
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {form.is_min_recharge_type
+                    ? 'Only coupon code needed — no discount fields'
+                    : 'Enable for a simple recharge-trigger coupon'}
+                </p>
+              </div>
+              <div className={cn(
+                "w-10 h-6 rounded-full transition-colors flex items-center px-1 shrink-0",
+                form.is_min_recharge_type ? "bg-blue-500" : "bg-white/10"
+              )}>
+                <div className={cn(
+                  "w-4 h-4 rounded-full bg-white transition-transform",
+                  form.is_min_recharge_type ? "translate-x-4" : "translate-x-0"
+                )} />
+              </div>
+            </div>
+
+            {/* Code — always visible */}
             <div>
               <label className="text-xs font-medium text-gray-400">Code</label>
               <Input
@@ -427,6 +487,8 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                 className="font-mono uppercase mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
               />
             </div>
+
+            {/* Description — always visible */}
             <div>
               <label className="text-xs font-medium text-gray-400">Description</label>
               <Input
@@ -436,52 +498,60 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                 className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-400">Type</label>
-                <select
-                  value={form.discount_type}
-                  onChange={(e) => setForm({ ...form, discount_type: e.target.value as 'percentage' | 'fixed' })}
-                  className="w-full mt-1 h-10 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white"
-                >
-                  <option value="percentage">Percentage (%)</option>
-                  <option value="fixed">Fixed (₹)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-400">
-                  {form.discount_type === 'percentage' ? 'Discount %' : 'Bonus ₹'}
-                </label>
-                <Input
-                  type="number"
-                  value={form.discount_value}
-                  onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
-                  placeholder={form.discount_type === 'percentage' ? 'e.g. 50' : 'e.g. 100'}
-                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-400">Min Recharge ₹</label>
-                <Input
-                  type="number"
-                  value={form.min_recharge_amount}
-                  onChange={(e) => setForm({ ...form, min_recharge_amount: e.target.value })}
-                  className="mt-1 bg-white/5 border-white/10 text-white"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-400">Max Discount ₹</label>
-                <Input
-                  type="number"
-                  value={form.max_discount}
-                  onChange={(e) => setForm({ ...form, max_discount: e.target.value })}
-                  placeholder="No limit"
-                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
-                />
-              </div>
-            </div>
+
+            {/* Discount fields — hidden when min recharge type */}
+            {!form.is_min_recharge_type && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-400">Type</label>
+                    <select
+                      value={form.discount_type}
+                      onChange={(e) => setForm({ ...form, discount_type: e.target.value as 'percentage' | 'fixed' })}
+                      className="w-full mt-1 h-10 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed (₹)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-400">
+                      {form.discount_type === 'percentage' ? 'Discount %' : 'Bonus ₹'}
+                    </label>
+                    <Input
+                      type="number"
+                      value={form.discount_value}
+                      onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                      placeholder={form.discount_type === 'percentage' ? 'e.g. 50' : 'e.g. 100'}
+                      className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-400">Min Recharge ₹</label>
+                    <Input
+                      type="number"
+                      value={form.min_recharge_amount}
+                      onChange={(e) => setForm({ ...form, min_recharge_amount: e.target.value })}
+                      className="mt-1 bg-white/5 border-white/10 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-400">Max Discount ₹</label>
+                    <Input
+                      type="number"
+                      value={form.max_discount}
+                      onChange={(e) => setForm({ ...form, max_discount: e.target.value })}
+                      placeholder="No limit"
+                      className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Usage limits — always visible */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-400">Max Total Uses</label>
@@ -504,6 +574,8 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                 />
               </div>
             </div>
+
+            {/* Valid Until — always visible */}
             <div>
               <label className="text-xs font-medium text-gray-400">Valid Until</label>
               <Input
@@ -513,25 +585,29 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                 className="mt-1 bg-white/5 border-white/10 text-white"
               />
             </div>
-            {/* Bypass min recharge toggle */}
-            <div
-              className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer"
-              onClick={() => setForm({ ...form, bypass_min_recharge: !form.bypass_min_recharge })}
-            >
-              <div>
-                <p className="text-sm font-medium text-amber-300">Bypass Min Recharge</p>
-                <p className="text-xs text-amber-400/70 mt-0.5">Allow coupon on any recharge amount</p>
-              </div>
-              <div className={cn(
-                "w-10 h-6 rounded-full transition-colors flex items-center px-1",
-                form.bypass_min_recharge ? "bg-amber-500" : "bg-white/10"
-              )}>
+
+            {/* Bypass min recharge — only shown for normal coupons */}
+            {!form.is_min_recharge_type && (
+              <div
+                className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer"
+                onClick={() => setForm({ ...form, bypass_min_recharge: !form.bypass_min_recharge })}
+              >
+                <div>
+                  <p className="text-sm font-medium text-amber-300">Bypass Min Recharge</p>
+                  <p className="text-xs text-amber-400/70 mt-0.5">Allow coupon on any recharge amount</p>
+                </div>
                 <div className={cn(
-                  "w-4 h-4 rounded-full bg-white transition-transform",
-                  form.bypass_min_recharge ? "translate-x-4" : "translate-x-0"
-                )} />
+                  "w-10 h-6 rounded-full transition-colors flex items-center px-1",
+                  form.bypass_min_recharge ? "bg-amber-500" : "bg-white/10"
+                )}>
+                  <div className={cn(
+                    "w-4 h-4 rounded-full bg-white transition-transform",
+                    form.bypass_min_recharge ? "translate-x-4" : "translate-x-0"
+                  )} />
+                </div>
               </div>
-            </div>
+            )}
+
             <Button onClick={handleSave} disabled={saving} className="w-full bg-red-600 hover:bg-red-700 text-white">
               {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {editingCoupon ? 'Update Coupon' : 'Create Coupon'}
