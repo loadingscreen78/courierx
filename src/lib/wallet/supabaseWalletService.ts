@@ -90,9 +90,12 @@ export async function computeAvailableBalance(userId: string): Promise<number> {
 }
 
 // Validate recharge
-export function validateRecharge(amount: number): { valid: boolean; error?: string } {
-  if (amount < MIN_RECHARGE_AMOUNT) {
+export function validateRecharge(amount: number, bypassMinRecharge = false): { valid: boolean; error?: string } {
+  if (!bypassMinRecharge && amount < MIN_RECHARGE_AMOUNT) {
     return { valid: false, error: `Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}` };
+  }
+  if (amount <= 0) {
+    return { valid: false, error: 'Enter a valid amount' };
   }
   if (amount > 100000) {
     return { valid: false, error: 'Maximum recharge amount is ₹1,00,000' };

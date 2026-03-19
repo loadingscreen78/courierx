@@ -147,7 +147,10 @@ export function useWalletLedger(): UseWalletLedgerReturn {
       return { success: false, error: 'Not authenticated' };
     }
 
-    const validation = validateRecharge(amount);
+    // couponCode presence alone doesn't mean bypass — the API will enforce it.
+    // We skip the local min-check entirely when a coupon is provided and let
+    // the server-side create-order route decide (it validates the coupon first).
+    const validation = validateRecharge(amount, !!couponCode);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
