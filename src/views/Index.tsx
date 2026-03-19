@@ -256,21 +256,21 @@ const Index = () => {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`flex items-center justify-between px-5 py-3 rounded-2xl border ${
+          className={`flex items-center justify-between px-5 py-3 rounded-2xl border transition-all duration-300 ${
             isInternational
-              ? 'bg-blue-950/20 border-blue-900/30'
-              : 'bg-green-950/20 border-green-900/30'
+              ? 'bg-[#F40000]/5 border-[#F40000]/20'
+              : 'bg-muted/40 border-border/60'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${isInternational ? 'bg-blue-500/15' : 'bg-green-500/15'}`}>
+            <div className={`p-2 rounded-xl ${isInternational ? 'bg-[#F40000]/10' : 'bg-foreground/8'}`}>
               {isInternational
-                ? <Globe className={`h-4 w-4 text-blue-400`} />
-                : <Truck className={`h-4 w-4 text-green-400`} />
+                ? <Globe className="h-4 w-4 text-[#F40000]" />
+                : <Truck className="h-4 w-4 text-foreground/60" />
               }
             </div>
             <div>
-              <p className={`text-xs font-bold uppercase tracking-widest ${isInternational ? 'text-blue-400' : 'text-green-400'}`}>
+              <p className={`text-xs font-bold uppercase tracking-widest ${isInternational ? 'text-[#F40000]' : 'text-foreground/70'}`}>
                 {isInternational ? '🌍 International Mode' : '🇮🇳 Domestic Mode'}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
