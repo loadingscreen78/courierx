@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Wallet,
   MapPin,
+  Truck,
   Eye,
   Plane,
   Box,
