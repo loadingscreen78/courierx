@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     bypass_min_recharge = false,
   } = body;
 
-  if (!code || (discount_value === undefined && !bypass_min_recharge)) {
+  if (!code || (!bypass_min_recharge && (discount_value === undefined || discount_value === null || discount_value === ''))) {
     return NextResponse.json({ error: 'Code and discount value are required' }, { status: 400 });
   }
 
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       code: code.toUpperCase().trim(),
       description: description || null,
       discount_type,
-      discount_value: Number(discount_value),
+      discount_value: bypass_min_recharge && (discount_value === undefined || discount_value === null || discount_value === '') ? 0 : Number(discount_value),
       min_recharge_amount: Number(min_recharge_amount),
       max_discount: max_discount ? Number(max_discount) : null,
       max_uses: max_uses ? Number(max_uses) : null,

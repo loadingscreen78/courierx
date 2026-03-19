@@ -174,8 +174,8 @@ const WalletPage = () => {
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
-    const amount = parseInt(rechargeAmount);
-    if (isNaN(amount) || amount < MIN_RECHARGE_AMOUNT) {
+    const amount = Number(rechargeAmount);
+    if (!Number.isFinite(amount) || amount < MIN_RECHARGE_AMOUNT) {
       toast.error(`Enter an amount of at least ₹${MIN_RECHARGE_AMOUNT} first`);
       return;
     }
@@ -210,8 +210,8 @@ const WalletPage = () => {
   };
 
   const handleRecharge = async () => {
-    const amount = parseInt(rechargeAmount);
-    if (isNaN(amount) || amount < MIN_RECHARGE_AMOUNT) {
+    const amount = Number(rechargeAmount);
+    if (!Number.isFinite(amount) || amount < MIN_RECHARGE_AMOUNT) {
       toast.error(`Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}`);
       return;
     }
@@ -570,7 +570,7 @@ const WalletPage = () => {
                 {quickRechargeAmounts.map((amount) => (
                   <button
                     key={amount}
-                    onClick={() => setRechargeAmount(amount.toString())}
+                    onClick={() => { setRechargeAmount(amount.toString()); setCouponResult(null); }}
                     className={cn(
                       "py-2 rounded-xl text-sm font-semibold transition-all duration-200 border",
                       rechargeAmount === amount.toString()

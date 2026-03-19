@@ -87,15 +87,68 @@ export async function POST(request: NextRequest) {
 
     if (rpcError) {
       if (rpcError.code === '23505') {
-        // Already credited — idempotent success
+        // Already credited — idempotent success, but still need to apply coupon bonus if not yet applied
         const { data: existing } = await supabase
           .from('wallet_ledger')
           .select('id')
           .eq('idempotency_key', idempotencyKey)
           .single();
+        const existingLedgerEntryId = existing?.id || '';
+
+        // Check if coupon bonus was already applied for this payment
+        const resolvedCouponCodeEarly = couponCode || order.order_tags?.coupon_code;
+        if (resolvedCouponCodeEarly) {
+          const bonusKeyEarly = `bonus_cf_${cfPaymentId}`;
+          const { data: existingBonus } = await supabase
+            .from('wallet_ledger')
+            .select('id, metadata')
+            .eq('idempotency_key', bonusKeyEarly)
+            .single();
+
+          if (existingBonus) {
+            // Bonus already applied — return with existing bonus amount
+            const existingBonusAmount = existingBonus.metadata?.bonus_amount || 0;
+            return NextResponse.json({
+              success: true,
+              ledgerEntryId: existingLedgerEntryId,
+              amount: amountInRupees,
+              paymentMethod,
+              bonusAmount: existingBonusAmount,
+            });
+          }
+
+          // Bonus not yet applied — apply it now
+          const { data: validation } = await supabase.rpc('validate_coupon', {
+            p_code: resolvedCouponCodeEarly,
+            p_user_id: user.id,
+            p_amount: amountInRupees,
+          });
+          if (validation?.[0]?.is_valid) {
+            const bonusAmt = Number(validation[0].bonus_amount);
+            const couponId = validation[0].coupon_id;
+            const { data: bonusEntryId } = await supabase.rpc('add_wallet_funds', {
+              p_user_id: user.id,
+              p_amount: bonusAmt,
+              p_description: `Coupon bonus (${resolvedCouponCodeEarly.toUpperCase()})`,
+              p_reference_id: cfPaymentId,
+              p_idempotency_key: bonusKeyEarly,
+            });
+            if (bonusEntryId) {
+              await supabase.from('wallet_ledger').update({
+                metadata: { coupon_code: resolvedCouponCodeEarly.toUpperCase(), coupon_id: couponId, cf_payment_id: cfPaymentId, type: 'coupon_bonus', bonus_amount: bonusAmt },
+              }).eq('id', bonusEntryId);
+              await supabase.from('coupon_usage').insert({
+                coupon_id: couponId, user_id: user.id, recharge_amount: amountInRupees,
+                bonus_amount: bonusAmt, cf_order_id: orderId, ledger_entry_id: bonusEntryId,
+              });
+              return NextResponse.json({ success: true, ledgerEntryId: existingLedgerEntryId, amount: amountInRupees, paymentMethod, bonusAmount: bonusAmt });
+            }
+          }
+        }
+
         return NextResponse.json({
           success: true,
-          ledgerEntryId: existing?.id || '',
+          ledgerEntryId: existingLedgerEntryId,
           amount: amountInRupees,
           paymentMethod,
         });
