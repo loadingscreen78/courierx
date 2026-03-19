@@ -21,7 +21,6 @@ import { useHaptics } from '@/hooks/useHaptics';
 import logoSymbol from '@/assets/logo-symbol.jpeg';
 import { useShipments } from '@/hooks/useShipments';
 import { motion } from 'framer-motion';
-import { ModeSwitchLoader } from '@/components/ui/ModeSwitchLoader';
 import { useShippingMode } from '@/contexts/ShippingModeContext';
 
 interface NavItemProps {
@@ -288,7 +287,6 @@ export const DesktopSidebar = () => {
           Sign Out
         </button>
       </div>
-      <ModeSwitchLoader visible={isSwitching} targetMode={mode} />
     </aside>
   );
 };
