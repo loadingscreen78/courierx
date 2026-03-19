@@ -275,11 +275,12 @@ const Auth = () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) { setIsLoading(false); return; }
 
-      // Send welcome email (fire-and-forget)
+      // Send welcome + verification email via Resend (fire-and-forget)
+      // This ensures the email is sent even if Supabase's hook doesn't fire on VPS
       fetch('/api/email/send-welcome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail: values.email }),
+        body: JSON.stringify({ userEmail: values.email, userId: currentUser.id }),
       }).catch(() => {});
 
       setIsLoading(false);

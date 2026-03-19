@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dispatchWelcomeEmail } from '@/lib/email/walletDispatcher';
+import { sendEmail } from '@/lib/email/resend';
+import { renderWelcomeEmail } from '@/lib/email/templates/welcomeEmail';
+
+const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || '';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,14 +16,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await dispatchWelcomeEmail({ userEmail, fullName });
+    console.log(`[Welcome Email] Sending to ${userEmail}`);
 
-    return NextResponse.json({ success: true, result });
+    const html = renderWelcomeEmail({ email: userEmail, fullName });
+
+    const result = await sendEmail({
+      to: userEmail,
+      subject: '🎉 Welcome to CourierX — Your Shipping Passport is Ready!',
+      html,
+    });
+
+    if (!result.success) {
+      console.error('[Welcome Email] Failed:', result.error);
+      return NextResponse.json({ success: false, error: result.error }, { status: 200 });
+    }
+
+    console.log(`[Welcome Email] Sent to ${userEmail} - ID: ${result.id}`);
+
+    // Also notify admin of new signup
+    if (ADMIN_EMAIL) {
+      sendEmail({
+        to: ADMIN_EMAIL,
+        subject: `[Admin] New Signup: ${userEmail}`,
+        html,
+      }).catch(() => {});
+    }
+
+    return NextResponse.json({ success: true, messageId: result.id });
   } catch (error) {
-    console.error('[Email] send-welcome route error:', error);
+    console.error('[Welcome Email] Unexpected error:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 },
+      { status: 200 },
     );
   }
 }
