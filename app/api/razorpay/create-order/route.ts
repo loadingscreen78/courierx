@@ -35,15 +35,8 @@ export async function POST(request: NextRequest) {
     const amount = Number(body.amount);
     const couponCode = body.couponCode || null;
 
-    if (!Number.isFinite(amount) || amount < MIN_RECHARGE_AMOUNT) {
-      return NextResponse.json(
-        { error: `Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}` },
-        { status: 400 },
-      );
-    }
-
-    // Validate coupon if provided
-    let couponData: { couponId: string; bonusAmount: number } | null = null;
+    // Validate coupon first if provided — bypass coupons skip the min amount check
+    let couponData: { couponId: string; bonusAmount: number; bypassMinRecharge: boolean } | null = null;
     if (couponCode) {
       const { data: validation, error: valError } = await supabase.rpc('validate_coupon', {
         p_code: couponCode,
@@ -61,7 +54,16 @@ export async function POST(request: NextRequest) {
       couponData = {
         couponId: validation[0].coupon_id,
         bonusAmount: Number(validation[0].bonus_amount),
+        bypassMinRecharge: Boolean(validation[0].bypass_min_recharge),
       };
+    }
+
+    const isBypass = couponData?.bypassMinRecharge === true;
+    if (!Number.isFinite(amount) || amount <= 0 || (!isBypass && amount < MIN_RECHARGE_AMOUNT)) {
+      return NextResponse.json(
+        { error: isBypass ? 'Enter a valid amount' : `Minimum recharge amount is ₹${MIN_RECHARGE_AMOUNT}` },
+        { status: 400 },
+      );
     }
 
     // Create Razorpay order
