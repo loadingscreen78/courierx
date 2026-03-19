@@ -17,10 +17,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`[ForgotPassword] email=${email} panel=${panel} siteUrl=${siteUrl}`);
 
-    // Strategy 1: Use admin generateLink to get the token, then send via Resend ourselves
-    // This bypasses Supabase's email sending entirely
     const supabaseAdmin = getServiceRoleClient();
 
+    // Strategy 1: Use admin generateLink to get the token, then send via Resend
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
@@ -51,10 +50,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // Strategy 2: generateLink failed (common on self-hosted VPS Supabase)
-    // Fall back to resetPasswordForEmail which triggers Supabase's own email hook
+    // Strategy 2: generateLink failed — use resetPasswordForEmail to generate the token,
+    // BUT also send the email ourselves via Resend since Supabase's built-in email
+    // may not be configured on the VPS.
     console.warn('[ForgotPassword] generateLink failed:', linkError?.message);
-    console.log('[ForgotPassword] Falling back to resetPasswordForEmail...');
+    console.log('[ForgotPassword] Falling back to resetPasswordForEmail + Resend...');
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -68,11 +68,26 @@ export async function POST(request: NextRequest) {
 
     if (resetError) {
       console.error('[ForgotPassword] resetPasswordForEmail error:', resetError.message);
-      // Still return success to avoid user enumeration
-      return NextResponse.json({ success: true });
+    } else {
+      console.log('[ForgotPassword] resetPasswordForEmail triggered successfully');
     }
 
-    console.log('[ForgotPassword] resetPasswordForEmail triggered successfully');
+    // Even if resetPasswordForEmail succeeded/failed, send a generic reset email via Resend
+    // with a link to the forgot-password page (user can re-request from there)
+    // This ensures the user always gets SOME email
+    const fallbackResetUrl = `${siteUrl}/auth?panel=${panel || 'customer'}`;
+    const html = renderAuthEmail({ type: 'recovery', confirmationUrl: fallbackResetUrl, email });
+    const resendResult = await sendEmail({
+      to: email,
+      subject: 'Reset your password - CourierX',
+      html,
+    });
+    console.log('[ForgotPassword] Fallback Resend result:', JSON.stringify(resendResult));
+
+    if (panel === 'customer') {
+      await trySendWhatsApp(supabaseAdmin, email, fallbackResetUrl);
+    }
+
     return NextResponse.json({ success: true });
 
   } catch (error: any) {
