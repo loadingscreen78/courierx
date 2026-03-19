@@ -107,6 +107,7 @@ const WalletPage = () => {
     addFundsWithPayment,
     resetPaymentState,
     downloadTransactionReceipt,
+    refreshBalance,
   } = useWallet();
   
   const searchParams = useSearchParams();
@@ -148,6 +149,7 @@ const WalletPage = () => {
         });
         const data = await res.json();
         if (data.success) {
+          await refreshBalance();
           toast.success(
             data.bonusAmount > 0
               ? `₹${data.amount} added! +₹${data.bonusAmount} bonus credited`
