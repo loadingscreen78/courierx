@@ -8,6 +8,11 @@ const verifyOtpSchema = z.object({
   code: z.string().length(6, 'OTP must be 6 digits'),
 });
 
+/** Build a deterministic synthetic email from a phone number */
+function syntheticEmail(phone: string): string {
+  return `${phone.replace(/\D/g, '')}@phone.courierx.local`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -39,66 +44,108 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Create or retrieve Supabase user by phone
+    // 2. Create or retrieve Supabase user
     const supabase = getServiceRoleClient();
+    const email = syntheticEmail(phone);
 
-    // Check if user exists with this phone
+    // Look up by phone first, then by synthetic email
     const { data: listData } = await supabase.auth.admin.listUsers();
-    const existingUser = (listData?.users ?? []).find(
+    const users = listData?.users ?? [];
+    let existingUser = users.find(
       (u: { phone?: string }) => u.phone === phone
     );
+    if (!existingUser) {
+      existingUser = users.find(
+        (u: { email?: string }) => u.email === email
+      );
+    }
 
     let userId: string;
+    let isNewUser = false;
 
     if (existingUser) {
       userId = existingUser.id;
     } else {
-      // Create new user with phone
+      // Create new user with BOTH email and phone so Supabase doesn't reject it
+      const tempPassword = crypto.randomUUID();
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email,
         phone,
+        password: tempPassword,
         phone_confirm: true,
+        email_confirm: true,
+        user_metadata: { phone_number: phone, registered_via: 'whatsapp' },
       });
 
       if (createError || !newUser?.user) {
         console.error('[WhatsApp Auth] Failed to create user:', createError?.message);
         return NextResponse.json(
-          { success: false, error: 'Failed to create user account' },
+          { success: false, error: createError?.message || 'Failed to create user account' },
           { status: 500 }
         );
       }
 
       userId = newUser.user.id;
+      isNewUser = true;
+
+      // Create a profile row for the new user
+      await supabase.from('profiles').upsert({
+        user_id: userId,
+        phone_number: phone,
+        email,
+        preferred_otp_method: 'whatsapp',
+      }, { onConflict: 'user_id' });
     }
 
-    // 3. Generate a session link for the user
+    // 3. Generate a magic link and extract the token to create a real session
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
-      email: `${phone.replace('+', '')}@phone.courierx.local`,
+      email,
     });
 
-    // Fallback: use signInWithPassword-less approach via admin
-    // Generate an OTP-verified session by updating user and creating a session
-    const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
+    if (linkError || !linkData) {
+      console.error('[WhatsApp Auth] generateLink failed:', linkError?.message);
+      return NextResponse.json(
+        { success: false, error: 'Failed to generate session' },
+        { status: 500 }
+      );
+    }
+
+    // The admin generateLink returns properties.hashed_token which we can
+    // use with verifyOtp on the server to mint a real session.
+    const hashedToken = linkData.properties?.hashed_token;
+
+    if (!hashedToken) {
+      console.error('[WhatsApp Auth] No hashed_token in generateLink response');
+      return NextResponse.json(
+        { success: false, error: 'Failed to generate session token' },
+        { status: 500 }
+      );
+    }
+
+    // Verify the magic link token server-side to get access + refresh tokens
+    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
       type: 'magiclink',
-      email: existingUser?.email || `${phone.replace(/\+/g, '')}@phone.courierx.local`,
+      token_hash: hashedToken,
     });
 
-    if (sessionError) {
-      console.error('[WhatsApp Auth] Session generation failed:', sessionError.message);
-      // Still return success since OTP was verified — client can use phone sign-in
-      return NextResponse.json({
-        success: true,
-        verified: true,
-        userId,
-        message: 'OTP verified. Use Supabase phone sign-in to complete authentication.',
-      });
+    if (sessionError || !sessionData?.session) {
+      console.error('[WhatsApp Auth] verifyOtp session failed:', sessionError?.message);
+      return NextResponse.json(
+        { success: false, error: 'Failed to create session' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
       verified: true,
       userId,
-      actionLink: sessionData?.properties?.action_link,
+      isNewUser,
+      session: {
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
+      },
     });
   } catch (error) {
     console.error('[WhatsApp Auth] verify-otp error:', error);

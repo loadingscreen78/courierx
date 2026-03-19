@@ -486,9 +486,32 @@ const Auth = () => {
     const { error } = method === 'whatsapp'
       ? await verifyWhatsAppOtp(phoneNumber, values.otp)
       : await verifyOtp(phoneNumber, values.otp);
-    setIsLoading(false);
-    if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
+    if (error) { setIsLoading(false); toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'Welcome!', description: 'Signed in.' });
+
+    // After successful WhatsApp OTP, check profile and redirect
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) { setIsLoading(false); return; }
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', currentUser.id)
+      .single();
+
+    setIsLoading(false);
+
+    if (!profileData || !profileData.full_name) {
+      window.location.href = '/onboarding';
+    } else {
+      const returnUrl = localStorage.getItem('authReturnUrl');
+      if (returnUrl) {
+        localStorage.removeItem('authReturnUrl');
+        window.location.href = returnUrl;
+      } else {
+        window.location.href = safeFrom || '/dashboard';
+      }
+    }
   };
 
   const handleForgotPassword = async () => {

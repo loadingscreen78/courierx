@@ -185,19 +185,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: new Error(data.error || 'WhatsApp OTP verification failed') };
       }
 
-      if (data.actionLink) {
-        const url = new URL(data.actionLink);
-        const token_hash = url.searchParams.get('token') || url.hash?.replace('#', '');
-        if (token_hash) {
-          const { error } = await supabase.auth.verifyOtp({ type: 'magiclink', token_hash });
-          if (error) {
-            const { error: phoneErr } = await supabase.auth.signInWithOtp({ phone });
-            if (phoneErr) return { error: phoneErr as Error };
-          }
-        }
-      } else {
-        const { error: otpErr } = await supabase.auth.signInWithOtp({ phone });
-        if (otpErr) return { error: otpErr as Error };
+      // The API now returns real session tokens — set them directly
+      if (data.session?.access_token && data.session?.refresh_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (error) return { error: error as Error };
       }
 
       return { error: null };
