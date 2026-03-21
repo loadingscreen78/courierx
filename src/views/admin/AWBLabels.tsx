@@ -16,6 +16,7 @@ import {
 
 interface AWBShipment {
   id: string;
+  user_id: string;
   domestic_awb: string | null;
   domestic_label_url: string | null;
   international_awb: string | null;
@@ -54,15 +55,13 @@ export default function AWBLabels() {
         .select(`id, domestic_awb, domestic_label_url, international_awb,
           recipient_name, recipient_phone, origin_address, destination_address,
           destination_country, shipment_type, current_status, current_leg,
-          weight_kg, declared_value, total_amount, booking_reference_id, created_at,
-          profiles:user_id(full_name, email)`)
+          weight_kg, declared_value, total_amount, booking_reference_id, created_at, user_id`)
         .not('domestic_awb', 'is', null)
         .order('created_at', { ascending: false });
 
       if (typeFilter !== 'all') dQuery = dQuery.eq('shipment_type', typeFilter as never);
       const { data: dData, error: dErr } = await dQuery;
       if (dErr) throw dErr;
-      setDomesticShipments((dData as unknown as AWBShipment[]) || []);
 
       // International AWBs
       let iQuery = supabase
@@ -70,15 +69,31 @@ export default function AWBLabels() {
         .select(`id, domestic_awb, domestic_label_url, international_awb,
           recipient_name, recipient_phone, origin_address, destination_address,
           destination_country, shipment_type, current_status, current_leg,
-          weight_kg, declared_value, total_amount, booking_reference_id, created_at,
-          profiles:user_id(full_name, email)`)
+          weight_kg, declared_value, total_amount, booking_reference_id, created_at, user_id`)
         .not('international_awb', 'is', null)
         .order('created_at', { ascending: false });
 
       if (typeFilter !== 'all') iQuery = iQuery.eq('shipment_type', typeFilter as never);
       const { data: iData, error: iErr } = await iQuery;
       if (iErr) throw iErr;
-      setIntlShipments((iData as unknown as AWBShipment[]) || []);
+
+      // Fetch profiles separately to avoid RLS join failures
+      const allRows = [...(dData || []), ...(iData || [])] as any[];
+      const userIds: string[] = [...new Set(allRows.map(r => r.user_id as string).filter(Boolean))];
+      let profileMap: Record<string, { full_name: string; email: string }> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', userIds);
+        (profiles || []).forEach((p: any) => {
+          profileMap[p.id] = { full_name: p.full_name || '', email: p.email || '' };
+        });
+      }
+
+      const attachProfile = (r: any): AWBShipment => ({ ...r, profiles: profileMap[r.user_id] || null });
+      setDomesticShipments((dData || []).map(attachProfile));
+      setIntlShipments((iData || []).map(attachProfile));
     } catch (err) {
       console.error(err);
       toast({ title: 'Failed to load shipments', variant: 'destructive' });
