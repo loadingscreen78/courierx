@@ -66,19 +66,16 @@ async function getToken(): Promise<string> {
 export async function fetchDomesticRates(req: RateCheckRequest): Promise<CourierOption[]> {
   const token = await getToken();
 
-  // NimbusPost expects weight in grams, dimensions in a nested object,
-  // and specific field names per their API docs.
+  // NimbusPost expects: origin/destination pincodes, payment_type, weight in GRAMS (integer)
   const payload = {
-    pickup_pincode: req.pickupPincode,
-    pincode: req.deliveryPincode,
-    payment: 'prepaid',
-    invoice_value: String(req.declaredValue),
-    weight: Math.round(req.weightKg * 1000), // convert kg → grams
-    dimensions: {
-      length: req.lengthCm,
-      breadth: req.widthCm,
-      height: req.heightCm,
-    },
+    origin: req.pickupPincode,
+    destination: req.deliveryPincode,
+    payment_type: 'prepaid',
+    order_amount: req.declaredValue,
+    weight: Math.round(req.weightKg * 1000), // kg → grams, must be integer
+    length: req.lengthCm,
+    breadth: req.widthCm,
+    height: req.heightCm,
   };
 
   const res = await fetch(`${NIMBUS_API_BASE}/courier/serviceability`, {
@@ -118,44 +115,59 @@ export async function fetchDomesticRates(req: RateCheckRequest): Promise<Courier
 }
 
 function mapCourierResponse(data: any): CourierOption[] {
-  // NimbusPost returns { rates: [...], custom_courier_rates: [...] }
-  const couriers = data?.rates || data?.data?.available_couriers || data?.data || [];
+  // NimbusPost actual response: { status: true, data: [...] }
+  // Each item: { id, name, freight_charges, cod_charges, total_charges, edd, min_weight, chargeable_weight }
+  const couriers = Array.isArray(data?.data) ? data.data : [];
 
-  if (!Array.isArray(couriers) || couriers.length === 0) {
+  if (couriers.length === 0) {
     return [];
   }
 
-  // Filter to only serviceable couriers with valid freight charges
-  const serviceable = couriers.filter(
-    (c: any) => c.freight_charge > 0 && c.pincode !== false
-  );
+  // Filter to only couriers with valid freight charges
+  const valid = couriers.filter((c: any) => c.freight_charges > 0);
 
-  // Sort by freight charge ascending
-  const sorted = serviceable.sort((a: any, b: any) => a.freight_charge - b.freight_charge);
+  // Sort by freight_charges ascending
+  const sorted = valid.sort((a: any, b: any) => a.freight_charges - b.freight_charges);
 
   return sorted.map((c: any, idx: number) => {
-    const shippingCharge = Math.round(c.freight_charge * MARKUP_MULTIPLIER);
+    const shippingCharge = Math.round(c.freight_charges * MARKUP_MULTIPLIER);
     const gstAmount = Math.round(shippingCharge * 0.18);
     const customerPrice = shippingCharge + gstAmount;
 
-    // NimbusPost mode: 0 = surface, 1 = air/express
-    const mode: CourierMode = c.mode === 1 ? 'air' : 'surface';
+    // Infer mode from courier name — "Air" in name = air, otherwise surface
+    const nameUpper = (c.name || '').toUpperCase();
+    const mode: CourierMode = nameUpper.includes('AIR') ? 'air' : 'surface';
+
+    // Parse EDD to get estimated delivery days
+    let estimatedDays = 3;
+    if (c.edd) {
+      try {
+        const [day, month, year] = c.edd.split('-').map(Number);
+        const eddDate = new Date(year, month - 1, day);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diffMs = eddDate.getTime() - today.getTime();
+        estimatedDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+      } catch {
+        estimatedDays = 3;
+      }
+    }
 
     return {
-      courier_company_id: c.courier_company_id,
-      courier_name: c.courier_name || c.carrier_name || c.carrier || 'Unknown Courier',
-      freight_charge: Math.round(c.freight_charge),
+      courier_company_id: Number(c.id),
+      courier_name: c.name || 'Unknown Courier',
+      freight_charge: Math.round(c.freight_charges),
       shipping_charge: shippingCharge,
       gst_amount: gstAmount,
       customer_price: customerPrice,
-      estimated_delivery_days: c.estimated_delivery_days || c.etd_days || 3,
-      etd: c.edd || c.etd || '',
-      rating: c.rating || 0,
-      rto_charges: Math.round((c.rto_charges || 0) * MARKUP_MULTIPLIER),
-      cod: !!c.cod,
+      estimated_delivery_days: estimatedDays,
+      etd: c.edd || '',
+      rating: 0,
+      rto_charges: 0,
+      cod: (c.cod_charges || 0) > 0,
       cod_charges: Math.round((c.cod_charges || 0) * MARKUP_MULTIPLIER),
-      pickup_availability: c.pickup_availability !== false,
-      is_recommended: idx === 0, // cheapest = recommended
+      pickup_availability: true,
+      is_recommended: idx === 0,
       mode,
     };
   });
