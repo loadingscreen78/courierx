@@ -98,10 +98,23 @@ const DomesticCourierStepComponent = ({ data, onUpdate }: Props) => {
   const airCount = useMemo(() => couriers.filter(c => c.mode === 'air').length, [couriers]);
   const surfaceCount = useMemo(() => couriers.filter(c => c.mode === 'surface').length, [couriers]);
 
+  // For documents: determine what to show and whether to show a fallback note
+  const documentFallback: 'surface' | 'all' | null = useMemo(() => {
+    if (!isDocument) return null;
+    if (airCount > 0) return null;
+    if (surfaceCount > 0) return 'surface';
+    return 'all';
+  }, [isDocument, airCount, surfaceCount]);
+
   const filtered = useMemo(() => {
+    if (isDocument) {
+      if (airCount > 0) return couriers.filter(c => c.mode === 'air');
+      if (surfaceCount > 0) return couriers.filter(c => c.mode === 'surface');
+      return couriers;
+    }
     if (activeTab === 'all') return couriers;
     return couriers.filter(c => c.mode === activeTab);
-  }, [couriers, activeTab]);
+  }, [couriers, activeTab, isDocument, airCount, surfaceCount]);
 
   if (loading) {
     return (
@@ -177,32 +190,48 @@ const DomesticCourierStepComponent = ({ data, onUpdate }: Props) => {
         </Button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => handleTabChange(tab.key)}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all',
-              activeTab === tab.key
-                ? 'bg-background text-coke-red shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {tab.icon}
-            {tab.label}
-            <span className={cn(
-              'text-[10px] px-1.5 py-0.5 rounded-full',
-              activeTab === tab.key
-                ? 'bg-coke-red/10 text-coke-red'
-                : 'bg-muted text-muted-foreground'
-            )}>
-              {tab.count}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Filter Tabs — hidden for documents */}
+      {!isDocument && (
+        <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => handleTabChange(tab.key)}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all',
+                activeTab === tab.key
+                  ? 'bg-background text-coke-red shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+              <span className={cn(
+                'text-[10px] px-1.5 py-0.5 rounded-full',
+                activeTab === tab.key
+                  ? 'bg-coke-red/10 text-coke-red'
+                  : 'bg-muted text-muted-foreground'
+              )}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Fallback note for documents when no air service available */}
+      {isDocument && documentFallback === 'surface' && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600">
+          <Ship className="h-3.5 w-3.5 shrink-0" />
+          No air service available for this route. Showing surface couriers instead.
+        </div>
+      )}
+      {isDocument && documentFallback === 'all' && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600">
+          <Truck className="h-3.5 w-3.5 shrink-0" />
+          Air service not available for this route. Showing all available couriers.
+        </div>
+      )}
 
       {/* Courier Cards */}
       {filtered.length === 0 ? (
