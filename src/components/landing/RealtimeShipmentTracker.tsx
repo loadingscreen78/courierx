@@ -281,7 +281,7 @@ export const RealtimeShipmentTracker = () => {
                   delay: 0.4,
                   ease: [0.25, 0.1, 0.25, 1]
                 }}
-                className="h-full bg-gradient-to-r from-primary via-coke-red to-candlestick-green rounded-full relative overflow-hidden"
+                className="h-full bg-gradient-to-r from-primary to-coke-red rounded-full relative overflow-hidden"
               >
                 {/* Shimmer effect */}
                 <motion.div
