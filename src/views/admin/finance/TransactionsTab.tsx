@@ -64,11 +64,16 @@ export function TransactionsTab() {
     setLoadingWallet(true);
     try {
       const { data } = await supabase
-        .from('wallet_transactions')
-        .select('id, amount, type, description, created_at, profiles(full_name, phone_number)')
+        .from('wallet_ledger')
+        .select('id, amount, transaction_type, description, created_at, profiles:user_id(full_name, phone_number)')
         .order('created_at', { ascending: false })
         .limit(200);
-      setWalletTxs((data as any) || []);
+      // Map transaction_type to type for display compatibility
+      setWalletTxs((data || []).map((d: any) => ({
+        ...d,
+        type: d.transaction_type || d.type,
+        profiles: d.profiles,
+      })));
     } finally { setLoadingWallet(false); }
   }, []);
 
@@ -101,8 +106,8 @@ export function TransactionsTab() {
 
     // Realtime subscriptions
     const walletChannel = supabase
-      .channel('admin-wallet-txs')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wallet_transactions' }, fetchWallet)
+      .channel('admin-wallet-ledger')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wallet_ledger' }, fetchWallet)
       .subscribe();
 
     const paymentsChannel = supabase

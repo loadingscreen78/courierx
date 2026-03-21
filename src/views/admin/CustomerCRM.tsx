@@ -201,7 +201,31 @@ export function CustomerCRM() {
     }
   }, []);
 
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+  useEffect(() => {
+    fetchCustomers();
+
+    // Real-time subscriptions for customer data changes
+    const profilesChannel = supabase
+      .channel('admin-crm-profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchCustomers)
+      .subscribe();
+
+    const shipmentsChannel = supabase
+      .channel('admin-crm-shipments')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipments' }, fetchCustomers)
+      .subscribe();
+
+    const walletChannel = supabase
+      .channel('admin-crm-wallet')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wallet_ledger' }, fetchCustomers)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profilesChannel);
+      supabase.removeChannel(shipmentsChannel);
+      supabase.removeChannel(walletChannel);
+    };
+  }, [fetchCustomers]);
 
   // ─── Computed stats ────────────────────────────────────────────────
   const stats = useMemo(() => {

@@ -45,8 +45,8 @@ function AdminDashboard() {
   const [recentShipments, setRecentShipments] = useState<any[]>([]);
   const [chartData, setChartData] = useState<DayOfWeekEntry[]>(fallbackChartData);
   const [isLoading, setIsLoading] = useState(true);
-  const [queueShipments, setQueueShipments] = useState<{ warehouse: any[]; international: any[]; delivered: any[] }>({
-    warehouse: [], international: [], delivered: [],
+  const [queueShipments, setQueueShipments] = useState<{ warehouse: any[]; domestic: any[]; international: any[]; delivered: any[] }>({
+    warehouse: [], domestic: [], international: [], delivered: [],
   });
   const [activeTab, setActiveTab] = useState('warehouse');
 
@@ -63,7 +63,7 @@ function AdminDashboard() {
               phone
             )
           `)
-          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED']);
+          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED', 'DOMESTIC']);
 
         if (error) throw error;
 
@@ -100,6 +100,7 @@ function AdminDashboard() {
 
         setQueueShipments({
           warehouse: (shipments?.filter(s => s.current_leg === 'COUNTER') || []).sort(sortByUpdated),
+          domestic: (shipments?.filter(s => s.current_leg === 'DOMESTIC') || []).sort(sortByUpdated),
           international: (shipments?.filter(s => s.current_leg === 'INTERNATIONAL') || []).sort(sortByUpdated),
           delivered: (shipments?.filter(s => s.current_leg === 'COMPLETED') || []).sort(sortByUpdated),
         });
@@ -114,7 +115,7 @@ function AdminDashboard() {
               phone
             )
           `)
-          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED'])
+          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED', 'DOMESTIC'])
           .order('updated_at', { ascending: false })
           .limit(5);
 
@@ -147,7 +148,7 @@ function AdminDashboard() {
           event: '*',
           schema: 'public',
           table: 'shipments',
-          filter: 'current_leg=in.(COUNTER,INTERNATIONAL,COMPLETED)',
+          filter: 'current_leg=in.(COUNTER,INTERNATIONAL,COMPLETED,DOMESTIC)',
         },
         (payload) => {
           // Show toast when a shipment transitions to COUNTER (new warehouse arrival)
@@ -184,6 +185,7 @@ function AdminDashboard() {
 
   const queueTabs = [
     { key: 'warehouse', label: 'Warehouse', count: queueShipments.warehouse.length, items: queueShipments.warehouse },
+    { key: 'domestic', label: 'Domestic', count: queueShipments.domestic.length, items: queueShipments.domestic },
     { key: 'international', label: 'International', count: queueShipments.international.length, items: queueShipments.international },
     { key: 'delivered', label: 'Delivered', count: queueShipments.delivered.length, items: queueShipments.delivered },
   ];

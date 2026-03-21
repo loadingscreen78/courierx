@@ -1,11 +1,12 @@
 "use client";
 
-import { Pill, FileText, Gift, ArrowRight } from 'lucide-react';
+import { Pill, FileText, Gift, ArrowRight, MapPin } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card } from '@/components/ui/card';
 import { useHaptics } from '@/hooks/useHaptics';
 import { deleteDraftsByType } from '@/lib/drafts/draftService';
+import { useShippingMode } from '@/contexts/ShippingModeContext';
 
 interface ShipmentTypeCardProps {
   icon: React.ElementType;
@@ -53,6 +54,9 @@ const ShipmentTypeCard = ({ icon: Icon, title, description, color, href, onBefor
 };
 
 const NewShipment = () => {
+  const { mode } = useShippingMode();
+  const isDomestic = mode === 'domestic';
+
   return (
     <AppLayout>
       <div className="max-w-2xl mx-auto space-y-8 animate-fade-in">
@@ -60,44 +64,75 @@ const NewShipment = () => {
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-typewriter font-bold">Create New Shipment</h1>
           <p className="text-muted-foreground">
-            Select the type of shipment you want to send internationally
+            {isDomestic
+              ? 'Ship documents or parcels anywhere across India'
+              : 'Select the type of shipment you want to send internationally'}
           </p>
         </div>
 
         {/* Shipment Type Selection */}
         <div className="space-y-4">
-          <ShipmentTypeCard
-            icon={Pill}
-            title="Medicine"
-            description="Send prescription medicines with proper documentation. Includes HSN code verification and 90-day supply limit compliance."
-            color="bg-destructive/10"
-            href="/book/medicine?new=1"
-            onBeforeNavigate={() => deleteDraftsByType('medicine')}
-          />
-          
-          <ShipmentTypeCard
-            icon={FileText}
-            title="Documents"
-            description="Ship important documents like certificates, legal papers, and official records securely worldwide."
-            color="bg-accent"
-            href="/book/document?new=1"
-            onBeforeNavigate={() => deleteDraftsByType('document')}
-          />
-          
-          <ShipmentTypeCard
-            icon={Gift}
-            title="Gifts & Samples"
-            description="Send personal gifts and product samples. Safety checklist included for restricted items."
-            color="bg-success/20"
-            href="/book/gift?new=1"
-            onBeforeNavigate={() => deleteDraftsByType('gift')}
-          />
+          {isDomestic ? (
+            /* Domestic Options */
+            <>
+              <ShipmentTypeCard
+                icon={FileText}
+                title="Documents"
+                description="Send documents up to 1 kg anywhere in India. Certificates, legal papers, records and more."
+                color="bg-accent"
+                href="/book/domestic?type=document"
+              />
+              <ShipmentTypeCard
+                icon={Gift}
+                title="Gifts & Parcels"
+                description="Ship anything up to 60 kg across India. Clothing, electronics, books, and more. Max value ₹49,000."
+                color="bg-success/20"
+                href="/book/domestic?type=gift"
+              />
+            </>
+          ) : (
+            /* International Options */
+            <>
+              <ShipmentTypeCard
+                icon={Pill}
+                title="Medicine"
+                description="Send prescription medicines with proper documentation. Includes HSN code verification and 90-day supply limit compliance."
+                color="bg-destructive/10"
+                href="/book/medicine?new=1"
+                onBeforeNavigate={() => deleteDraftsByType('medicine')}
+              />
+              <ShipmentTypeCard
+                icon={FileText}
+                title="Documents"
+                description="Ship important documents like certificates, legal papers, and official records securely worldwide."
+                color="bg-accent"
+                href="/book/document?new=1"
+                onBeforeNavigate={() => deleteDraftsByType('document')}
+              />
+              <ShipmentTypeCard
+                icon={Gift}
+                title="Gifts & Samples"
+                description="Send personal gifts and product samples. Safety checklist included for restricted items."
+                color="bg-success/20"
+                href="/book/gift?new=1"
+                onBeforeNavigate={() => deleteDraftsByType('gift')}
+              />
+            </>
+          )}
         </div>
 
         {/* Info Card */}
         <Card className="p-4 bg-muted/50 border-dashed">
           <p className="text-sm text-muted-foreground text-center">
-            <span className="font-semibold">CSB IV Compliance:</span> All shipments must be for personal use with declared value under ₹25,000
+            {isDomestic ? (
+              <>
+                <span className="font-semibold">🇮🇳 Domestic Shipping:</span> Direct pickup from your address. No warehouse involvement. AWB label provided instantly.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">CSB IV Compliance:</span> All shipments must be for personal use with declared value under ₹25,000
+              </>
+            )}
           </p>
         </Card>
       </div>

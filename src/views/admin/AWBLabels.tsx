@@ -87,7 +87,21 @@ export default function AWBLabels() {
     }
   }, [typeFilter, toast]);
 
-  useEffect(() => { fetchShipments(); }, [fetchShipments]);
+  useEffect(() => {
+    fetchShipments();
+
+    // Real-time subscription for AWB updates
+    const channel = supabase
+      .channel('admin-awb-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'shipments' },
+        () => { fetchShipments(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchShipments]);
 
   const handleRegenerateLabel = async (shipment: AWBShipment) => {
     if (!shipment.domestic_awb) return;

@@ -13,13 +13,15 @@ import {
   FileText,
   Gift,
   X,
-  Sparkles
+  Sparkles,
+  MapPin
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHaptics } from '@/hooks/useHaptics';
 import { MobileMoreDrawer } from './MobileMoreDrawer';
 import { deleteDraftsByType } from '@/lib/drafts/draftService';
 import type { Draft } from '@/lib/drafts/draftService';
+import { useShippingMode } from '@/contexts/ShippingModeContext';
 import {
   Sheet,
   SheetContent,
@@ -98,7 +100,7 @@ const NavItem = ({ icon, label, href, isActive, isPrimary, onClick }: NavItemPro
   );
 };
 
-const shipmentOptions = [
+const internationalOptions = [
   {
     id: 'medicine',
     icon: Pill,
@@ -128,18 +130,45 @@ const shipmentOptions = [
   },
 ];
 
+const domesticOptions = [
+  {
+    id: 'domestic-document',
+    icon: FileText,
+    title: 'Documents',
+    description: 'Send documents up to 1 kg across India',
+    href: '/book/domestic?type=document',
+    color: 'bg-amber-500/10 text-amber-600',
+    gradient: 'from-amber-500/20 to-amber-600/5',
+  },
+  {
+    id: 'domestic-gift',
+    icon: Gift,
+    title: 'Gifts & Parcels',
+    description: 'Ship up to 60 kg anywhere in India',
+    href: '/book/domestic?type=gift',
+    color: 'bg-pink-500/10 text-pink-600',
+    gradient: 'from-pink-500/20 to-pink-600/5',
+  },
+];
+
 export const MobileNav = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [shipDrawerOpen, setShipDrawerOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { mediumTap } = useHaptics();
+  const { mode } = useShippingMode();
+  const isDomestic = mode === 'domestic';
+
+  const shipmentOptions = isDomestic ? domesticOptions : internationalOptions;
 
   const handleShipmentSelect = (href: string, draftType: Draft['type']) => {
     mediumTap();
-    deleteDraftsByType(draftType);
+    if (!isDomestic) {
+      deleteDraftsByType(draftType);
+    }
     setShipDrawerOpen(false);
-    router.push(href + '?new=1');
+    router.push(isDomestic ? href : href + '?new=1');
   };
 
   return (
@@ -187,8 +216,12 @@ export const MobileNav = () => {
           <SheetHeader className="pb-2 px-6">
             <div className="flex items-center justify-between">
               <div>
-                <SheetTitle className="font-typewriter text-xl">What are you shipping?</SheetTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">Choose a shipment type to get started</p>
+                <SheetTitle className="font-typewriter text-xl">
+                  {isDomestic ? '🇮🇳 Ship Across India' : 'What are you shipping?'}
+                </SheetTitle>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {isDomestic ? 'Direct pickup, no warehouse' : 'Choose a shipment type to get started'}
+                </p>
               </div>
               <button
                 onClick={() => setShipDrawerOpen(false)}
@@ -233,7 +266,11 @@ export const MobileNav = () => {
 
           <div className="mx-4 mt-4 p-3 rounded-xl bg-muted/50 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-coke-red shrink-0" />
-            <p className="text-xs text-muted-foreground">All shipments are CSB-IV compliant & fully insured</p>
+            <p className="text-xs text-muted-foreground">
+              {isDomestic
+                ? 'Pickup raised automatically. AWB label provided instantly.'
+                : 'All shipments are CSB-IV compliant & fully insured'}
+            </p>
           </div>
         </SheetContent>
       </Sheet>

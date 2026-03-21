@@ -80,7 +80,7 @@ export default function AllShipments() {
               phone
             )
           `)
-          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED'])
+          .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED', 'DOMESTIC'])
           .order('created_at', { ascending: false });
 
         if (statusFilter !== 'all') {
@@ -113,7 +113,7 @@ export default function AllShipments() {
           event: '*',
           schema: 'public',
           table: 'shipments',
-          filter: 'current_leg=in.(COUNTER,INTERNATIONAL,COMPLETED)'
+          filter: 'current_leg=in.(COUNTER,INTERNATIONAL,COMPLETED,DOMESTIC)'
         },
         () => {
           fetchShipments();
