@@ -81,6 +81,8 @@ const DomesticReviewStepComponent = ({ data }: Props) => {
               <p className="font-semibold">{courier.courier_name}</p>
               <p className="text-sm text-muted-foreground">
                 Est. delivery: {courier.estimated_delivery_days} day{courier.estimated_delivery_days !== 1 ? 's' : ''}
+                {' · '}
+                <span className="capitalize">{courier.mode}</span>
               </p>
             </div>
             <div className="text-right">
@@ -88,6 +90,16 @@ const DomesticReviewStepComponent = ({ data }: Props) => {
                 ₹{courier.customer_price.toLocaleString('en-IN')}
               </p>
               <p className="text-[10px] text-muted-foreground">Total payable</p>
+            </div>
+          </div>
+          <div className="mt-2 px-3 space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Shipping Charges</span>
+              <span>₹{courier.shipping_charge.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>GST (18%)</span>
+              <span>₹{courier.gst_amount.toLocaleString('en-IN')}</span>
             </div>
           </div>
         </CardContent>

@@ -7,7 +7,7 @@
  */
 
 import { MARKUP_MULTIPLIER } from './types';
-import type { CourierOption, RateCheckRequest } from './types';
+import type { CourierOption, CourierMode, RateCheckRequest } from './types';
 
 const NIMBUS_API_BASE = 'https://api.nimbuspost.com/v1';
 
@@ -124,19 +124,32 @@ function mapCourierResponse(data: any): CourierOption[] {
     .filter((c: any) => c.freight_charge > 0)
     .sort((a: any, b: any) => a.freight_charge - b.freight_charge);
 
-  return sorted.map((c: any, idx: number) => ({
-    courier_company_id: c.courier_company_id,
-    courier_name: c.courier_name || 'Unknown Courier',
-    freight_charge: Math.round(c.freight_charge),
-    customer_price: Math.round(c.freight_charge * MARKUP_MULTIPLIER),
-    estimated_delivery_days: c.estimated_delivery_days || c.etd_days || 3,
-    etd: c.etd || '',
-    rating: c.rating || 0,
-    rto_charges: Math.round((c.rto_charges || 0) * MARKUP_MULTIPLIER),
-    cod: !!c.cod,
-    pickup_availability: c.pickup_availability !== false,
-    is_recommended: idx === 0, // cheapest = recommended
-  }));
+  return sorted.map((c: any, idx: number) => {
+    const shippingCharge = Math.round(c.freight_charge * MARKUP_MULTIPLIER);
+    const gstAmount = Math.round(shippingCharge * 0.18);
+    const customerPrice = shippingCharge + gstAmount;
+
+    // NimbusPost mode: 0 = surface, 1 = air/express
+    const mode: CourierMode = c.mode === 1 ? 'air' : 'surface';
+
+    return {
+      courier_company_id: c.courier_company_id,
+      courier_name: c.courier_name || 'Unknown Courier',
+      freight_charge: Math.round(c.freight_charge),
+      shipping_charge: shippingCharge,
+      gst_amount: gstAmount,
+      customer_price: customerPrice,
+      estimated_delivery_days: c.estimated_delivery_days || c.etd_days || 3,
+      etd: c.etd || '',
+      rating: c.rating || 0,
+      rto_charges: Math.round((c.rto_charges || 0) * MARKUP_MULTIPLIER),
+      cod: !!c.cod,
+      cod_charges: Math.round((c.cod_charges || 0) * MARKUP_MULTIPLIER),
+      pickup_availability: c.pickup_availability !== false,
+      is_recommended: idx === 0, // cheapest = recommended
+      mode,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -32,18 +32,24 @@ export interface DomesticBookingData {
   selectedCourier: CourierOption | null;
 }
 
+export type CourierMode = 'surface' | 'air';
+
 export interface CourierOption {
   courier_company_id: number;
   courier_name: string;
   freight_charge: number;       // actual NimbusPost cost
-  customer_price: number;       // 2.6x marked-up price shown to customer
+  customer_price: number;       // marked-up total (shipping + GST)
+  shipping_charge: number;      // marked-up base shipping (before GST)
+  gst_amount: number;           // 18% GST on shipping_charge
   estimated_delivery_days: number;
   etd: string;                  // estimated delivery date string
   rating: number;
   rto_charges: number;
   cod: boolean;
+  cod_charges: number;
   pickup_availability: boolean;
   is_recommended: boolean;
+  mode: CourierMode;            // 'surface' or 'air'
 }
 
 export interface RateCheckRequest {
@@ -77,6 +83,8 @@ export interface DomesticBookRequest {
     courier_company_id: number;
     courier_name: string;
     customer_price: number;
+    shipping_charge: number;
+    gst_amount: number;
   };
 }
 
@@ -105,4 +113,4 @@ export const DOMESTIC_LIMITS = {
   gift: { maxWeightKg: 60, maxValue: 49000 },
 } as const;
 
-export const MARKUP_MULTIPLIER = 2.6;
+export const MARKUP_MULTIPLIER = 2.65;

@@ -128,6 +128,8 @@ const DomesticBooking = () => {
             courier_company_id: data.selectedCourier.courier_company_id,
             courier_name: data.selectedCourier.courier_name,
             customer_price: data.selectedCourier.customer_price,
+            shipping_charge: data.selectedCourier.shipping_charge,
+            gst_amount: data.selectedCourier.gst_amount,
           },
         }),
       });

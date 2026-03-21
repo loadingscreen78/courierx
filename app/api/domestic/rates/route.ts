@@ -56,61 +56,36 @@ export async function POST(request: NextRequest) {
     const skipNimbus = !process.env.NIMBUS_EMAIL || !process.env.NIMBUS_PASSWORD;
 
     if (skipNimbus) {
-      // Mock courier options for development
+      // Mock courier options for development — includes air & surface modes
+      const buildMock = (id: number, name: string, base: number, perKg: number, days: number, rating: number, mode: 'surface' | 'air', recommended: boolean) => {
+        const freight = Math.round(base + data.weightKg * perKg);
+        const shipping = Math.round(freight * 2.65);
+        const gst = Math.round(shipping * 0.18);
+        return {
+          courier_company_id: id, courier_name: name, freight_charge: freight,
+          shipping_charge: shipping, gst_amount: gst, customer_price: shipping + gst,
+          estimated_delivery_days: days, etd: '', rating, rto_charges: 0,
+          cod: false, cod_charges: 0, pickup_availability: true,
+          is_recommended: recommended, mode,
+        };
+      };
+
       const mockCouriers = [
-        {
-          courier_company_id: 1,
-          courier_name: 'Delhivery Surface',
-          freight_charge: Math.round(40 + data.weightKg * 30),
-          customer_price: Math.round((40 + data.weightKg * 30) * 2.6),
-          estimated_delivery_days: 5,
-          etd: '',
-          rating: 4.2,
-          rto_charges: 0,
-          cod: false,
-          pickup_availability: true,
-          is_recommended: true,
-        },
-        {
-          courier_company_id: 2,
-          courier_name: 'BlueDart Express',
-          freight_charge: Math.round(80 + data.weightKg * 50),
-          customer_price: Math.round((80 + data.weightKg * 50) * 2.6),
-          estimated_delivery_days: 3,
-          etd: '',
-          rating: 4.5,
-          rto_charges: 0,
-          cod: false,
-          pickup_availability: true,
-          is_recommended: false,
-        },
-        {
-          courier_company_id: 3,
-          courier_name: 'DTDC Express',
-          freight_charge: Math.round(50 + data.weightKg * 35),
-          customer_price: Math.round((50 + data.weightKg * 35) * 2.6),
-          estimated_delivery_days: 4,
-          etd: '',
-          rating: 3.8,
-          rto_charges: 0,
-          cod: false,
-          pickup_availability: true,
-          is_recommended: false,
-        },
-        {
-          courier_company_id: 4,
-          courier_name: 'Ecom Express',
-          freight_charge: Math.round(35 + data.weightKg * 28),
-          customer_price: Math.round((35 + data.weightKg * 28) * 2.6),
-          estimated_delivery_days: 6,
-          etd: '',
-          rating: 3.5,
-          rto_charges: 0,
-          cod: false,
-          pickup_availability: true,
-          is_recommended: false,
-        },
+        buildMock(1, 'Delhivery Surface', 40, 30, 5, 4.2, 'surface', false),
+        buildMock(2, 'BlueDart Air', 80, 50, 2, 4.5, 'air', false),
+        buildMock(3, 'DTDC Surface', 50, 35, 4, 3.8, 'surface', false),
+        buildMock(4, 'Ecom Express Surface', 35, 28, 6, 3.5, 'surface', false),
+        buildMock(5, 'Delhivery Air', 70, 45, 2, 4.2, 'air', false),
+        buildMock(6, 'DTDC Air', 75, 48, 2, 3.8, 'air', false),
+        buildMock(7, 'Xpressbees Surface', 38, 26, 5, 3.9, 'surface', false),
+        buildMock(8, 'Xpressbees Air', 65, 42, 2, 3.9, 'air', false),
       ];
+
+      // Sort by customer_price ascending and mark cheapest as recommended
+      mockCouriers.sort((a, b) => a.customer_price - b.customer_price);
+      if (mockCouriers.length > 0) {
+        mockCouriers[0].is_recommended = true;
+      }
 
       return NextResponse.json({ success: true, couriers: mockCouriers });
     }

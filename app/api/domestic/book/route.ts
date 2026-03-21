@@ -29,6 +29,8 @@ const bookingSchema = z.object({
     courier_company_id: z.number(),
     courier_name: z.string(),
     customer_price: z.number().positive(),
+    shipping_charge: z.number().nonnegative().optional(),
+    gst_amount: z.number().nonnegative().optional(),
   }),
 });
 
@@ -69,6 +71,8 @@ export async function POST(request: NextRequest) {
     }
 
     const totalAmount = data.selectedCourier.customer_price;
+    const gstAmount = data.selectedCourier.gst_amount ?? 0;
+    const shippingCost = data.selectedCourier.shipping_charge ?? totalAmount;
 
     // 3. Check wallet balance
     const { data: ledgerData, error: ledgerError } = await supabase
@@ -108,8 +112,8 @@ export async function POST(request: NextRequest) {
         destination_country: 'India',
         weight_kg: data.weightKg,
         declared_value: data.declaredValue,
-        shipping_cost: totalAmount,
-        gst_amount: 0,
+        shipping_cost: shippingCost,
+        gst_amount: gstAmount,
         total_amount: totalAmount,
         alert_sent: false,
         pickup_address: pickupAddr,
