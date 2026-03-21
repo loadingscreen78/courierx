@@ -66,15 +66,19 @@ async function getToken(): Promise<string> {
 export async function fetchDomesticRates(req: RateCheckRequest): Promise<CourierOption[]> {
   const token = await getToken();
 
+  // NimbusPost expects weight in grams, dimensions in a nested object,
+  // and specific field names per their API docs.
   const payload = {
-    origin: req.pickupPincode,
-    destination: req.deliveryPincode,
-    payment_type: 'prepaid',
-    order_amount: req.declaredValue,
-    weight: req.weightKg,
-    length: req.lengthCm,
-    breadth: req.widthCm,
-    height: req.heightCm,
+    pickup_pincode: req.pickupPincode,
+    pincode: req.deliveryPincode,
+    payment: 'prepaid',
+    invoice_value: String(req.declaredValue),
+    weight: Math.round(req.weightKg * 1000), // convert kg → grams
+    dimensions: {
+      length: req.lengthCm,
+      breadth: req.widthCm,
+      height: req.heightCm,
+    },
   };
 
   const res = await fetch(`${NIMBUS_API_BASE}/courier/serviceability`, {
@@ -109,20 +113,25 @@ export async function fetchDomesticRates(req: RateCheckRequest): Promise<Courier
   }
 
   const data = await res.json();
+  console.log('[nimbusPostDomestic] Raw response keys:', Object.keys(data), 'rates count:', data?.rates?.length ?? 'N/A');
   return mapCourierResponse(data);
 }
 
 function mapCourierResponse(data: any): CourierOption[] {
-  const couriers = data?.data?.available_couriers || data?.data || [];
+  // NimbusPost returns { rates: [...], custom_courier_rates: [...] }
+  const couriers = data?.rates || data?.data?.available_couriers || data?.data || [];
 
   if (!Array.isArray(couriers) || couriers.length === 0) {
     return [];
   }
 
+  // Filter to only serviceable couriers with valid freight charges
+  const serviceable = couriers.filter(
+    (c: any) => c.freight_charge > 0 && c.pincode !== false
+  );
+
   // Sort by freight charge ascending
-  const sorted = couriers
-    .filter((c: any) => c.freight_charge > 0)
-    .sort((a: any, b: any) => a.freight_charge - b.freight_charge);
+  const sorted = serviceable.sort((a: any, b: any) => a.freight_charge - b.freight_charge);
 
   return sorted.map((c: any, idx: number) => {
     const shippingCharge = Math.round(c.freight_charge * MARKUP_MULTIPLIER);
@@ -134,13 +143,13 @@ function mapCourierResponse(data: any): CourierOption[] {
 
     return {
       courier_company_id: c.courier_company_id,
-      courier_name: c.courier_name || 'Unknown Courier',
+      courier_name: c.courier_name || c.carrier_name || c.carrier || 'Unknown Courier',
       freight_charge: Math.round(c.freight_charge),
       shipping_charge: shippingCharge,
       gst_amount: gstAmount,
       customer_price: customerPrice,
       estimated_delivery_days: c.estimated_delivery_days || c.etd_days || 3,
-      etd: c.etd || '',
+      etd: c.edd || c.etd || '',
       rating: c.rating || 0,
       rto_charges: Math.round((c.rto_charges || 0) * MARKUP_MULTIPLIER),
       cod: !!c.cod,

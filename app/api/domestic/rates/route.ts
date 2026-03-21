@@ -92,6 +92,15 @@ export async function POST(request: NextRequest) {
 
     const couriers = await fetchDomesticRates(data as import('@/lib/domestic/types').RateCheckRequest);
 
+    if (couriers.length === 0) {
+      console.warn('[domestic/rates] NimbusPost returned 0 couriers for:', {
+        pickup: data.pickupPincode,
+        delivery: data.deliveryPincode,
+        weightKg: data.weightKg,
+        dims: `${data.lengthCm}x${data.widthCm}x${data.heightCm}`,
+      });
+    }
+
     return NextResponse.json({ success: true, couriers });
   } catch (error) {
     console.error('[domestic/rates] Error:', error);
