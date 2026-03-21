@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -16,14 +16,48 @@ interface Props {
 type AddressKey = 'pickupAddress' | 'deliveryAddress';
 
 const DomesticAddressStepComponent = ({ data, onUpdate }: Props) => {
+  // Local state — prevents parent re-renders on every keystroke
+  const [localPickup, setLocalPickup] = useState<DomesticAddress>(data.pickupAddress);
+  const [localDelivery, setLocalDelivery] = useState<DomesticAddress>(data.deliveryAddress);
   const [pincodeLoading, setPincodeLoading] = useState<Record<string, boolean>>({});
   const [pincodeError, setPincodeError] = useState<Record<string, string | null>>({});
 
-  const updateAddress = useCallback((key: AddressKey, field: keyof DomesticAddress, value: string) => {
-    onUpdate({
-      [key]: { ...data[key], [field]: value },
+  // Refs for timer-based sync — closures read from refs, never cause re-renders
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const pickupRef = useRef(localPickup);
+  const deliveryRef = useRef(localDelivery);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  pickupRef.current = localPickup;
+  deliveryRef.current = localDelivery;
+
+  const scheduleSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      onUpdateRef.current({
+        pickupAddress: pickupRef.current,
+        deliveryAddress: deliveryRef.current,
+      });
+    }, 600);
+  }, []);
+
+  const flushSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    onUpdateRef.current({
+      pickupAddress: pickupRef.current,
+      deliveryAddress: deliveryRef.current,
     });
-  }, [data, onUpdate]);
+  }, []);
+
+  const updateAddress = useCallback((key: AddressKey, field: keyof DomesticAddress, value: string) => {
+    if (key === 'pickupAddress') {
+      setLocalPickup(prev => ({ ...prev, [field]: value }));
+    } else {
+      setLocalDelivery(prev => ({ ...prev, [field]: value }));
+    }
+    scheduleSync();
+  }, [scheduleSync]);
 
   const handlePincodeLookup = useCallback(async (key: AddressKey, pincode: string) => {
     if (!/^\d{6}$/.test(pincode)) return;
@@ -34,14 +68,13 @@ const DomesticAddressStepComponent = ({ data, onUpdate }: Props) => {
     try {
       const result = await lookupPincode(pincode);
       if (result) {
-        onUpdate({
-          [key]: {
-            ...data[key],
-            pincode,
-            city: result.city,
-            state: result.state,
-          },
-        });
+        if (key === 'pickupAddress') {
+          setLocalPickup(prev => ({ ...prev, pincode, city: result.city, state: result.state }));
+        } else {
+          setLocalDelivery(prev => ({ ...prev, pincode, city: result.city, state: result.state }));
+        }
+        // Flush immediately after auto-fill
+        setTimeout(() => flushSync(), 0);
       } else {
         setPincodeError(prev => ({ ...prev, [key]: 'Invalid pincode' }));
       }
@@ -50,10 +83,10 @@ const DomesticAddressStepComponent = ({ data, onUpdate }: Props) => {
     } finally {
       setPincodeLoading(prev => ({ ...prev, [key]: false }));
     }
-  }, [data, onUpdate]);
+  }, [flushSync]);
 
   const renderAddressForm = (key: AddressKey, title: string, icon: React.ReactNode) => {
-    const addr = data[key];
+    const addr = key === 'pickupAddress' ? localPickup : localDelivery;
     const cities = addr.state ? CITIES_BY_STATE[addr.state] || [] : [];
     const isLoading = pincodeLoading[key];
     const pinError = pincodeError[key];
@@ -66,7 +99,7 @@ const DomesticAddressStepComponent = ({ data, onUpdate }: Props) => {
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3" onBlur={flushSync}>
           {/* Name & Phone */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -146,9 +179,8 @@ const DomesticAddressStepComponent = ({ data, onUpdate }: Props) => {
               <Select
                 value={addr.state}
                 onValueChange={val => {
-                  onUpdate({
-                    [key]: { ...addr, state: val, city: '' },
-                  });
+                  updateAddress(key, 'state', val);
+                  updateAddress(key, 'city', '');
                 }}
               >
                 <SelectTrigger>

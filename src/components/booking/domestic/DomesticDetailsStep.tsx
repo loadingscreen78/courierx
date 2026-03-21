@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,26 @@ interface Props {
 
 const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
   const limits = DOMESTIC_LIMITS[data.shipmentType];
+
+  // Local state for text inputs to prevent parent re-renders on every keystroke
+  const [localDeclaredValue, setLocalDeclaredValue] = useState(String(data.declaredValue));
+  const [localDescription, setLocalDescription] = useState(data.contentDescription);
+  const [localDimensions, setLocalDimensions] = useState({
+    lengthCm: String(data.lengthCm),
+    widthCm: String(data.widthCm),
+    heightCm: String(data.heightCm),
+  });
+
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleSync = useCallback((patch: Partial<DomesticBookingData>) => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      onUpdateRef.current(patch);
+    }, 400);
+  }, []);
 
   const handleTypeChange = (type: DomesticShipmentType) => {
     const newLimits = DOMESTIC_LIMITS[type];
@@ -76,7 +96,6 @@ const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
         </CardHeader>
         <CardContent className="space-y-4">
           {data.shipmentType === 'document' ? (
-            /* Document weight slabs */
             <div className="grid grid-cols-4 gap-2">
               {DOCUMENT_WEIGHT_SLABS.map(slab => (
                 <button
@@ -97,7 +116,6 @@ const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
               ))}
             </div>
           ) : (
-            /* Gift weight slider */
             <div className="space-y-3">
               <div className="text-center py-3 bg-muted/30 rounded-lg">
                 <span className="text-4xl font-bold font-typewriter text-coke-red">
@@ -148,19 +166,28 @@ const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3">
-            {[
+            {([
               { label: 'Length', key: 'lengthCm' as const },
               { label: 'Width', key: 'widthCm' as const },
               { label: 'Height', key: 'heightCm' as const },
-            ].map(dim => (
+            ] as const).map(dim => (
               <div key={dim.key} className="space-y-1.5">
                 <Label className="text-xs">{dim.label}</Label>
                 <Input
                   type="number"
                   min={1}
                   max={150}
-                  value={data[dim.key]}
-                  onChange={e => onUpdate({ [dim.key]: Math.max(1, Number(e.target.value) || 1) })}
+                  value={localDimensions[dim.key]}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    setLocalDimensions(prev => ({ ...prev, [dim.key]: raw }));
+                    const num = Math.max(1, Number(raw) || 1);
+                    scheduleSync({ [dim.key]: num });
+                  }}
+                  onBlur={() => {
+                    const num = Math.max(1, Number(localDimensions[dim.key]) || 1);
+                    onUpdate({ [dim.key]: num });
+                  }}
                   className="font-typewriter"
                 />
               </div>
@@ -184,8 +211,16 @@ const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
               type="number"
               min={0}
               max={limits.maxValue}
-              value={data.declaredValue}
-              onChange={e => onUpdate({ declaredValue: Math.min(limits.maxValue, Math.max(0, Number(e.target.value) || 0)) })}
+              value={localDeclaredValue}
+              onChange={e => {
+                setLocalDeclaredValue(e.target.value);
+                const num = Math.min(limits.maxValue, Math.max(0, Number(e.target.value) || 0));
+                scheduleSync({ declaredValue: num });
+              }}
+              onBlur={() => {
+                const num = Math.min(limits.maxValue, Math.max(0, Number(localDeclaredValue) || 0));
+                onUpdate({ declaredValue: num });
+              }}
               className="font-typewriter"
               placeholder="Enter value in INR"
             />
@@ -194,8 +229,12 @@ const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
           <div className="space-y-1.5">
             <Label>Content Description</Label>
             <Textarea
-              value={data.contentDescription}
-              onChange={e => onUpdate({ contentDescription: e.target.value })}
+              value={localDescription}
+              onChange={e => {
+                setLocalDescription(e.target.value);
+                scheduleSync({ contentDescription: e.target.value });
+              }}
+              onBlur={() => onUpdate({ contentDescription: localDescription })}
               placeholder={data.shipmentType === 'document' ? 'e.g. Legal documents, certificates...' : 'e.g. Clothing, electronics, books...'}
               rows={2}
               maxLength={500}

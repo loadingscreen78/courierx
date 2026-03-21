@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, memo } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import { GiftBookingData } from '@/views/GiftBooking';
 import { Label } from '@/components/ui/label';
 import { DebouncedInput } from '@/components/ui/debounced-input';
@@ -52,6 +52,33 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   const [localPickupAddress, setLocalPickupAddress] = useState(data.pickupAddress);
   const [localConsigneeAddress, setLocalConsigneeAddress] = useState(data.consigneeAddress);
 
+  // Refs for debounced sync — closures read from refs, never cause re-renders
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const pickupRef = useRef(localPickupAddress);
+  const consigneeRef = useRef(localConsigneeAddress);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  pickupRef.current = localPickupAddress;
+  consigneeRef.current = localConsigneeAddress;
+
+  const scheduleSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      onUpdateRef.current({
+        pickupAddress: pickupRef.current,
+        consigneeAddress: consigneeRef.current,
+      });
+    }, 600);
+  }, []);
+
+  const flushSync = useCallback(() => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    onUpdateRef.current({
+      pickupAddress: pickupRef.current,
+      consigneeAddress: consigneeRef.current,
+    });
+  }, []);
+
   // Get cities for selected state
   const availableCities = localPickupAddress.state
     ? CITIES_BY_STATE[localPickupAddress.state] || []
@@ -71,20 +98,14 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   const handleBlur = useCallback((e: React.FocusEvent) => {
     const relatedTarget = e.relatedTarget as HTMLElement;
     if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
-      onUpdate({
-        pickupAddress: localPickupAddress,
-        consigneeAddress: localConsigneeAddress,
-      });
+      flushSync();
     }
-  }, [localPickupAddress, localConsigneeAddress, onUpdate]);
+  }, [flushSync]);
 
   const updatePickupAddress = useCallback((field: string, value: string) => {
-    setLocalPickupAddress(prev => {
-      const updated = { ...prev, [field]: value };
-      onUpdate({ pickupAddress: updated });
-      return updated;
-    });
-  }, [onUpdate]);
+    setLocalPickupAddress(prev => ({ ...prev, [field]: value }));
+    scheduleSync();
+  }, [scheduleSync]);
 
   // Handle PIN code change with auto-fill
   const handlePincodeChange = async (pincode: string) => {
@@ -103,14 +124,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
             city: result.city,
             state: result.state,
           }));
-          onUpdate({
-            pickupAddress: {
-              ...localPickupAddress,
-              pincode: cleanPincode,
-              city: result.city,
-              state: result.state,
-            }
-          });
+          setTimeout(() => flushSync(), 0);
         } else {
           setPincodeError('Invalid PIN code');
         }
@@ -123,12 +137,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   };
 
   const updateConsigneeAddress = useCallback((field: string, value: string) => {
-    setLocalConsigneeAddress(prev => {
-      const updated = { ...prev, [field]: value };
-      onUpdate({ consigneeAddress: updated });
-      return updated;
-    });
-  }, [onUpdate]);
+    setLocalConsigneeAddress(prev => ({ ...prev, [field]: value }));
+    scheduleSync();
+  }, [scheduleSync]);
 
   // Handle ZIP/Postal code change with auto-fill for consignee
   const handleZipcodeChange = async (zipcode: string) => {
@@ -148,13 +159,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
         const result = await lookupZipcode(cleanZip, cc);
         if (result) {
           setLocalConsigneeAddress(prev => ({ ...prev, zipcode: cleanZip, city: result.city }));
-          onUpdate({
-            consigneeAddress: {
-              ...localConsigneeAddress,
-              zipcode: cleanZip,
-              city: result.city,
-            }
-          });
+          setTimeout(() => flushSync(), 0);
         }
       } catch {
         // Silent fail
@@ -171,8 +176,8 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
   }, [updateConsigneeAddress]);
 
   const handleConsigneePhoneBlur = useCallback(() => {
-    const phone = localConsigneeAddress.phone;
-    const cc = localConsigneeAddress.country;
+    const phone = consigneeRef.current.phone;
+    const cc = consigneeRef.current.country;
     if (!phone || !cc) return;
     if (countryInfo && !phone.startsWith('+') && phone.length > 3) {
       updateConsigneeAddress('phone', `${countryInfo.phone.dialCode} ${phone}`);
@@ -180,7 +185,8 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
     if (cc && phone.length > 3 && !validatePhone(phone, cc)) {
       setPhoneError(`Expected format: ${countryInfo?.phone.format || 'international format'}`);
     }
-  }, [localConsigneeAddress, countryInfo, updateConsigneeAddress]);
+    flushSync();
+  }, [countryInfo, updateConsigneeAddress, flushSync]);
 
   // When country changes, reset phone prefix hint and clear zip auto-fill
   const handleCountryChange = useCallback((countryCode: string) => {
@@ -192,14 +198,8 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       country: countryCode,
       phone: prev.phone || (info ? `${info.phone.dialCode} ` : ''),
     }));
-    onUpdate({
-      consigneeAddress: {
-        ...localConsigneeAddress,
-        country: countryCode,
-        phone: localConsigneeAddress.phone || (info ? `${info.phone.dialCode} ` : ''),
-      }
-    });
-  }, [localConsigneeAddress, onUpdate]);
+    scheduleSync();
+  }, [scheduleSync]);
 
   const handleFileUpload = useCallback((file: File | null, type: 'front' | 'back') => {
     if (!file) return;
