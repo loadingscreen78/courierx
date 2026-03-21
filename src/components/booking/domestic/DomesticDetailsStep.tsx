@@ -12,9 +12,10 @@ import { DOMESTIC_LIMITS, DOCUMENT_WEIGHT_SLABS } from '@/lib/domestic/types';
 interface Props {
   data: DomesticBookingData;
   onUpdate: (updates: Partial<DomesticBookingData>) => void;
+  lockedType?: boolean;
 }
 
-const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
+const DomesticDetailsStepComponent = ({ data, onUpdate, lockedType }: Props) => {
   const limits = DOMESTIC_LIMITS[data.shipmentType];
 
   // Local state for text inputs to prevent parent re-renders on every keystroke
@@ -48,43 +49,45 @@ const DomesticDetailsStepComponent = ({ data, onUpdate }: Props) => {
 
   return (
     <div className="space-y-6">
-      {/* Shipment Type */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Package className="h-5 w-5 text-coke-red" />
-            Shipment Type
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { type: 'document' as const, icon: FileText, label: 'Documents', desc: 'Up to 1 kg', emoji: '📄' },
-              { type: 'gift' as const, icon: Gift, label: 'Gift / Parcel', desc: 'Up to 60 kg', emoji: '🎁' },
-            ].map(opt => (
-              <button
-                key={opt.type}
-                onClick={() => handleTypeChange(opt.type)}
-                className={cn(
-                  'flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
-                  data.shipmentType === opt.type
-                    ? 'border-coke-red bg-coke-red/5 shadow-md'
-                    : 'border-border hover:border-coke-red/30'
-                )}
-              >
-                <span className="text-3xl">{opt.emoji}</span>
-                <div>
-                  <p className={cn(
-                    'font-semibold',
-                    data.shipmentType === opt.type ? 'text-coke-red' : 'text-foreground'
-                  )}>{opt.label}</p>
-                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Shipment Type — hidden when type is locked via URL param */}
+      {!lockedType && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Package className="h-5 w-5 text-coke-red" />
+              Shipment Type
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { type: 'document' as const, icon: FileText, label: 'Documents', desc: 'Up to 1 kg', emoji: '📄' },
+                { type: 'gift' as const, icon: Gift, label: 'Gift / Parcel', desc: 'Up to 60 kg', emoji: '🎁' },
+              ].map(opt => (
+                <button
+                  key={opt.type}
+                  onClick={() => handleTypeChange(opt.type)}
+                  className={cn(
+                    'flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
+                    data.shipmentType === opt.type
+                      ? 'border-coke-red bg-coke-red/5 shadow-md'
+                      : 'border-border hover:border-coke-red/30'
+                  )}
+                >
+                  <span className="text-3xl">{opt.emoji}</span>
+                  <div>
+                    <p className={cn(
+                      'font-semibold',
+                      data.shipmentType === opt.type ? 'text-coke-red' : 'text-foreground'
+                    )}>{opt.label}</p>
+                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Weight */}
       <Card>

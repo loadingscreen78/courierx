@@ -54,6 +54,7 @@ const DomesticBooking = () => {
       typeParam === 'gift' ? 'gift' : 'document';
     return { ...initialData, shipmentType };
   });
+  const lockedType = searchParams.get('type') === 'document' || searchParams.get('type') === 'gift';
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,7 +161,7 @@ const DomesticBooking = () => {
   };
 
   const renderedStep = useMemo(() => {
-    if (step === 1) return <DomesticDetailsStep data={data} onUpdate={handleUpdate} />;
+    if (step === 1) return <DomesticDetailsStep data={data} onUpdate={handleUpdate} lockedType={lockedType} />;
     if (step === 2) return <DomesticAddressStep data={addressSnapRef.current ?? data} onUpdate={handleUpdate} />;
     if (step === 3) return <DomesticCourierStep data={data} onUpdate={handleUpdate} />;
     if (step === 4) return <DomesticReviewStep data={data} />;

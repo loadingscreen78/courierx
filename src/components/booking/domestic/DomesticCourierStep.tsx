@@ -23,7 +23,9 @@ const DomesticCourierStepComponent = ({ data, onUpdate }: Props) => {
   const [couriers, setCouriers] = useState<CourierOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [activeTab, setActiveTab] = useState<FilterTab>(() =>
+    data.shipmentType === 'document' ? 'air' : 'all'
+  );
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const handleTabChange = (tab: FilterTab) => {
@@ -63,7 +65,14 @@ const DomesticCourierStepComponent = ({ data, onUpdate }: Props) => {
         setError(result.error || 'Failed to fetch rates');
         return;
       }
-      setCouriers(result.couriers || []);
+      const fetchedCouriers: CourierOption[] = result.couriers || [];
+      setCouriers(fetchedCouriers);
+
+      // For documents: default to air, but fall back to surface if no air available
+      if (data.shipmentType === 'document') {
+        const hasAir = fetchedCouriers.some(c => c.mode === 'air');
+        setActiveTab(hasAir ? 'air' : 'surface');
+      }
     } catch {
       setError('Network error. Please try again.');
     } finally {
