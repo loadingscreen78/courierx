@@ -118,7 +118,7 @@ export default function AWBLabels() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchShipments]);
 
-  const isMockAwb = (awb: string | null) => !awb || awb.startsWith('CXD-MOCK-') || awb.startsWith('MOCK-');
+  const isMockAwb = (awb: string | null) => !awb || awb.startsWith('CXD-MOCK-') || awb.startsWith('CX-MOCK-') || awb.startsWith('MOCK-');
 
   const handleRegenerateLabel = async (shipment: AWBShipment) => {
     if (!shipment.domestic_awb) return;
@@ -350,7 +350,7 @@ function AWBCard({ shipment, isRegenerating, onDownload, onRegenerate, mode }: {
 }) {
   const hasLabel = !!shipment.domestic_label_url;
   const awbNumber = mode === 'domestic' ? shipment.domestic_awb : shipment.international_awb;
-  const isMock = awbNumber?.startsWith('CXD-MOCK-') || awbNumber?.startsWith('MOCK-');
+  const isMock = awbNumber?.startsWith('CXD-MOCK-') || awbNumber?.startsWith('CX-MOCK-') || awbNumber?.startsWith('MOCK-');
   const profile = shipment.profiles as { full_name: string; email: string } | null;
 
   return (

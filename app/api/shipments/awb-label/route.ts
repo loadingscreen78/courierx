@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Mock AWBs — no real label available
-    if (awb.startsWith('CXD-MOCK-') || awb.startsWith('MOCK-')) {
+    if (awb.startsWith('CXD-MOCK-') || awb.startsWith('CX-MOCK-') || awb.startsWith('MOCK-')) {
       return NextResponse.json({
         success: false,
         error: 'This is a mock shipment (NimbusPost credentials were not configured at booking time). Re-book with valid credentials to get a real AWB label.',
