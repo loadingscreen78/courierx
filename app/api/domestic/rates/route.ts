@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, couriers: mockCouriers });
     }
 
-    const couriers = await fetchDomesticRates(data);
+    const couriers = await fetchDomesticRates(data as import('@/lib/domestic/types').RateCheckRequest);
 
     return NextResponse.json({ success: true, couriers });
   } catch (error) {
