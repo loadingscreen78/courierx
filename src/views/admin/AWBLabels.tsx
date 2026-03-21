@@ -118,8 +118,16 @@ export default function AWBLabels() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchShipments]);
 
+  const isMockAwb = (awb: string | null) => !awb || awb.startsWith('CXD-MOCK-') || awb.startsWith('MOCK-');
+
   const handleRegenerateLabel = async (shipment: AWBShipment) => {
     if (!shipment.domestic_awb) return;
+
+    if (isMockAwb(shipment.domestic_awb)) {
+      toast({ title: 'Mock shipment', description: 'This was booked without NimbusPost credentials. Re-book to get a real AWB label.', variant: 'destructive' });
+      return;
+    }
+
     setRegeneratingId(shipment.id);
     try {
       const session = await supabase.auth.getSession();
@@ -342,6 +350,7 @@ function AWBCard({ shipment, isRegenerating, onDownload, onRegenerate, mode }: {
 }) {
   const hasLabel = !!shipment.domestic_label_url;
   const awbNumber = mode === 'domestic' ? shipment.domestic_awb : shipment.international_awb;
+  const isMock = awbNumber?.startsWith('CXD-MOCK-') || awbNumber?.startsWith('MOCK-');
   const profile = shipment.profiles as { full_name: string; email: string } | null;
 
   return (
@@ -357,9 +366,12 @@ function AWBCard({ shipment, isRegenerating, onDownload, onRegenerate, mode }: {
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className="font-mono text-sm font-bold text-white">{awbNumber}</span>
               {mode === 'domestic' && (
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${hasLabel ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${hasLabel ? 'bg-green-500' : 'bg-amber-500'}`} />
-                  {hasLabel ? 'Label Ready' : 'No Label'}
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                  isMock ? 'bg-gray-500/10 border-gray-500/30 text-gray-400'
+                  : hasLabel ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isMock ? 'bg-gray-500' : hasLabel ? 'bg-green-500' : 'bg-amber-500'}`} />
+                  {isMock ? 'Mock AWB' : hasLabel ? 'Label Ready' : 'No Label'}
                 </span>
               )}
               {mode === 'international' && (
@@ -400,9 +412,9 @@ function AWBCard({ shipment, isRegenerating, onDownload, onRegenerate, mode }: {
                 {shipment.domestic_label_url!.startsWith('http') ? 'Open' : 'Download'}
               </button>
             ) : (
-              <button onClick={() => onRegenerate(shipment)} disabled={isRegenerating} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium transition-colors">
+              <button onClick={() => onRegenerate(shipment)} disabled={isRegenerating || !!isMock} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors">
                 <RefreshCw className={`h-3.5 w-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                {isRegenerating ? 'Fetching...' : 'Fetch Label'}
+                {isMock ? 'Mock — No Label' : isRegenerating ? 'Fetching...' : 'Fetch Label'}
               </button>
             )
           )}
@@ -411,7 +423,7 @@ function AWBCard({ shipment, isRegenerating, onDownload, onRegenerate, mode }: {
               {shipment.current_status?.replace(/_/g, ' ')}
             </span>
           )}
-          {mode === 'domestic' && (
+          {mode === 'domestic' && !isMock && (
             <button onClick={() => onRegenerate(shipment)} disabled={isRegenerating} title="Re-fetch label" className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50">
               <RefreshCw className={`h-3.5 w-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
             </button>
