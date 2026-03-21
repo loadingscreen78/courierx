@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
 import { GiftItemsStep } from '@/components/booking/gift/GiftItemsStep';
@@ -424,7 +424,9 @@ const GiftBooking = () => {
     }
   };
 
-  const renderStep = () => {
+  // Memoize the active step — only re-renders when bookingData or currentStep actually changes.
+  // This prevents validation errors, dialog state, etc. from causing step re-renders.
+  const renderedStep = useMemo(() => {
     switch (currentStep) {
       case 1:
         return <GiftItemsStep data={bookingData} onUpdate={updateBookingData} totalValue={totalValue} />;
@@ -439,7 +441,8 @@ const GiftBooking = () => {
       default:
         return null;
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, bookingData]);
 
   const hasBlockingIssue = (currentStep === 1 && isOverValueCap) ||
     (currentStep === 4 && bookingData.prohibitedItemAttempted);
@@ -525,7 +528,7 @@ const GiftBooking = () => {
         )}
 
         <div className="bg-card rounded-xl border border-border p-6">
-          {renderStep()}
+          {renderedStep}
         </div>
 
         <div className="flex items-center justify-between pt-4">

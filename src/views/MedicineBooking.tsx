@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useDraft } from '@/hooks/useDraft';
 import { formatRelativeTime } from '@/lib/drafts/draftService';
@@ -439,7 +439,9 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
     }
   };
 
-  const renderStep = () => {
+  // Memoize the active step — only re-renders when bookingData or currentStep changes.
+  // Prevents validation errors and other parent state from causing step re-renders.
+  const renderedStep = useMemo(() => {
     switch (currentStep) {
       case 1:
         return (
@@ -485,7 +487,8 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
       default:
         return null;
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, bookingData]);
 
   return (
     <AppLayout>
@@ -545,7 +548,7 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
 
         {/* Step Content */}
         <div className="bg-card rounded-xl border border-border p-6">
-          {renderStep()}
+          {renderedStep}
         </div>
 
         {/* Navigation */}

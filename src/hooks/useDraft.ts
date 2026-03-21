@@ -37,35 +37,29 @@ export function useDraft<T>({
 }: UseDraftOptions<T> & { draftId?: string | null }): UseDraftReturn<T> {
   const [data, setDataState] = useState<T>(initialData);
   const [currentStep, setCurrentStep] = useState(1);
-  const [draftId, setDraftId] = useState<string | null>(propDraftId || null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasDraft, setHasDraft] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
+  // Use refs for draft metadata to avoid re-renders on auto-save
+  const draftIdRef = useRef<string | null>(propDraftId || null);
+  const lastSavedRef = useRef<Date | null>(null);
+  const hasDraftRef = useRef(false);
   const dataRef = useRef(data);
   const stepRef = useRef(currentStep);
-  const draftIdRef = useRef(draftId);
 
-  // Keep refs updated
-  useEffect(() => {
-    dataRef.current = data;
-  }, [data]);
+  // Expose lastSaved/hasDraft as state ONLY for UI display — updated sparingly
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasDraft, setHasDraft] = useState(false);
+  // draftId as state so consumers can read it
+  const [draftId, setDraftId] = useState<string | null>(propDraftId || null);
 
-  useEffect(() => {
-    stepRef.current = currentStep;
-  }, [currentStep]);
-
-  useEffect(() => {
-    draftIdRef.current = draftId;
-  }, [draftId]);
+  // Keep data/step refs in sync inline (no useEffect needed)
+  dataRef.current = data;
+  stepRef.current = currentStep;
 
   // Rehydrate Date objects from JSON strings after loading from localStorage
-  // JSON.stringify converts Date objects to ISO strings; this converts them back
   const rehydrateDates = useCallback((obj: unknown): unknown => {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj === 'string') {
-      // Check if it looks like an ISO date string
       const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
       if (isoDateRegex.test(obj)) {
         const date = new Date(obj);
@@ -86,54 +80,52 @@ export function useDraft<T>({
     return obj;
   }, []);
 
-  // Load existing draft on mount
+  // Load existing draft on mount — runs once
   useEffect(() => {
     if (initialized) return;
 
-    // Check if this is a fresh start (from "New Shipment" page)
     const isNew = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('new');
 
     if (isNew) {
-      // Fresh start — delete any existing draft of this type and use initial data
       const existingDraft = getActiveDraft<T>(type);
-      if (existingDraft) {
-        deleteDraft(existingDraft.id);
-      }
-      // Clean up the ?new param from URL without triggering navigation
+      if (existingDraft) deleteDraft(existingDraft.id);
       const url = new URL(window.location.href);
       url.searchParams.delete('new');
       window.history.replaceState({}, '', url.toString());
     } else if (propDraftId) {
-      // If propDraftId is provided, try to load that specific draft
       const specificDraft = getDraft(propDraftId);
       if (specificDraft && specificDraft.type === type) {
         setDataState(rehydrateDates(specificDraft.data) as T);
         setCurrentStep(specificDraft.currentStep);
+        draftIdRef.current = specificDraft.id;
+        lastSavedRef.current = new Date(specificDraft.updatedAt);
+        hasDraftRef.current = true;
+        // Update display state once on load
         setDraftId(specificDraft.id);
         setLastSaved(new Date(specificDraft.updatedAt));
         setHasDraft(true);
       }
     } else {
-      // Otherwise load the most recent draft of this type
       const existingDraft = getActiveDraft<T>(type);
       if (existingDraft) {
         setDataState(rehydrateDates(existingDraft.data) as T);
         setCurrentStep(existingDraft.currentStep);
+        draftIdRef.current = existingDraft.id;
+        lastSavedRef.current = new Date(existingDraft.updatedAt);
+        hasDraftRef.current = true;
+        // Update display state once on load
         setDraftId(existingDraft.id);
         setLastSaved(new Date(existingDraft.updatedAt));
         setHasDraft(true);
       }
     }
     setInitialized(true);
-  }, [type, initialized, propDraftId, rehydrateDates]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Save function
-  const saveNow = useCallback(() => {
-    // Don't save if not initialized or if data hasn't changed from initial
+  // Silent auto-save — writes to localStorage only, NO setState during typing
+  const silentSave = useCallback(() => {
     if (!initialized) return;
-
-    // Use a ref-based guard to avoid synchronous state flipping
-    // which causes re-renders and input blinking
     try {
       const draft = saveDraft(
         type,
@@ -143,12 +135,31 @@ export function useDraft<T>({
         undefined,
         draftIdRef.current || undefined
       );
+      draftIdRef.current = draft.id;
+      lastSavedRef.current = new Date();
+      hasDraftRef.current = true;
+    } catch (error) {
+      console.error('Failed to auto-save draft:', error);
+    }
+  }, [type, totalSteps, initialized]);
 
-      // Update state only if it's a new draft ID
-      if (draft.id !== draftIdRef.current) {
-        setDraftId(draft.id);
-      }
-
+  // saveNow — called explicitly (button click / step change) — updates display state
+  const saveNow = useCallback(() => {
+    if (!initialized) return;
+    try {
+      const draft = saveDraft(
+        type,
+        dataRef.current,
+        stepRef.current,
+        totalSteps,
+        undefined,
+        draftIdRef.current || undefined
+      );
+      draftIdRef.current = draft.id;
+      lastSavedRef.current = new Date();
+      hasDraftRef.current = true;
+      // Update display state — this is intentional (user clicked Save)
+      setDraftId(draft.id);
       setLastSaved(new Date());
       setHasDraft(true);
     } catch (error) {
@@ -156,19 +167,19 @@ export function useDraft<T>({
     }
   }, [type, totalSteps, initialized]);
 
-  // Auto-save on data/step change (debounced)
+  // Auto-save timer — uses silentSave (no setState, no re-render)
   useEffect(() => {
     if (!initialized) return;
-
-    // Skip if data equals initial data (deep comparison simplified)
-    if (JSON.stringify(data) === JSON.stringify(initialData) && !draftId) return;
+    if (JSON.stringify(data) === JSON.stringify(initialData) && !draftIdRef.current) return;
 
     const timer = setTimeout(() => {
-      saveNow();
+      silentSave();
     }, autoSaveInterval);
 
     return () => clearTimeout(timer);
-  }, [data, currentStep, initialized, autoSaveInterval, saveNow, initialData, draftId]);
+  // We intentionally only watch data/currentStep for the auto-save trigger
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, currentStep, initialized, autoSaveInterval]);
 
   // Save on page unload
   useEffect(() => {
@@ -177,12 +188,10 @@ export function useDraft<T>({
         saveDraft(type, dataRef.current, stepRef.current, totalSteps, undefined, draftIdRef.current || undefined);
       }
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [type, totalSteps, initialized]);
 
-  // Set data with function support
   const setData = useCallback((newData: T | ((prev: T) => T)) => {
     setDataState(prev => {
       if (typeof newData === 'function') {
@@ -192,22 +201,20 @@ export function useDraft<T>({
     });
   }, []);
 
-  // Set step
   const setStep = useCallback((step: number) => {
     setCurrentStep(step);
   }, []);
 
-  // Discard draft
   const discardDraft = useCallback(() => {
-    if (draftId) {
-      deleteDraft(draftId);
-    }
+    if (draftIdRef.current) deleteDraft(draftIdRef.current);
+    draftIdRef.current = null;
+    lastSavedRef.current = null;
+    hasDraftRef.current = false;
     setDataState(initialData);
     setCurrentStep(1);
     setDraftId(null);
     setLastSaved(null);
     setHasDraft(false);
-    // Remove query param if present
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       if (url.searchParams.has('draftId')) {
@@ -215,14 +222,15 @@ export function useDraft<T>({
         window.history.replaceState({}, '', url.toString());
       }
     }
-  }, [draftId, initialData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     data,
     currentStep,
     draftId,
     lastSaved,
-    isSaving,
+    isSaving: false, // no async saving, always false
     setData,
     setStep,
     saveNow,

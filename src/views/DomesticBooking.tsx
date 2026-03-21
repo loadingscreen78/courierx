@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { BookingProgress } from '@/components/booking/BookingProgress';
@@ -148,6 +148,15 @@ const DomesticBooking = () => {
     }
   };
 
+  const renderedStep = useMemo(() => {
+    if (step === 1) return <DomesticDetailsStep data={data} onUpdate={handleUpdate} />;
+    if (step === 2) return <DomesticAddressStep data={data} onUpdate={handleUpdate} />;
+    if (step === 3) return <DomesticCourierStep data={data} onUpdate={handleUpdate} />;
+    if (step === 4) return <DomesticReviewStep data={data} />;
+    return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, data]);
+
   return (
     <AppLayout>
       <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -179,18 +188,7 @@ const DomesticBooking = () => {
 
         {/* Step Content */}
         <div className="min-h-[400px]">
-          {step === 1 && (
-            <DomesticDetailsStep data={data} onUpdate={handleUpdate} />
-          )}
-          {step === 2 && (
-            <DomesticAddressStep data={data} onUpdate={handleUpdate} />
-          )}
-          {step === 3 && (
-            <DomesticCourierStep data={data} onUpdate={handleUpdate} />
-          )}
-          {step === 4 && (
-            <DomesticReviewStep data={data} />
-          )}
+          {renderedStep}
         </div>
 
         {/* Navigation */}
