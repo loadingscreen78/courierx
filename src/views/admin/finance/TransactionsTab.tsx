@@ -85,9 +85,9 @@ export function TransactionsTab() {
       if (error) console.error('[Finance] recharges error:', error);
 
       const rows = data || [];
-      const userIds = [...new Set(rows.map(r => r.user_id))];
+      const userIds = [...new Set(rows.map(r => r.user_id as string))];
       const profileMap = await fetchProfileMap(supabase, userIds);
-      setRechargeRows(rows.map(r => ({ ...r, ...profileMap[r.user_id] })));
+      setRechargeRows(rows.map(r => ({ ...r, ...profileMap[r.user_id as string] })));
     } finally {
       setLoadingRecharge(false);
     }
@@ -105,9 +105,9 @@ export function TransactionsTab() {
       if (error) console.error('[Finance] shipments error:', error);
 
       const rows = (data || []) as ShipmentRow[];
-      const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+      const userIds = [...new Set(rows.map(r => r.user_id as string).filter(Boolean))];
       const profileMap = await fetchProfileMap(supabase, userIds);
-      setShipmentRows(rows.map(r => ({ ...r, full_name: profileMap[r.user_id]?.full_name ?? null })));
+      setShipmentRows(rows.map(r => ({ ...r, full_name: profileMap[r.user_id as string]?.full_name ?? null })));
     } finally {
       setLoadingShipments(false);
     }
@@ -125,9 +125,9 @@ export function TransactionsTab() {
       if (error) console.error('[Finance] ledger error:', error);
 
       const rows = data || [];
-      const userIds = [...new Set(rows.map(r => r.user_id))];
+      const userIds = [...new Set(rows.map(r => r.user_id as string))];
       const profileMap = await fetchProfileMap(supabase, userIds);
-      setLedgerRows(rows.map(r => ({ ...r, ...profileMap[r.user_id] })));
+      setLedgerRows(rows.map(r => ({ ...r, ...profileMap[r.user_id as string] })));
     } finally {
       setLoadingLedger(false);
     }
