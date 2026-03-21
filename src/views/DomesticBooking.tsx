@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { BookingProgress } from '@/components/booking/BookingProgress';
@@ -56,6 +56,15 @@ const DomesticBooking = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Frozen snapshot for address step — prevents re-renders while typing
+  const addressSnapRef = useRef<DomesticBookingData | null>(null);
+  if (step === 2 && addressSnapRef.current === null) {
+    addressSnapRef.current = data;
+  }
+  if (step !== 2) {
+    addressSnapRef.current = null;
+  }
 
   const handleUpdate = useCallback((updates: Partial<DomesticBookingData>) => {
     setData(prev => ({ ...prev, ...updates }));
@@ -150,12 +159,12 @@ const DomesticBooking = () => {
 
   const renderedStep = useMemo(() => {
     if (step === 1) return <DomesticDetailsStep data={data} onUpdate={handleUpdate} />;
-    if (step === 2) return <DomesticAddressStep data={data} onUpdate={handleUpdate} />;
+    if (step === 2) return <DomesticAddressStep data={addressSnapRef.current ?? data} onUpdate={handleUpdate} />;
     if (step === 3) return <DomesticCourierStep data={data} onUpdate={handleUpdate} />;
     if (step === 4) return <DomesticReviewStep data={data} />;
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, data]);
+  }, [step === 2 ? 'step2' : step, step !== 2 ? data : null]);
 
   return (
     <AppLayout>

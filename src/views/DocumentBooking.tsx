@@ -349,23 +349,36 @@ const DocumentBooking = () => {
     }
   };
 
-  // Memoize the active step — only re-renders when bookingData or currentStep changes.
-  // Prevents validation errors and other parent state from causing step re-renders.
-  const renderedStep = useMemo(() => {
-    switch (currentStep) {
-      case 1:
-        return <DocumentDetailsStep data={bookingData} onUpdate={updateBookingData} />;
-      case 2:
-        return <DocumentAddressStep data={addressStepDataRef.current ?? bookingData} onUpdate={updateBookingData} />;
-      case 3:
-        return <DocumentAddonsStep data={bookingData} onUpdate={updateBookingData} />;
-      case 4:
-        return <DocumentReviewStep data={bookingData} onConfirmBooking={handleConfirmBooking} />;
-      default:
-        return null;
-    }
+  // Per-step memoization — each step only re-renders when its own data slice changes.
+
+  // Step 1: document details only
+  const step1 = useMemo(() => (
+    <DocumentDetailsStep data={bookingData} onUpdate={updateBookingData} />
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, bookingData]);
+  ), [bookingData.packetType, bookingData.documentType, bookingData.description, bookingData.weight, bookingData.length, bookingData.width, bookingData.height]);
+
+  // Step 2: address — frozen snapshot on entry
+  const step2 = useMemo(() => (
+    <DocumentAddressStep data={addressStepDataRef.current ?? bookingData} onUpdate={updateBookingData} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [currentStep === 2 ? 'step2' : 'other']);
+
+  // Step 3: addons only
+  const step3 = useMemo(() => (
+    <DocumentAddonsStep data={bookingData} onUpdate={updateBookingData} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData.insurance, bookingData.waterproofPackaging]);
+
+  // Step 4: review — full data, no typing
+  const step4 = useMemo(() => (
+    <DocumentReviewStep data={bookingData} onConfirmBooking={handleConfirmBooking} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData]);
+
+  const renderedStep = currentStep === 1 ? step1
+    : currentStep === 2 ? step2
+    : currentStep === 3 ? step3
+    : step4;
 
   return (
     <AppLayout>

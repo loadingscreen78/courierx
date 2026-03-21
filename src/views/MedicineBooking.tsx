@@ -439,56 +439,66 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
     }
   };
 
-  // Memoize the active step — only re-renders when bookingData or currentStep changes.
-  // Prevents validation errors and other parent state from causing step re-renders.
-  const renderedStep = useMemo(() => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <MedicineDetailsStep
-            medicines={bookingData.medicines}
-            onUpdateMedicines={updateMedicines}
-            aggregatedSupplyDays={aggregatedSupplyDays}
-            aggregatedTotalValue={aggregatedTotalValue}
-          />
-        );
-      case 2:
-        return (
-          <AddressStep
-            data={addressStepDataRef.current ?? bookingData}
-            onUpdate={updateBookingData}
-          />
-        );
-      case 3:
-        return (
-          <DocumentUploadStep
-            prescription={bookingData.prescription}
-            pharmacyBill={bookingData.pharmacyBill}
-            consigneeId={bookingData.consigneeId}
-            onUpdate={updateBookingData}
-          />
-        );
-      case 4:
-        return (
-          <AddonsStep
-            data={bookingData}
-            onUpdate={updateBookingData}
-          />
-        );
-      case 5:
-        return (
-          <ReviewStep
-            data={bookingData}
-            aggregatedSupplyDays={aggregatedSupplyDays}
-            aggregatedTotalValue={aggregatedTotalValue}
-            onConfirmBooking={handleConfirmBooking}
-          />
-        );
-      default:
-        return null;
-    }
+  // Per-step memoization — each step only re-renders when its own data slice changes.
+  // This is the core fix for blinking: bookingData changing (e.g. address typing) must NOT
+  // cause step 1 (medicines) to re-render, and vice versa.
+
+  // Step 1: only depends on medicines array
+  const step1 = useMemo(() => (
+    <MedicineDetailsStep
+      medicines={bookingData.medicines}
+      onUpdateMedicines={updateMedicines}
+      aggregatedSupplyDays={aggregatedSupplyDays}
+      aggregatedTotalValue={aggregatedTotalValue}
+    />
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, bookingData]);
+  ), [bookingData.medicines, aggregatedSupplyDays, aggregatedTotalValue]);
+
+  // Step 2: frozen snapshot on entry — never re-renders while typing
+  const step2 = useMemo(() => (
+    <AddressStep
+      data={addressStepDataRef.current ?? bookingData}
+      onUpdate={updateBookingData}
+    />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [currentStep === 2 ? 'step2' : 'other']);
+
+  // Step 3: only depends on document files
+  const step3 = useMemo(() => (
+    <DocumentUploadStep
+      prescription={bookingData.prescription}
+      pharmacyBill={bookingData.pharmacyBill}
+      consigneeId={bookingData.consigneeId}
+      onUpdate={updateBookingData}
+    />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData.prescription, bookingData.pharmacyBill, bookingData.consigneeId]);
+
+  // Step 4: only depends on addon flags
+  const step4 = useMemo(() => (
+    <AddonsStep
+      data={bookingData}
+      onUpdate={updateBookingData}
+    />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData.insurance, bookingData.specialPackaging]);
+
+  // Step 5: review — depends on full data but only shown at end, no typing happens here
+  const step5 = useMemo(() => (
+    <ReviewStep
+      data={bookingData}
+      aggregatedSupplyDays={aggregatedSupplyDays}
+      aggregatedTotalValue={aggregatedTotalValue}
+      onConfirmBooking={handleConfirmBooking}
+    />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData, aggregatedSupplyDays, aggregatedTotalValue]);
+
+  const renderedStep = currentStep === 1 ? step1
+    : currentStep === 2 ? step2
+    : currentStep === 3 ? step3
+    : currentStep === 4 ? step4
+    : step5;
 
   return (
     <AppLayout>

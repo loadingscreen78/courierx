@@ -61,12 +61,12 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
     return d;
   }, []);
   const sixMonthsFromNow = useMemo(() => addMonths(today, 6), [today]);
-  const twelveMonthsFromNow = useMemo(() => addMonths(today, 12), [today]);
+  const sevenMonthsFromNow = useMemo(() => addMonths(today, 7), [today]);
 
-  // Check expiry warning (6-12 months)
+  // Check expiry warning (6-7 months)
   const hasExpiryWarning = formData.expiryDate &&
     formData.expiryDate >= sixMonthsFromNow &&
-    formData.expiryDate <= twelveMonthsFromNow;
+    formData.expiryDate <= sevenMonthsFromNow;
 
   // Expiry validation: valid if >= 6 months from today
   const isExpiryValid = formData.expiryDate ? formData.expiryDate >= sixMonthsFromNow : false;
@@ -254,13 +254,18 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Daily Dosage (units)</Label>
+            <Label className="text-xs text-muted-foreground">
+              Daily Dosage ({formData.form === 'liquid' || formData.form === 'semi-liquid' ? 'ml/dose' : 'units/day'})
+            </Label>
             <Input
               type="number"
               min="1"
-              placeholder="e.g., 2"
-              value={formData.dailyDosage || ''}
-              onChange={(e) => updateField('dailyDosage', parseInt(e.target.value) || 1)}
+              placeholder={formData.form === 'liquid' || formData.form === 'semi-liquid' ? 'e.g., 10' : 'e.g., 2'}
+              value={formData.dailyDosage === 0 ? '' : formData.dailyDosage}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateField('dailyDosage', val === '' ? 0 : parseInt(val) || 0);
+              }}
               className="input-premium"
             />
           </div>
@@ -460,7 +465,7 @@ export const MedicineForm = ({ medicine, onSave, onCancel, isEditing }: Medicine
         <Alert className="border-warning bg-warning/10">
           <AlertTriangle className="h-4 w-4 text-warning" />
           <AlertDescription className="text-sm">
-            This medicine expires within 12 months. Ensure the consignee can use it before expiry.
+            This medicine expires within 7 months. Ensure the consignee can use it before expiry.
           </AlertDescription>
         </Alert>
       )}

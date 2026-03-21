@@ -424,25 +424,44 @@ const GiftBooking = () => {
     }
   };
 
-  // Memoize the active step — only re-renders when bookingData or currentStep actually changes.
-  // This prevents validation errors, dialog state, etc. from causing step re-renders.
-  const renderedStep = useMemo(() => {
-    switch (currentStep) {
-      case 1:
-        return <GiftItemsStep data={bookingData} onUpdate={updateBookingData} totalValue={totalValue} />;
-      case 2:
-        return <GiftAddressStep data={bookingData} onUpdate={updateBookingData} />;
-      case 3:
-        return <GiftAddonsStep data={bookingData} onUpdate={updateBookingData} />;
-      case 4:
-        return <GiftValidationStep data={bookingData} onUpdate={updateBookingData} />;
-      case 5:
-        return <GiftReviewStep data={bookingData} totalValue={totalValue} />;
-      default:
-        return null;
-    }
+  // Per-step memoization — each step only re-renders when its own data slice changes.
+  // This eliminates blinking: typing in address fields won't re-render the items step, etc.
+
+  // Step 1: items + safety checklist
+  const step1 = useMemo(() => (
+    <GiftItemsStep data={bookingData} onUpdate={updateBookingData} totalValue={totalValue} />
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, bookingData]);
+  ), [bookingData.items, bookingData.safetyChecklist, bookingData.prohibitedItemAttempted, totalValue]);
+
+  // Step 2: address — frozen snapshot on entry, never re-renders while typing
+  const step2 = useMemo(() => (
+    <GiftAddressStep data={bookingData} onUpdate={updateBookingData} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [currentStep === 2 ? 'step2' : 'other']);
+
+  // Step 3: addons only
+  const step3 = useMemo(() => (
+    <GiftAddonsStep data={bookingData} onUpdate={updateBookingData} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData.insurance, bookingData.giftWrapping, bookingData.passportPhotoPage, bookingData.passportAddressPage]);
+
+  // Step 4: validation
+  const step4 = useMemo(() => (
+    <GiftValidationStep data={bookingData} onUpdate={updateBookingData} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData.items, bookingData.safetyChecklist, bookingData.prohibitedItemAttempted]);
+
+  // Step 5: review — no typing, full data fine
+  const step5 = useMemo(() => (
+    <GiftReviewStep data={bookingData} totalValue={totalValue} />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [bookingData, totalValue]);
+
+  const renderedStep = currentStep === 1 ? step1
+    : currentStep === 2 ? step2
+    : currentStep === 3 ? step3
+    : currentStep === 4 ? step4
+    : step5;
 
   const hasBlockingIssue = (currentStep === 1 && isOverValueCap) ||
     (currentStep === 4 && bookingData.prohibitedItemAttempted);

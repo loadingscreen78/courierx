@@ -64,13 +64,13 @@ export const MedicineCard = ({ medicine, index, onEdit, onRemove, canRemove }: M
   const isOver90Days = supplyDays > 90;
   const isOverValueCap = totalValue > 25000;
 
-  // Check expiry warning (6-12 months)
+  // Check expiry warning (6-7 months)
   const today = new Date();
   const sixMonthsFromNow = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
-  const twelveMonthsFromNow = new Date(today.getFullYear(), today.getMonth() + 12, today.getDate());
+  const sevenMonthsFromNow = new Date(today.getFullYear(), today.getMonth() + 7, today.getDate());
   const hasExpiryWarning = medicine.expiryDate &&
     medicine.expiryDate >= sixMonthsFromNow &&
-    medicine.expiryDate <= twelveMonthsFromNow;
+    medicine.expiryDate <= sevenMonthsFromNow;
 
   return (
     <Card className={cn(
@@ -136,7 +136,7 @@ export const MedicineCard = ({ medicine, index, onEdit, onRemove, canRemove }: M
               {hasExpiryWarning && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm bg-warning/10 text-warning">
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  <span>Expires in &lt;12 months</span>
+                  <span>Expires in &lt;7 months</span>
                 </div>
               )}
             </div>
