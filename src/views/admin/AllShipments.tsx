@@ -72,14 +72,7 @@ export default function AllShipments() {
       try {
         let query = supabase
           .from('shipments')
-          .select(`
-            *,
-            profiles:user_id (
-              full_name,
-              email,
-              phone
-            )
-          `)
+          .select('*')
           .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED', 'DOMESTIC'])
           .order('created_at', { ascending: false });
 
@@ -94,7 +87,20 @@ export default function AllShipments() {
         const { data, error } = await query;
 
         if (error) throw error;
-        setShipments(data || []);
+
+        const rows = data || [];
+        const userIds = [...new Set(rows.map((s: any) => s.user_id).filter(Boolean))];
+        let profileMap: Record<string, { full_name: string; email: string; phone: string }> = {};
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, phone_number')
+            .in('id', userIds);
+          (profiles || []).forEach((p: any) => {
+            profileMap[p.id] = { full_name: p.full_name || '', email: p.email || '', phone: p.phone_number || '' };
+          });
+        }
+        setShipments(rows.map((s: any) => ({ ...s, profiles: profileMap[s.user_id] || null })));
       } catch (error) {
         console.error('Error fetching shipments:', error);
       } finally {

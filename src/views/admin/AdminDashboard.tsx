@@ -55,14 +55,7 @@ function AdminDashboard() {
       try {
         const { data: shipments, error } = await supabase
           .from('shipments')
-          .select(`
-            *,
-            profiles:user_id (
-              full_name,
-              email,
-              phone
-            )
-          `)
+          .select('*')
           .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED', 'DOMESTIC']);
 
         if (error) throw error;
@@ -107,19 +100,27 @@ function AdminDashboard() {
 
         const { data: recent } = await supabase
           .from('shipments')
-          .select(`
-            *,
-            profiles:user_id (
-              full_name,
-              email,
-              phone
-            )
-          `)
+          .select('*')
           .in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED', 'DOMESTIC'])
           .order('updated_at', { ascending: false })
           .limit(5);
 
-        setRecentShipments(recent || []);
+        // Fetch profiles separately to avoid RLS join issues
+        const allShipments = [...(shipments || []), ...(recent || [])];
+        const userIds = [...new Set(allShipments.map((s: any) => s.user_id).filter(Boolean))];
+        let profileMap: Record<string, { full_name: string | null; email: string | null; phone: string | null }> = {};
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, phone_number')
+            .in('id', userIds);
+          (profiles || []).forEach((p: any) => {
+            profileMap[p.id] = { full_name: p.full_name, email: p.email, phone: p.phone_number };
+          });
+        }
+        const attachProfile = (s: any) => ({ ...s, profiles: profileMap[s.user_id] || null });
+
+        setRecentShipments((recent || []).map(attachProfile));
 
         // Fetch weekly chart data
         const startOfWeek = getStartOfWeek(new Date());

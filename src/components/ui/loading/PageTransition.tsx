@@ -12,17 +12,17 @@ interface PageTransitionProps {
 export const PageTransition = ({ children, className }: PageTransitionProps) => {
   const pathname = usePathname();
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [displayChildren, setDisplayChildren] = useState(children);
 
   useEffect(() => {
     setIsTransitioning(true);
     const timeout = setTimeout(() => {
-      setDisplayChildren(children);
       setIsTransitioning(false);
     }, 150);
 
     return () => clearTimeout(timeout);
-  }, [pathname, children]);
+  // Only trigger on route changes, NOT on children prop changes (would flicker on every keystroke)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   return (
     <div
@@ -32,7 +32,7 @@ export const PageTransition = ({ children, className }: PageTransitionProps) => 
         className
       )}
     >
-      {displayChildren}
+      {children}
     </div>
   );
 };
