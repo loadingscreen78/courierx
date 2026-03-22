@@ -16,6 +16,7 @@ import {
   DollarSign,
   FileBarChart2,
   Users,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -33,6 +34,7 @@ const navItems = [
   { title: 'CXBC Partners', href: '/admin/cxbc-partners', icon: Briefcase, adminOnly: true },
   { title: 'Finance', href: '/admin/finance', icon: DollarSign, adminOnly: true },
   { title: 'Role Management', href: '/admin/roles', icon: ShieldCheck, adminOnly: true },
+  { title: 'Settings', href: '/admin/settings', icon: Settings, adminOnly: true },
 ];
 
 interface AdminSidebarProps {

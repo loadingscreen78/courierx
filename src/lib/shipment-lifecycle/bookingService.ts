@@ -4,6 +4,153 @@ import { getServiceRoleClient } from './supabaseAdmin';
 import { updateShipmentStatus } from './stateMachine';
 
 // ---------------------------------------------------------------------------
+// Default warehouse address (fallback if DB not yet seeded)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_WAREHOUSE = {
+  name: 'CourierX Warehouse',
+  phone: '9999999999',
+  address: 'Gopalpur',
+  city: 'Cuttack',
+  state: 'Odisha',
+  pincode: '753011',
+};
+
+async function getWarehouseAddress(): Promise<typeof DEFAULT_WAREHOUSE> {
+  try {
+    const supabase = getServiceRoleClient();
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'warehouse_address')
+      .maybeSingle();
+    if (data?.value) return data.value as typeof DEFAULT_WAREHOUSE;
+  } catch {
+    // fall through to default
+  }
+  return DEFAULT_WAREHOUSE;
+}
+
+// ---------------------------------------------------------------------------
+// NimbusPost — book domestic leg: customer → warehouse
+// ---------------------------------------------------------------------------
+
+const NIMBUS_API_BASE = 'https://api.nimbuspost.com/v1';
+
+interface NimbusTokenCache { token: string; expiresAt: number }
+let _tokenCache: NimbusTokenCache | null = null;
+
+async function getNimbusToken(): Promise<string> {
+  if (_tokenCache && _tokenCache.expiresAt > Date.now()) return _tokenCache.token;
+  const email = process.env.NIMBUS_EMAIL?.trim();
+  const password = process.env.NIMBUS_PASSWORD?.trim();
+  if (!email || !password) throw new Error('NIMBUS_EMAIL / NIMBUS_PASSWORD not configured');
+  const res = await fetch(`${NIMBUS_API_BASE}/users/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(`Nimbus auth failed: ${res.status}`);
+  const data = await res.json();
+  const token = data?.data;
+  if (!token) throw new Error('No token in Nimbus auth response');
+  _tokenCache = { token, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
+  return token;
+}
+
+interface NimbusBookingResult { success: boolean; awb?: string; label_url?: string; error?: string }
+
+async function bookDomesticLegToWarehouse(req: BookingRequest): Promise<NimbusBookingResult> {
+  const warehouse = await getWarehouseAddress();
+  const token = await getNimbusToken();
+
+  // Parse pickup pincode from originAddress (last 6 digits)
+  const pincodeMatch = req.originAddress.match(/\b(\d{6})\b/);
+  const pickupPincode = pincodeMatch?.[1] ?? '000000';
+
+  // Get serviceability to pick best courier
+  const serviceabilityRes = await fetch(`${NIMBUS_API_BASE}/courier/serviceability`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      origin: pickupPincode,
+      destination: warehouse.pincode,
+      payment_type: 'prepaid',
+      order_amount: req.declaredValue || 1,
+      weight: Math.round((req.weightKg || 0.5) * 1000),
+      length: req.dimensions?.lengthCm ?? 10,
+      breadth: req.dimensions?.widthCm ?? 10,
+      height: req.dimensions?.heightCm ?? 5,
+    }),
+  });
+
+  let courierId = 1;
+  if (serviceabilityRes.ok) {
+    const sData = await serviceabilityRes.json();
+    const couriers = Array.isArray(sData?.data) ? sData.data : [];
+    const best = couriers.filter((c: any) => c.freight_charges > 0)
+      .sort((a: any, b: any) => a.freight_charges - b.freight_charges)[0];
+    if (best?.id) courierId = Number(best.id);
+  }
+
+  const payload = {
+    order_number: `CXI-${Date.now()}`,
+    shipping_charges: 0,
+    discount: 0,
+    cod_charges: 0,
+    payment_type: 'prepaid',
+    order_amount: req.declaredValue || 1,
+    package_weight: Math.round((req.weightKg || 0.5) * 1000),
+    package_length: req.dimensions?.lengthCm ?? 10,
+    package_breadth: req.dimensions?.widthCm ?? 10,
+    package_height: req.dimensions?.heightCm ?? 5,
+    consignee: {
+      name: warehouse.name,
+      address: warehouse.address,
+      address_2: '',
+      city: warehouse.city,
+      state: warehouse.state,
+      pincode: warehouse.pincode,
+      phone: warehouse.phone,
+    },
+    pickup: {
+      warehouse_name: 'customer',
+      name: req.recipientName,
+      address: req.originAddress,
+      address_2: '',
+      city: '',
+      state: '',
+      pincode: pickupPincode,
+      phone: req.recipientPhone || '9999999999',
+    },
+    order_items: [{ name: `${req.shipmentType} shipment`, qty: 1, price: req.declaredValue || 1 }],
+    courier_id: courierId,
+  };
+
+  const res = await fetch(`${NIMBUS_API_BASE}/shipments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    return { success: false, error: `NimbusPost error: ${res.status} ${err}` };
+  }
+
+  const data = await res.json();
+  if (data?.status === false || data?.status_code !== 200) {
+    return { success: false, error: data?.message || 'Nimbus shipment creation failed' };
+  }
+
+  return {
+    success: true,
+    awb: data?.data?.awb_number || data?.data?.awb,
+    label_url: data?.data?.label || data?.data?.label_url,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
 
@@ -38,19 +185,8 @@ export interface BookingResult {
 // createBooking
 // ---------------------------------------------------------------------------
 
-/**
- * Creates a new shipment booking.
- *
- * 1. Validate inputs via Zod
- * 2. Check idempotency by booking_reference_id
- * 3. Create shipment row (PENDING / DOMESTIC / version=1)
- * 4. Call Nimbus createShipment
- * 5. On success: update domestic_awb, transition to BOOKING_CONFIRMED
- * 6. On failure: mark FAILED, return error
- * 7. API calls are logged with PII masking by the Nimbus client
- */
 export async function createBooking(req: BookingRequest): Promise<BookingResult> {
-  // 1. Validate inputs
+  // 1. Validate
   const validation = bookingRequestSchema.safeParse({
     bookingReferenceId: req.bookingReferenceId,
     recipientName: req.recipientName,
@@ -89,7 +225,7 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
     return { success: true, shipment: existing as unknown as ShipmentRow };
   }
 
-  // 3. Create shipment row — international bookings start at COUNTER (warehouse intake)
+  // 3. Create shipment row — starts at COUNTER (warehouse intake leg)
   const { data: created, error: insertError } = await supabase
     .from('shipments')
     .insert({
@@ -118,30 +254,50 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
     .single();
 
   if (insertError || !created) {
-    return {
-      success: false,
-      error: `Failed to create shipment: ${insertError?.message ?? 'unknown'}`,
-    };
+    return { success: false, error: `Failed to create shipment: ${insertError?.message ?? 'unknown'}` };
   }
 
   const shipment = created as unknown as ShipmentRow;
 
-  // 4. International bookings (medicine/document/gift) go to the warehouse first.
-  //    No NimbusPost call needed here — AWB is assigned by admin at dispatch time.
-  //    Just transition to BOOKING_CONFIRMED directly.
+  // 4. Book domestic leg via NimbusPost: customer → warehouse
+  //    Skip if credentials not configured (dev/staging)
+  const skipNimbus = !process.env.NIMBUS_EMAIL || !process.env.NIMBUS_PASSWORD;
+  let domesticAwb: string | undefined;
+  let domesticLabelUrl: string | undefined;
+
+  if (!skipNimbus) {
+    const nimbusResult = await bookDomesticLegToWarehouse(req);
+    if (nimbusResult.success && nimbusResult.awb) {
+      domesticAwb = nimbusResult.awb;
+      domesticLabelUrl = nimbusResult.label_url;
+    } else {
+      // Non-fatal: log but don't fail the booking — admin can manually arrange pickup
+      console.warn('[bookingService] Nimbus domestic leg failed (non-fatal):', nimbusResult.error);
+    }
+  }
+
+  // 5. Persist domestic AWB if obtained
+  if (domesticAwb) {
+    await supabase
+      .from('shipments')
+      .update({
+        domestic_awb: domesticAwb,
+        ...(domesticLabelUrl && { domestic_label_url: domesticLabelUrl }),
+      })
+      .eq('id', shipment.id);
+  }
+
+  // 6. Transition to BOOKING_CONFIRMED
   const result = await updateShipmentStatus({
     shipmentId: shipment.id,
     newStatus: 'BOOKING_CONFIRMED',
     source: 'INTERNAL',
-    metadata: { bookingReferenceId: req.bookingReferenceId },
+    metadata: { bookingReferenceId: req.bookingReferenceId, domesticAwb },
     expectedVersion: 1,
   });
 
   if (!result.success) {
-    return {
-      success: false,
-      error: result.error ?? 'Failed to confirm booking',
-    };
+    return { success: false, error: result.error ?? 'Failed to confirm booking' };
   }
 
   return { success: true, shipment: result.shipment };
@@ -151,13 +307,6 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
 // dispatchInternational
 // ---------------------------------------------------------------------------
 
-/**
- * Dispatches a shipment internationally.
- *
- * 1. Validate shipment is DISPATCH_APPROVED
- * 2. Generate mock international_awb
- * 3. Transition to INTERNATIONAL / DISPATCHED via state machine
- */
 export async function dispatchInternational(
   shipmentId: string,
   expectedVersion: number,
@@ -183,7 +332,6 @@ export async function dispatchInternational(
     };
   }
 
-  // Generate mock international AWB
   const internationalAwb = `INTL-${crypto.randomUUID()}`;
 
   await supabase
