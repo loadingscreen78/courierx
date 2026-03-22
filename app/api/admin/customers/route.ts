@@ -70,27 +70,38 @@ export async function GET(request: NextRequest) {
       roleMap.set(r.user_id, arr);
     }
 
-    // 6. Merge everything — auth users as source of truth
-    const customers = authUsers.map((u: any) => {
-      const profile = profileMap.get(u.id);
-      const wallet = walletMap.get(u.id) || { balance: 0, total_spent: 0 };
-      const shipAgg = shipCountMap.get(u.id) || { count: 0, lastAt: null };
+    // 6. Build a unified set of user_ids: auth users UNION profile users UNION wallet users UNION shipment users
+    // This ensures users deleted from auth but still having data are included
+    const allUserIds = new Set<string>();
+    authUsers.forEach((u: any) => allUserIds.add(u.id));
+    (profiles || []).forEach((p: any) => allUserIds.add(p.user_id));
+    walletMap.forEach((_, uid) => allUserIds.add(uid));
+    shipCountMap.forEach((_, uid) => allUserIds.add(uid));
+
+    const authUserMap = new Map<string, any>();
+    authUsers.forEach((u: any) => authUserMap.set(u.id, u));
+
+    const customers = Array.from(allUserIds).map((uid) => {
+      const u = authUserMap.get(uid);
+      const profile = profileMap.get(uid);
+      const wallet = walletMap.get(uid) || { balance: 0, total_spent: 0 };
+      const shipAgg = shipCountMap.get(uid) || { count: 0, lastAt: null };
       return {
-        user_id: u.id,
-        full_name: profile?.full_name || u.user_metadata?.full_name || u.user_metadata?.name || null,
-        email: profile?.email || u.email || null,
-        phone_number: profile?.phone_number || u.phone || null,
+        user_id: uid,
+        full_name: profile?.full_name || u?.user_metadata?.full_name || u?.user_metadata?.name || null,
+        email: profile?.email || u?.email || null,
+        phone_number: profile?.phone_number || u?.phone || null,
         wallet_balance: Math.max(0, wallet.balance),
         total_spent: wallet.total_spent,
         aadhaar_verified: profile?.aadhaar_verified || false,
         kyc_completed_at: profile?.kyc_completed_at || null,
-        created_at: u.created_at,
-        updated_at: profile?.updated_at || u.updated_at || u.created_at,
-        avatar_url: profile?.avatar_url || u.user_metadata?.avatar_url || null,
+        created_at: u?.created_at || profile?.created_at || new Date().toISOString(),
+        updated_at: profile?.updated_at || u?.updated_at || u?.created_at || new Date().toISOString(),
+        avatar_url: profile?.avatar_url || u?.user_metadata?.avatar_url || null,
         aadhaar_address: profile?.aadhaar_address || null,
         shipment_count: shipAgg.count,
         last_shipment_at: shipAgg.lastAt,
-        roles: roleMap.get(u.id) || [],
+        roles: roleMap.get(uid) || [],
       };
     });
 
