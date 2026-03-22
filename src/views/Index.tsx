@@ -15,7 +15,7 @@ import {
   Truck,
   Eye,
   Airplane,
-  Box,
+  Cube,
   CaretRight,
   Sparkle,
 } from '@phosphor-icons/react';
@@ -345,7 +345,7 @@ const Index = () => {
             href="/history"
           />
           <StatCard
-            icon={Box}
+            icon={Cube}
             value={addresses.length}
             label="Saved Addresses"
             href="/vault"

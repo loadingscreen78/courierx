@@ -6,8 +6,9 @@ import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, MagnifyingGlass, DownloadSimple, ArrowSquareOut, Package,
-  ArrowsClockwise, Funnel, Globe, Truck, CurrencyInr, TrendingUp,
+  ArrowsClockwise, Funnel, Globe, Truck, CurrencyInr, TrendUp,
 } from '@phosphor-icons/react';
+import { ExternalLink, Download, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -194,7 +195,7 @@ export default function AWBLabels() {
           className="grid grid-cols-1 sm:grid-cols-3 gap-4"
         >
           {[
-            { label: 'Total Shipment Revenue', value: totalRevenue, color: 'from-red-600/20 to-red-900/10 border-red-500/20', text: 'text-red-400', icon: TrendingUp },
+            { label: 'Total Shipment Revenue', value: totalRevenue, color: 'from-red-600/20 to-red-900/10 border-red-500/20', text: 'text-red-400', icon: TrendUp },
             { label: 'Domestic Revenue', value: domesticRevenue, color: 'from-green-600/20 to-green-900/10 border-green-500/20', text: 'text-green-400', icon: Truck },
             { label: 'International Revenue', value: intlRevenue, color: 'from-blue-600/20 to-blue-900/10 border-blue-500/20', text: 'text-blue-400', icon: Globe },
           ].map(card => (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HelpCircle, Ticket, MessageCircle, BookOpen } from '@phosphor-icons/react';
+import { Question, Ticket, ChatCircle, BookOpen } from '@phosphor-icons/react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -29,7 +29,7 @@ export default function Support() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="faq" className="flex items-center gap-2">
-              <HelpCircle size={16} weight="bold" />
+              <Question size={16} weight="bold" />
               <span className="hidden sm:inline">FAQ</span>
             </TabsTrigger>
             <TabsTrigger value="tickets" className="flex items-center gap-2">
@@ -37,7 +37,7 @@ export default function Support() {
               <span className="hidden sm:inline">My Tickets</span>
             </TabsTrigger>
             <TabsTrigger value="contact" className="flex items-center gap-2">
-              <MessageCircle size={16} weight="bold" />
+              <ChatCircle size={16} weight="bold" />
               <span className="hidden sm:inline">Contact</span>
             </TabsTrigger>
             <TabsTrigger value="knowledge" className="flex items-center gap-2">

@@ -26,8 +26,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   ArrowCounterClockwise,
-  TrendingUp,
-  TrendingDown,
+  TrendUp,
+  TrendDown,
   CurrencyInr,
   Clock,
   FileText,
@@ -351,8 +351,8 @@ const WalletPage = () => {
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Credits', value: totalCredits, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-500/10' },
-            { label: 'Debits', value: totalDebits, icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-500/10' },
+            { label: 'Credits', value: totalCredits, icon: TrendUp, color: 'text-green-600', bg: 'bg-green-500/10' },
+            { label: 'Debits', value: totalDebits, icon: TrendDown, color: 'text-red-500', bg: 'bg-red-500/10' },
             { label: 'Refunds', value: totalRefunds, icon: ArrowCounterClockwise, color: 'text-blue-600', bg: 'bg-blue-500/10' },
           ].map((stat, i) => (
             <motion.div

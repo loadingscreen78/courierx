@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, memo } from 'react';
-import { Calculator, Package, MapPin, Scale, Clock, Truck, Warning, Info, Check, X, Star } from '@phosphor-icons/react';
+import { Calculator, Package, MapPin, Scales, Clock, Truck, Warning, Info, Check, X, Star } from '@phosphor-icons/react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -223,7 +223,7 @@ const RateCalculator = () => {
               {/* Weight */}
               <div className="space-y-4 isolate-render" style={{ contain: 'layout style' }}>
                 <Label className="flex items-center gap-2">
-                  <Scale size={16} weight="bold" />
+                  <Scales size={16} weight="bold" />
                   Package Weight
                 </Label>
                 

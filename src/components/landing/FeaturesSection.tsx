@@ -1,6 +1,6 @@
 "use client";
 
-import { Pill, FileText, Gift, Truck, Clock, Globe, Headphones, ShieldCheck } from '@phosphor-icons/react';
+import { Pill, FileText, Gift, Truck, Clock, Globe, Headphones, ShieldCheck, Shield } from '@phosphor-icons/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { AnimatedSection, StaggerContainer, StaggerItem } from './AnimatedSection';
 import { motion } from 'framer-motion';
