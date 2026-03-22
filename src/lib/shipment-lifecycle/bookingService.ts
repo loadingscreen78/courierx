@@ -4,91 +4,6 @@ import { getServiceRoleClient } from './supabaseAdmin';
 import { updateShipmentStatus } from './stateMachine';
 
 // ---------------------------------------------------------------------------
-// NimbusPost direct integration (mirrors nimbusPostDomestic pattern)
-// Uses NIMBUS_EMAIL + NIMBUS_PASSWORD — NOT the legacy nimbusClient
-// ---------------------------------------------------------------------------
-
-const NIMBUS_API_BASE = 'https://api.nimbuspost.com/v1';
-
-interface NimbusTokenCache { token: string; expiresAt: number }
-let _tokenCache: NimbusTokenCache | null = null;
-
-async function getNimbusToken(): Promise<string> {
-  if (_tokenCache && _tokenCache.expiresAt > Date.now()) return _tokenCache.token;
-  const email = process.env.NIMBUS_EMAIL?.trim();
-  const password = process.env.NIMBUS_PASSWORD?.trim();
-  if (!email || !password) throw new Error('NIMBUS_EMAIL / NIMBUS_PASSWORD not configured');
-  const res = await fetch(`${NIMBUS_API_BASE}/users/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) throw new Error(`Nimbus auth failed: ${res.status}`);
-  const data = await res.json();
-  const token = data?.data;
-  if (!token) throw new Error('No token in Nimbus auth response');
-  _tokenCache = { token, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
-  return token;
-}
-
-interface NimbusBookingResult { success: boolean; awb?: string; label_url?: string; error?: string }
-
-async function createNimbusShipment(req: BookingRequest): Promise<NimbusBookingResult> {
-  const token = await getNimbusToken();
-  const payload = {
-    order_number: `CX-${Date.now()}`,
-    shipping_charges: 0,
-    discount: 0,
-    cod_charges: 0,
-    payment_type: 'prepaid',
-    order_amount: req.declaredValue,
-    package_weight: Math.round((req.weightKg || 0.5) * 1000), // kg → grams
-    package_length: req.dimensions?.lengthCm ?? 10,
-    package_breadth: req.dimensions?.widthCm ?? 10,
-    package_height: req.dimensions?.heightCm ?? 5,
-    consignee: {
-      name: req.recipientName,
-      address: req.destinationAddress,
-      address_2: '',
-      city: '',
-      state: req.destinationCountry,
-      pincode: '000000',
-      phone: req.recipientPhone || '0000000000',
-    },
-    pickup: {
-      warehouse_name: 'default',
-      name: 'CourierX Warehouse',
-      address: req.originAddress,
-      address_2: '',
-      city: 'Cuttack',
-      state: 'Odisha',
-      pincode: '753001',
-      phone: '9999999999',
-    },
-    order_items: [{ name: req.shipmentType, qty: 1, price: req.declaredValue || 1 }],
-    courier_id: 1, // default courier; will be overridden by NimbusPost auto-selection
-  };
-  const res = await fetch(`${NIMBUS_API_BASE}/shipments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    return { success: false, error: `NimbusPost error: ${res.status} ${err}` };
-  }
-  const data = await res.json();
-  if (data?.status === false || data?.status_code !== 200) {
-    return { success: false, error: data?.message || 'Shipment creation failed' };
-  }
-  return {
-    success: true,
-    awb: data?.data?.awb_number || data?.data?.awb,
-    label_url: data?.data?.label || data?.data?.label_url,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
 
@@ -211,47 +126,14 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
 
   const shipment = created as unknown as ShipmentRow;
 
-  // 4. Call NimbusPost to create shipment & get AWB
-  // Falls back to mock only if credentials are missing (dev/staging)
-  const skipNimbus = !process.env.NIMBUS_EMAIL || !process.env.NIMBUS_PASSWORD;
-
-  let awb: string;
-  let labelUrl: string | undefined;
-
-  if (skipNimbus) {
-    awb = `CX-MOCK-${Date.now()}`;
-  } else {
-    const nimbusResult = await createNimbusShipment(req);
-    if (!nimbusResult.success || !nimbusResult.awb) {
-      await supabase
-        .from('shipments')
-        .update({ current_status: 'FAILED' })
-        .eq('id', shipment.id)
-        .eq('version', 1);
-      return {
-        success: false,
-        error: nimbusResult.error ?? 'Nimbus API returned no AWB',
-        errorCode: 'NIMBUS_API_FAILURE',
-      };
-    }
-    awb = nimbusResult.awb;
-    labelUrl = nimbusResult.label_url;
-  }
-
-  // 5. Update domestic_awb (used for label fetch) and optionally label URL
-  await supabase
-    .from('shipments')
-    .update({
-      domestic_awb: awb,
-      ...(labelUrl && { domestic_label_url: labelUrl }),
-    })
-    .eq('id', shipment.id);
-
+  // 4. International bookings (medicine/document/gift) go to the warehouse first.
+  //    No NimbusPost call needed here — AWB is assigned by admin at dispatch time.
+  //    Just transition to BOOKING_CONFIRMED directly.
   const result = await updateShipmentStatus({
     shipmentId: shipment.id,
     newStatus: 'BOOKING_CONFIRMED',
-    source: 'NIMBUS',
-    metadata: { awb, bookingReferenceId: req.bookingReferenceId },
+    source: 'INTERNAL',
+    metadata: { bookingReferenceId: req.bookingReferenceId },
     expectedVersion: 1,
   });
 
