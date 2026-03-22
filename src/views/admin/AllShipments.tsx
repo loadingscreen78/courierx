@@ -101,13 +101,28 @@ export default function AllShipments() {
         if (userIds.length > 0) {
           const { data: profiles } = await supabase
             .from('profiles')
-            .select('id, full_name, email, phone_number')
-            .in('id', userIds);
+            .select('user_id, full_name, email, phone_number')
+            .in('user_id', userIds);
           (profiles || []).forEach((p: any) => {
-            profileMap[p.id] = { full_name: p.full_name || '', email: p.email || '', phone: p.phone_number || '' };
+            profileMap[p.user_id] = {
+              full_name: p.full_name || '',
+              email: p.email || '',
+              phone: p.phone_number || '',
+            };
           });
         }
-        setShipments(rows.map((s: any) => ({ ...s, profiles: profileMap[s.user_id] || null })));
+        setShipments(rows.map((s: any) => {
+          const profile = profileMap[s.user_id];
+          // Fallback: use pickup address contact info if no profile row exists
+          const fallbackName = s.pickup_address?.fullName || s.pickup_address?.full_name || '';
+          const fallbackPhone = s.pickup_address?.phone || '';
+          return {
+            ...s,
+            profiles: profile
+              ? profile
+              : (fallbackName ? { full_name: fallbackName, email: '', phone: fallbackPhone } : null),
+          };
+        }));
       } catch (error) {
         console.error('Error fetching shipments:', error);
       } finally {

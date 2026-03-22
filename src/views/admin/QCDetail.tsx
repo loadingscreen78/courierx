@@ -110,15 +110,30 @@ export default function QCDetail() {
     dimensions_height_cm: 0,
   });
 
-  const refreshShipment = useCallback(async () => {
-    if (!shipmentId) return;
+  const fetchShipmentData = useCallback(async (showError = false) => {
+    if (!shipmentId) return null;
     try {
+      // Fetch shipment row
       const { data, error } = await supabase
         .from('shipments')
-        .select(`*, profiles:user_id (full_name, email, phone)`)
+        .select('*')
         .eq('id', shipmentId)
         .single();
       if (error) throw error;
+
+      // Fetch profile separately (avoids column name mismatch issues)
+      if (data.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, email, phone_number')
+          .eq('user_id', data.user_id)
+          .maybeSingle();
+        data.profiles = profile
+          ? { full_name: profile.full_name, email: profile.email, phone: profile.phone_number }
+          : null;
+      }
+
+      // Fetch medicine items if applicable
       if (data.shipment_type === 'medicine') {
         const { data: medicineItems, error: medError } = await supabase
           .from('medicine_items')
@@ -126,40 +141,33 @@ export default function QCDetail() {
           .eq('shipment_id', shipmentId);
         if (!medError) data.medicine_items = medicineItems;
       }
-      setShipment(data);
+
+      return data;
     } catch (error) {
-      console.error('Error refreshing shipment:', error);
+      console.error('Error fetching shipment:', error);
+      if (showError) {
+        toast({ title: 'Error', description: 'Failed to load shipment details.', variant: 'destructive' });
+      }
+      return null;
     }
-  }, [shipmentId]);
+  }, [shipmentId, toast]);
+
+  const refreshShipment = useCallback(async () => {
+    const data = await fetchShipmentData(false);
+    if (data) setShipment(data);
+  }, [fetchShipmentData]);
 
   useEffect(() => {
-    const fetchShipment = async () => {
-      if (!shipmentId) return;
-      try {
-        const { data, error } = await supabase
-          .from('shipments')
-          .select(`*, profiles:user_id (full_name, email, phone)`)
-          .eq('id', shipmentId)
-          .single();
-        if (error) throw error;
-        if (data.shipment_type === 'medicine') {
-          const { data: medicineItems, error: medError } = await supabase
-            .from('medicine_items')
-            .select('*')
-            .eq('shipment_id', shipmentId);
-          if (!medError) data.medicine_items = medicineItems;
-        }
+    const load = async () => {
+      const data = await fetchShipmentData(true);
+      if (data) {
         setShipment(data);
         if (data.weight_kg) setChecklist(prev => ({ ...prev, final_weight_kg: data.weight_kg }));
-      } catch (error) {
-        console.error('Error fetching shipment:', error);
-        toast({ title: 'Error', description: 'Failed to load shipment details.', variant: 'destructive' });
-      } finally {
-        setIsLoading(false);
       }
+      setIsLoading(false);
     };
-    fetchShipment();
-  }, [shipmentId, toast]);
+    load();
+  }, [fetchShipmentData]);
 
   // Realtime subscription for shipment row updates (status/leg/version changes)
   useEffect(() => {
@@ -174,21 +182,20 @@ export default function QCDetail() {
       }, (payload) => {
         const updated = payload.new as Record<string, unknown>;
         // Ignore stale events where version is lower than current
-        if (shipment && typeof updated.version === 'number' && updated.version < shipment.version) return;
+        setShipment(prev => {
+          if (prev && typeof updated.version === 'number' && updated.version < prev.version) return prev;
+          return prev; // trigger refresh below
+        });
         refreshShipment();
       })
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('[QCDetail] Channel error, will refresh on reconnect');
-        }
         if (status === 'SUBSCRIBED') {
-          // Re-fetch on reconnection to catch missed events
           refreshShipment();
         }
       });
 
     return () => { supabase.removeChannel(channel); };
-  }, [shipmentId, shipment?.version, refreshShipment]);
+  }, [shipmentId, refreshShipment]);
 
   useEffect(() => {
     if (checklist.actual_unit_count > 0 && checklist.daily_dosage > 0) {
@@ -318,9 +325,9 @@ export default function QCDetail() {
           <div className="bg-[#16161a] rounded-[2rem] border border-white/5 p-6 shadow-2xl">
             <h3 className="text-sm font-semibold text-white mb-4">User Information</h3>
             <div className="space-y-3">
-              <div><p className="text-xs text-gray-500">Name</p><p className="text-white font-medium">{shipment.profiles?.full_name || 'Unknown'}</p></div>
+              <div><p className="text-xs text-gray-500">Name</p><p className="text-white font-medium">{shipment.profiles?.full_name || shipment.pickup_address?.fullName || 'Unknown'}</p></div>
               <div><p className="text-xs text-gray-500">Email</p><p className="text-gray-300 text-sm">{shipment.profiles?.email || 'No email'}</p></div>
-              <div><p className="text-xs text-gray-500">Phone</p><p className="text-gray-300 text-sm">{shipment.profiles?.phone || 'No phone'}</p></div>
+              <div><p className="text-xs text-gray-500">Phone</p><p className="text-gray-300 text-sm">{shipment.profiles?.phone || shipment.pickup_address?.phone || 'No phone'}</p></div>
               <div><p className="text-xs text-gray-500">Booking Date</p><p className="text-gray-300 text-sm">{new Date(shipment.created_at).toLocaleString()}</p></div>
             </div>
           </div>
