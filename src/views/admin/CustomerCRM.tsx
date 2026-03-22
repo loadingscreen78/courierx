@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AdminLayout } from '@/components/admin/layout';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { format, subDays, startOfMonth, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -131,80 +132,31 @@ export function CustomerCRM() {
   const [editForm, setEditForm] = useState({ full_name: '', phone_number: '', email: '' });
   const [saving, setSaving] = useState(false);
 
-  // ─── Fetch all customers with aggregated data ──────────────────────
+  const { session } = useAuth();
+
+  // ─── Fetch all customers via admin API (reads auth.users, not just profiles) ──
   const fetchCustomers = useCallback(async () => {
+    if (!session?.access_token) return;
     setIsLoading(true);
     try {
-      // Fetch profiles
-      const { data: profiles, error: pErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (pErr) throw pErr;
-
-      // Fetch shipment aggregates per user
-      const { data: shipments, error: sErr } = await supabase
-        .from('shipments')
-        .select('user_id, total_amount, created_at');
-      if (sErr) throw sErr;
-
-      // Fetch roles
-      const { data: roles, error: rErr } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-      if (rErr) throw rErr;
-
-      // Build aggregates
-      const shipAgg = new Map<string, { count: number; total: number; lastAt: string | null }>();
-      for (const s of shipments || []) {
-        const agg = shipAgg.get(s.user_id) || { count: 0, total: 0, lastAt: null };
-        agg.count++;
-        agg.total += s.total_amount || 0;
-        if (!agg.lastAt || s.created_at > agg.lastAt) agg.lastAt = s.created_at;
-        shipAgg.set(s.user_id, agg);
-      }
-
-      const roleMap = new Map<string, string[]>();
-      for (const r of roles || []) {
-        const arr = roleMap.get(r.user_id) || [];
-        arr.push(r.role);
-        roleMap.set(r.user_id, arr);
-      }
-
-      const merged: Customer[] = (profiles || []).map((p: any) => {
-        const agg = shipAgg.get(p.user_id) || { count: 0, total: 0, lastAt: null };
-        return {
-          user_id: p.user_id,
-          full_name: p.full_name,
-          email: p.email,
-          phone_number: p.phone_number,
-          wallet_balance: p.wallet_balance || 0,
-          aadhaar_verified: p.aadhaar_verified,
-          kyc_completed_at: p.kyc_completed_at,
-          created_at: p.created_at,
-          updated_at: p.updated_at,
-          avatar_url: p.avatar_url,
-          aadhaar_address: p.aadhaar_address,
-          shipment_count: agg.count,
-          total_spent: agg.total,
-          last_shipment_at: agg.lastAt,
-          roles: roleMap.get(p.user_id) || [],
-        };
+      const res = await fetch('/api/admin/customers', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
-
-      setCustomers(merged);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { customers: data } = await res.json();
+      setCustomers(data || []);
     } catch (err) {
       console.error('[CRM] fetch error:', err);
       toast.error('Failed to load customers');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [session?.access_token]);
 
   useEffect(() => {
     fetchCustomers();
 
-    // Real-time subscriptions for customer data changes
+    // Real-time subscriptions: re-fetch when profiles/shipments/wallet change
     const profilesChannel = supabase
       .channel('admin-crm-profiles')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchCustomers)
