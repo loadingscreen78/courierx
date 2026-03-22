@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AdminLayout } from '@/components/admin/layout';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { format, subDays, startOfMonth, parseISO } from 'date-fns';
 import { toast } from 'sonner';
@@ -146,15 +145,17 @@ export function CustomerCRM() {
   const [otpAttemptsLeft, setOtpAttemptsLeft] = useState(3);
   const [otpError, setOtpError] = useState('');
 
-  const { session } = useAuth();
 
   // ─── Fetch all customers via admin API (reads auth.users, not just profiles) ──
   const fetchCustomers = useCallback(async () => {
-    if (!session?.access_token) return;
+    // Always get a fresh token to avoid stale/expired access_token issues
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
+    const token = freshSession?.access_token;
+    if (!token) return;
     setIsLoading(true);
     try {
       const res = await fetch('/api/admin/customers', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { customers: data, top10: topData } = await res.json();
@@ -166,7 +167,7 @@ export function CustomerCRM() {
     } finally {
       setIsLoading(false);
     }
-  }, [session?.access_token]);
+  }, []);
 
   useEffect(() => {
     fetchCustomers();
@@ -368,13 +369,15 @@ export function CustomerCRM() {
   };
 
   const sendWalletOtp = async () => {
-    if (!session?.access_token) return;
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
+    const token = freshSession?.access_token;
+    if (!token) return;
     setOtpSending(true);
     setOtpError('');
     try {
       const res = await fetch('/api/admin/wallet-otp/send', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
@@ -392,7 +395,10 @@ export function CustomerCRM() {
   };
 
   const submitWalletAdjust = async () => {
-    if (!walletTarget || !session?.access_token) return;
+    if (!walletTarget) return;
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
+    const token = freshSession?.access_token;
+    if (!token) return;
     setWalletSaving(true);
     setOtpError('');
     try {
@@ -400,7 +406,7 @@ export function CustomerCRM() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           userId: walletTarget.user_id,

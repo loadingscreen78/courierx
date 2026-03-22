@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Warehouse, FloppyDisk, ArrowsClockwise } from '@phosphor-icons/react';
 
 interface WarehouseAddress {
@@ -23,26 +23,29 @@ const DEFAULT: WarehouseAddress = {
 };
 
 export default function WarehouseSettings() {
-  const { session } = useAuth();
   const [form, setForm] = useState<WarehouseAddress>(DEFAULT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    if (!session?.access_token) return;
-    fetch('/api/admin/settings', {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
-      .then((r) => r.json())
-      .then((res) => {
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { setLoading(false); return; }
+      try {
+        const r = await fetch('/api/admin/settings', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const res = await r.json();
         if (res.data?.value) setForm(res.data.value);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [session]);
+      } catch {}
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const handleSave = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) return;
     setSaving(true);
     setMessage(null);
