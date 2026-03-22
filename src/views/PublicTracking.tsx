@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { MagnifyingGlass, Package, MapPin, Clock, CheckCircle, Airplane, Globe, Phone, Shield, CaretDown, X, CalendarBlank } from '@phosphor-icons/react';
+import {
+  MagnifyingGlass, Package, CheckCircle, Globe, Phone, Shield,
+  CaretDown, X, CalendarBlank, ArrowClockwise, Circle,
+} from '@phosphor-icons/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,307 +12,98 @@ import { LandingHeader, LandingFooter } from '@/components/landing';
 import { useSeo } from '@/hooks/useSeo';
 import { motion, AnimatePresence } from 'framer-motion';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { cn } from '@/lib/utils';
+import { STATUS_LABEL_MAP, LEG_LABEL_MAP } from '@/lib/shipment-lifecycle/statusLabelMap';
+import type { ShipmentStatus, ShipmentLeg, TimelineSource } from '@/lib/shipment-lifecycle/types';
 
-// Helper to get a future date (3 days from now)
-const getFutureDeliveryDate = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 3);
-  date.setHours(18, 0, 0, 0);
-  return date;
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface TrackingShipment {
+  id: string;
+  tracking_number: string;
+  current_status: ShipmentStatus;
+  current_leg: ShipmentLeg;
+  domestic_awb: string | null;
+  international_awb: string | null;
+  recipient_name: string;
+  destination_country: string;
+  destination_address: string;
+  origin_address: string;
+  weight_kg: number | null;
+  shipment_type: string;
+  created_at: string;
+}
+
+interface TrackingTimelineEntry {
+  id: string;
+  status: ShipmentStatus;
+  leg: ShipmentLeg;
+  source: TimelineSource;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const SOURCE_COLORS: Record<TimelineSource, string> = {
+  NIMBUS: 'bg-blue-500',
+  INTERNAL: 'bg-amber-500',
+  SIMULATION: 'bg-purple-500',
+  SYSTEM: 'bg-gray-400',
 };
 
-const formatDeliveryDate = (date: Date) => {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const SOURCE_LABELS: Record<TimelineSource, string> = {
+  NIMBUS: 'NimbusPost',
+  INTERNAL: 'Warehouse',
+  SIMULATION: 'International',
+  SYSTEM: 'System',
 };
 
-// Mock tracking data
-const mockTrackingData = {
-  'CX1234567890': {
-    trackingNumber: 'CX1234567890',
-    status: 'in_transit',
-    statusLabel: 'In Transit',
-    origin: 'New Delhi, India',
-    destination: 'London, UK',
-    originCoords: { x: 540, y: 185 },
-    destCoords: { x: 380, y: 135 },
-    shipmentType: 'Medicine',
-    get estimatedDelivery() { return formatDeliveryDate(getFutureDeliveryDate()); },
-    get estimatedDeliveryDate() { return getFutureDeliveryDate(); },
-    weight: '500g',
-    progress: 65,
-    distance: '6,704 km',
-    flightTime: '8h 45m',
-    timeline: [
-      { status: 'Order Placed', date: 'Jan 1, 2026 10:30 AM', completed: true, location: 'Online' },
-      { status: 'Picked Up', date: 'Jan 2, 2026 02:00 PM', completed: true, location: 'New Delhi' },
-      { status: 'At Warehouse', date: 'Jan 3, 2026 09:00 AM', completed: true, location: 'Delhi Hub' },
-      { status: 'QC Passed', date: 'Jan 3, 2026 03:00 PM', completed: true, location: 'Delhi Hub' },
-      { status: 'In Transit', date: 'Jan 4, 2026 11:00 AM', completed: true, location: 'International', current: true },
-      { status: 'Customs Clearance', date: 'Expected Jan 5', completed: false, location: 'London' },
-      { status: 'Out for Delivery', date: 'Expected Jan 6', completed: false, location: 'London' },
-      { status: 'Delivered', date: 'Expected Jan 7', completed: false, location: 'London' },
-    ],
-  },
-};
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+}
 
-// Mock phone data
-const mockPhoneData: Record<string, string> = {
-  '9876543210': 'CX1234567890',
-};
+function getEstimatedDelivery(createdAt: string): string {
+  const d = new Date(createdAt);
+  d.setDate(d.getDate() + 7);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-// Countdown Timer Component
-const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+// ---------------------------------------------------------------------------
+// OTP Modal (phone search)
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    const calculateTimeLeft = () => {
-      const now = new Date().getTime();
-      const target = targetDate.getTime();
-      const difference = target - now;
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000),
-        });
-      }
-    };
-
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
-    return () => clearInterval(timer);
-  }, [targetDate]);
-
-  const timeUnits = [
-    { label: 'Days', value: timeLeft.days },
-    { label: 'Hours', value: timeLeft.hours },
-    { label: 'Minutes', value: timeLeft.minutes },
-    { label: 'Seconds', value: timeLeft.seconds },
-  ];
-
-  return (
-    <div className="grid grid-cols-4 gap-3">
-      {timeUnits.map((unit, i) => (
-        <motion.div
-          key={unit.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.1 }}
-          className="text-center"
-        >
-          <div className="relative">
-            <motion.div
-              key={unit.value}
-              initial={{ scale: 1.1 }}
-              animate={{ scale: 1 }}
-              className="bg-gradient-to-b from-coke-red to-coke-red/80 text-white rounded-xl p-4 shadow-lg shadow-coke-red/20"
-            >
-              <span className="text-3xl md:text-4xl font-bold font-typewriter">
-                {String(unit.value).padStart(2, '0')}
-              </span>
-            </motion.div>
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-coke-red/30 rounded-full blur-sm" />
-          </div>
-          <p className="text-xs md:text-sm text-muted-foreground mt-2 font-medium uppercase tracking-wide">
-            {unit.label}
-          </p>
-        </motion.div>
-      ))}
-    </div>
-  );
-};
-
-// Accurate World Map SVG Component
-const WorldMap = ({ origin, destination, progress }: { 
-  origin: { x: number; y: number }; 
-  destination: { x: number; y: number }; 
-  progress: number 
-}) => {
-  const [planePos, setPlanePos] = useState(0);
-
-  // Animate plane continuously
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlanePos(prev => (prev >= progress ? 0 : prev + 0.5));
-    }, 50);
-    return () => clearInterval(interval);
-  }, [progress]);
-
-  // Calculate curved path control point
-  const midX = (origin.x + destination.x) / 2;
-  const midY = Math.min(origin.y, destination.y) - 60;
-  
-  // Calculate plane position on curve
-  const t = planePos / 100;
-  const planeX = (1-t)*(1-t)*origin.x + 2*(1-t)*t*midX + t*t*destination.x;
-  const planeY = (1-t)*(1-t)*origin.y + 2*(1-t)*t*midY + t*t*destination.y;
-  
-  // Calculate plane angle
-  const dx = 2*(1-t)*(midX-origin.x) + 2*t*(destination.x-midX);
-  const dy = 2*(1-t)*(midY-origin.y) + 2*t*(destination.y-midY);
-  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-
-  return (
-    <div className="relative w-full aspect-[2/1] rounded-2xl overflow-hidden bg-background border border-border">
-      <svg viewBox="0 0 800 400" className="w-full h-full" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-          <linearGradient id="flightPath" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(var(--coke-red))" stopOpacity="1"/>
-            <stop offset="100%" stopColor="hsl(var(--coke-red))" stopOpacity="0.3"/>
-          </linearGradient>
-        </defs>
-        
-        {/* World Map - Accurate continents */}
-        <g className="fill-muted-foreground/20 dark:fill-muted-foreground/30">
-          {/* North America */}
-          <path d="M40,100 Q80,80 140,90 Q180,100 200,130 Q210,160 190,190 Q160,210 120,200 Q80,190 60,160 Q40,130 40,100Z"/>
-          {/* South America */}
-          <path d="M150,220 Q180,210 200,230 Q220,270 210,320 Q190,360 160,370 Q130,360 120,320 Q120,270 150,220Z"/>
-          {/* Europe */}
-          <path d="M340,80 Q380,70 420,80 Q450,100 440,130 Q420,150 380,145 Q350,140 340,120 Q335,100 340,80Z"/>
-          {/* Africa */}
-          <path d="M360,160 Q400,150 440,170 Q470,210 460,280 Q440,340 400,360 Q360,350 340,300 Q330,240 360,160Z"/>
-          {/* Asia */}
-          <path d="M450,60 Q520,50 600,70 Q680,100 720,150 Q740,200 700,250 Q640,280 560,260 Q480,240 460,180 Q440,120 450,60Z"/>
-          {/* India */}
-          <path d="M520,170 Q550,160 570,180 Q580,220 560,260 Q530,280 510,260 Q500,220 520,170Z" className="fill-muted-foreground/30 dark:fill-muted-foreground/40"/>
-          {/* Australia */}
-          <path d="M620,290 Q680,280 720,300 Q740,330 720,360 Q680,380 640,370 Q610,350 620,290Z"/>
-          {/* UK */}
-          <path d="M365,95 Q380,90 390,100 Q395,115 385,125 Q370,130 365,115 Q360,105 365,95Z" className="fill-muted-foreground/30 dark:fill-muted-foreground/40"/>
-        </g>
-
-        {/* Grid lines */}
-        <g className="stroke-border" strokeWidth="0.5" opacity="0.3">
-          {[100, 200, 300].map(y => <line key={y} x1="0" y1={y} x2="800" y2={y} />)}
-          {[200, 400, 600].map(x => <line key={x} x1={x} y1="0" x2={x} y2="400" />)}
-        </g>
-
-        {/* Flight path - dashed background */}
-        <path
-          d={`M${origin.x},${origin.y} Q${midX},${midY} ${destination.x},${destination.y}`}
-          fill="none"
-          className="stroke-muted-foreground/30"
-          strokeWidth="2"
-          strokeDasharray="8 8"
-        />
-
-        {/* Flight path - animated red line */}
-        <motion.path
-          d={`M${origin.x},${origin.y} Q${midX},${midY} ${destination.x},${destination.y}`}
-          fill="none"
-          stroke="hsl(var(--coke-red))"
-          strokeWidth="3"
-          strokeLinecap="round"
-          filter="url(#glow)"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: progress / 100 }}
-          transition={{ duration: 2, ease: "easeOut" }}
-        />
-
-        {/* Origin point - New Delhi */}
-        <g>
-          <circle cx={origin.x} cy={origin.y} r="8" className="fill-coke-red" />
-          <motion.circle
-            cx={origin.x} cy={origin.y} r="12"
-            fill="none" stroke="hsl(var(--coke-red))" strokeWidth="2"
-            animate={{ r: [12, 20, 12], opacity: [0.8, 0, 0.8] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <text x={origin.x + 15} y={origin.y + 5} className="fill-foreground text-xs font-medium">New Delhi</text>
-        </g>
-
-        {/* Destination point - London */}
-        <g>
-          <circle cx={destination.x} cy={destination.y} r="8" className="fill-foreground" />
-          <circle cx={destination.x} cy={destination.y} r="12" fill="none" className="stroke-foreground" strokeWidth="2" opacity="0.3" />
-          <text x={destination.x - 50} y={destination.y - 15} className="fill-foreground text-xs font-medium">London</text>
-        </g>
-
-        {/* Animated Plane */}
-        {planePos < progress && (
-          <motion.g
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <g transform={`translate(${planeX}, ${planeY}) rotate(${angle})`}>
-              <path 
-                d="M-12,0 L-4,-3 L8,0 L-4,3 Z M-8,-2 L-8,2 M4,-6 L4,6" 
-                className="fill-coke-red stroke-coke-red"
-                strokeWidth="1"
-              />
-            </g>
-            {/* Trail effect */}
-            <motion.circle
-              cx={planeX - 15 * Math.cos(angle * Math.PI / 180)}
-              cy={planeY - 15 * Math.sin(angle * Math.PI / 180)}
-              r="4"
-              className="fill-coke-red/50"
-              animate={{ opacity: [0.5, 0], r: [4, 8] }}
-              transition={{ duration: 0.5, repeat: Infinity }}
-            />
-          </motion.g>
-        )}
-      </svg>
-
-      {/* Distance overlay */}
-      <div className="absolute bottom-4 left-4 px-3 py-2 rounded-lg bg-card/80 backdrop-blur-sm border border-border">
-        <div className="flex items-center gap-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Distance: </span>
-            <span className="font-semibold text-foreground">6,704 km</span>
-          </div>
-          <div className="w-px h-4 bg-border" />
-          <div>
-            <span className="text-muted-foreground">Flight: </span>
-            <span className="font-semibold text-foreground">~8h 45m</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// OTP Verification Modal
-const OTPModal = ({ 
-  phone, 
-  onVerify, 
-  onClose 
-}: { 
-  phone: string; 
-  onVerify: (otp: string) => void; 
+const OTPModal = ({
+  phone,
+  onVerify,
+  onClose,
+}: {
+  phone: string;
+  onVerify: (otp: string) => void;
   onClose: () => void;
 }) => {
   const [otp, setOtp] = useState('');
   const [resendTimer, setResendTimer] = useState(30);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setResendTimer(prev => prev > 0 ? prev - 1 : 0);
-    }, 1000);
+    const timer = setInterval(() => setResendTimer(p => p > 0 ? p - 1 : 0), 1000);
     return () => clearInterval(timer);
   }, []);
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
         className="bg-card border border-border rounded-2xl p-8 max-w-md w-full shadow-2xl"
       >
         <div className="flex justify-between items-start mb-6">
@@ -323,7 +117,6 @@ const OTPModal = ({
             <X size={20} weight="bold" />
           </button>
         </div>
-
         <div className="flex justify-center mb-6">
           <InputOTP maxLength={6} value={otp} onChange={setOtp}>
             <InputOTPGroup>
@@ -333,12 +126,7 @@ const OTPModal = ({
             </InputOTPGroup>
           </InputOTP>
         </div>
-
-        <p className="text-center text-sm text-muted-foreground mb-6">
-          Demo OTP: <span className="font-mono font-bold text-coke-red">123456</span>
-        </p>
-
-        <Button 
+        <Button
           className="w-full h-12 bg-coke-red hover:bg-coke-red/90"
           onClick={() => onVerify(otp)}
           disabled={otp.length !== 6}
@@ -346,7 +134,6 @@ const OTPModal = ({
           <Shield size={20} weight="bold" className="mr-2" />
           Verify & Track
         </Button>
-
         <p className="text-center text-sm text-muted-foreground mt-4">
           {resendTimer > 0 ? (
             <>Resend OTP in <span className="font-semibold">{resendTimer}s</span></>
@@ -361,15 +148,70 @@ const OTPModal = ({
   );
 };
 
+// ---------------------------------------------------------------------------
+// Timeline Component
+// ---------------------------------------------------------------------------
+
+const TrackingTimeline = ({ entries }: { entries: TrackingTimelineEntry[] }) => {
+  if (entries.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground text-sm">
+        No tracking events yet. Check back soon.
+      </div>
+    );
+  }
+
+  const sorted = [...entries].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  return (
+    <ol className="space-y-0">
+      {sorted.map((entry, idx) => {
+        const statusInfo = STATUS_LABEL_MAP[entry.status];
+        const dotColor = SOURCE_COLORS[entry.source] ?? 'bg-gray-400';
+        const isLast = idx === sorted.length - 1;
+        const location = (entry.metadata?.location as string) || '';
+
+        return (
+          <li key={entry.id} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <span className={cn('mt-1 h-3 w-3 rounded-full shrink-0', dotColor)} />
+              {!isLast && <span className="w-0.5 flex-1 bg-border mt-1" />}
+            </div>
+            <div className="flex-1 pb-5">
+              <p className={cn('text-sm font-semibold', isLast ? 'text-coke-red' : 'text-foreground')}>
+                {statusInfo?.label ?? entry.status}
+              </p>
+              {location && (
+                <p className="text-xs text-muted-foreground">{location}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-0.5">{formatDate(entry.created_at)}</p>
+              <span className="text-[10px] font-medium text-muted-foreground/60">
+                via {SOURCE_LABELS[entry.source] ?? entry.source}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
+
 const PublicTracking = () => {
-  const [searchMode, setSearchMode] = useState<'tracking' | 'phone'>('tracking');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showOTP, setShowOTP] = useState(false);
-  const [trackingResult, setTrackingResult] = useState<typeof mockTrackingData['CX1234567890'] | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [shipment, setShipment] = useState<TrackingShipment | null>(null);
+  const [timeline, setTimeline] = useState<TrackingTimelineEntry[]>([]);
 
   useSeo({
     title: 'Track Your Shipment | CourierX',
@@ -377,72 +219,124 @@ const PublicTracking = () => {
     canonicalPath: '/public/track',
   });
 
-  const handleTrackByNumber = () => {
-    setLoading(true);
+  const fetchTracking = async (awb: string, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError('');
-    setTrackingResult(null);
 
-    setTimeout(() => {
-      const result = mockTrackingData[trackingNumber.toUpperCase() as keyof typeof mockTrackingData];
-      if (result) {
-        setTrackingResult(result);
-      } else {
-        setError('No shipment found with this tracking number.');
+    try {
+      const res = await fetch(`/api/track?awb=${encodeURIComponent(awb.trim())}`);
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setError(json.error || 'No shipment found with this tracking number.');
+        setShipment(null);
+        setTimeline([]);
+        return;
       }
+
+      setShipment(json.shipment);
+      setTimeline(json.timeline ?? []);
+    } catch {
+      setError('Failed to fetch tracking data. Please try again.');
+    } finally {
       setLoading(false);
-    }, 800);
+      setRefreshing(false);
+    }
+  };
+
+  const handleTrackByNumber = () => {
+    if (!trackingNumber.trim()) return;
+    setShipment(null);
+    setTimeline([]);
+    fetchTracking(trackingNumber);
   };
 
   const handlePhoneSearch = () => {
     setError('');
-    const trackingId = mockPhoneData[phoneNumber];
-    if (trackingId) {
-      setShowOTP(true);
-    } else {
-      setError('No shipment found for this phone number.');
+    if (phoneNumber.length !== 10) {
+      setError('Enter a valid 10-digit mobile number.');
+      return;
+    }
+    setShowOTP(true);
+  };
+
+  const handleOTPVerify = async (otp: string) => {
+    // Verify OTP via Twilio
+    try {
+      const res = await fetch('/api/auth/whatsapp/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `+91${phoneNumber}`, code: otp }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError('Invalid OTP. Please try again.');
+        return;
+      }
+    } catch {
+      setError('OTP verification failed.');
+      return;
+    }
+
+    setShowOTP(false);
+    setLoading(true);
+    setError('');
+
+    // Look up shipment by phone
+    try {
+      const res = await fetch(`/api/track?awb=${encodeURIComponent(phoneNumber)}`);
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError('No shipment found for this phone number.');
+      } else {
+        setShipment(json.shipment);
+        setTimeline(json.timeline ?? []);
+        setTrackingNumber(json.shipment.tracking_number);
+      }
+    } catch {
+      setError('Failed to fetch tracking data.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleOTPVerify = (otp: string) => {
-    if (otp === '123456') {
-      setShowOTP(false);
-      const trackingId = mockPhoneData[phoneNumber];
-      if (trackingId) {
-        setTrackingNumber(trackingId);
-        const result = mockTrackingData[trackingId as keyof typeof mockTrackingData];
-        setTrackingResult(result);
-      }
-    } else {
-      setError('Invalid OTP. Please try again.');
-    }
+  const currentStatusInfo = shipment ? STATUS_LABEL_MAP[shipment.current_status] : null;
+  const currentLegLabel = shipment ? LEG_LABEL_MAP[shipment.current_leg] : null;
+
+  // Progress percentage based on lifecycle
+  const PROGRESS_MAP: Record<ShipmentStatus, number> = {
+    PENDING: 5, BOOKING_CONFIRMED: 10, PICKED_UP: 20, IN_TRANSIT: 35,
+    OUT_FOR_DELIVERY: 45, DELIVERED: 55, ARRIVED_AT_WAREHOUSE: 60,
+    QUALITY_CHECKED: 65, PACKAGED: 70, DISPATCH_APPROVED: 75,
+    DISPATCHED: 80, IN_INTERNATIONAL_TRANSIT: 85, CUSTOMS_CLEARANCE: 90,
+    INTL_OUT_FOR_DELIVERY: 95, INTL_DELIVERED: 100, FAILED: 0,
   };
+  const progress = shipment ? (PROGRESS_MAP[shipment.current_status] ?? 10) : 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <LandingHeader />
-      
-      {/* OTP Modal */}
+
       <AnimatePresence>
         {showOTP && (
-          <OTPModal 
-            phone={phoneNumber} 
-            onVerify={handleOTPVerify} 
-            onClose={() => setShowOTP(false)} 
+          <OTPModal
+            phone={phoneNumber}
+            onVerify={handleOTPVerify}
+            onClose={() => setShowOTP(false)}
           />
         )}
       </AnimatePresence>
 
       <main className="flex-1 py-16">
-        <div className="container max-w-6xl">
+        <div className="container max-w-4xl">
           {/* Header */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="text-center mb-12"
           >
-            <motion.div 
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
+            <motion.div
+              initial={{ scale: 0.9 }} animate={{ scale: 1 }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-coke-red/10 text-coke-red mb-6"
             >
               <Globe size={20} weight="bold" />
@@ -452,31 +346,29 @@ const PublicTracking = () => {
               Track Your Shipment
             </h1>
             <p className="text-muted-foreground max-w-xl mx-auto text-lg">
-              Enter your tracking number or phone for instant updates.
+              Enter your tracking number for live updates from NimbusPost.
             </p>
           </motion.div>
 
           {/* Search Box */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="mb-12"
+            className="mb-10"
           >
             <div className="max-w-2xl mx-auto">
-              {/* Main Search */}
-              <div className="p-2 rounded-2xl bg-card border border-border shadow-lg dark:shadow-none">
+              <div className="p-2 rounded-2xl bg-card border border-border shadow-lg">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Input
-                    placeholder="Enter tracking number (e.g., CX1234567890)"
+                    placeholder="Enter tracking number (e.g., CX-...)"
                     value={trackingNumber}
-                    onChange={(e) => setTrackingNumber(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleTrackByNumber()}
+                    onChange={e => setTrackingNumber(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleTrackByNumber()}
                     className="flex-1 h-14 text-lg border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/50"
                   />
-                  <Button 
-                    size="lg" 
-                    className="h-14 px-10 gap-2 bg-coke-red hover:bg-coke-red/90 text-white font-semibold rounded-xl shadow-lg shadow-coke-red/25 hover:shadow-xl hover:shadow-coke-red/30 active:shadow-md transition-all duration-150"
+                  <Button
+                    size="lg"
+                    className="h-14 px-10 gap-2 bg-coke-red hover:bg-coke-red/90 text-white font-semibold rounded-xl"
                     onClick={handleTrackByNumber}
                     disabled={!trackingNumber.trim() || loading}
                   >
@@ -488,23 +380,20 @@ const PublicTracking = () => {
 
               {/* Advanced Search Toggle */}
               <div className="mt-4 text-center">
-                <button 
+                <button
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <span>Advanced Search</span>
+                  <span>Search by Phone</span>
                   <CaretDown size={16} weight="bold" className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
                 </button>
               </div>
 
-              {/* Advanced Search - Phone */}
               <AnimatePresence>
                 {showAdvanced && (
                   <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden"
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }} className="overflow-hidden"
                   >
                     <div className="mt-4 p-6 rounded-2xl bg-muted/50 border border-border">
                       <div className="flex items-center gap-2 mb-4">
@@ -520,13 +409,13 @@ const PublicTracking = () => {
                             +91
                           </span>
                           <Input
-                            placeholder="Enter 10-digit mobile number"
+                            placeholder="10-digit mobile number"
                             value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
                             className="flex-1 h-12 rounded-l-none border-l-0"
                           />
                         </div>
-                        <Button 
+                        <Button
                           className="h-12 px-6 bg-foreground hover:bg-foreground/90 text-background"
                           onClick={handlePhoneSearch}
                           disabled={phoneNumber.length !== 10}
@@ -535,17 +424,10 @@ const PublicTracking = () => {
                           Send OTP
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-3">
-                        Demo: Try phone <button onClick={() => setPhoneNumber('9876543210')} className="text-coke-red hover:underline font-medium">9876543210</button>
-                      </p>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-
-              <p className="text-center text-sm text-muted-foreground mt-4">
-                Demo: Try <button onClick={() => setTrackingNumber('CX1234567890')} className="text-coke-red hover:underline font-medium">CX1234567890</button>
-              </p>
             </div>
           </motion.div>
 
@@ -553,9 +435,7 @@ const PublicTracking = () => {
           <AnimatePresence>
             {error && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                 className="max-w-2xl mx-auto mb-8 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-center"
               >
                 {error}
@@ -565,193 +445,147 @@ const PublicTracking = () => {
 
           {/* Tracking Result */}
           <AnimatePresence>
-            {trackingResult && (
+            {shipment && (
               <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -30 }}
-                transition={{ duration: 0.5 }}
-                className="grid lg:grid-cols-5 gap-8"
+                initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4 }}
+                className="grid md:grid-cols-5 gap-6"
               >
-                {/* Left - Timeline */}
-                <div className="lg:col-span-2 order-2 lg:order-1">
-                  <Card className="border-border shadow-lg dark:shadow-none rounded-2xl overflow-hidden">
-                    <CardContent className="p-8">
-                      <h3 className="text-xl font-bold font-typewriter text-foreground mb-8">
-                        Shipment Timeline
-                      </h3>
-                      <div className="space-y-1">
-                        {trackingResult.timeline.map((step, index) => (
-                          <motion.div 
-                            key={index}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 * index }}
-                            className="flex gap-4"
-                          >
-                            <div className="flex flex-col items-center">
-                              <motion.div 
-                                className={`w-10 h-10 rounded-full flex items-center justify-center relative ${
-                                  step.current 
-                                    ? 'bg-coke-red text-white' 
-                                    : step.completed 
-                                      ? 'bg-foreground text-background' 
-                                      : 'bg-muted text-muted-foreground border-2 border-border'
-                                }`}
-                                animate={step.current ? { 
-                                  boxShadow: ['0 0 0 0 rgba(244,0,0,0.4)', '0 0 0 12px rgba(244,0,0,0)', '0 0 0 0 rgba(244,0,0,0.4)']
-                                } : {}}
-                                transition={{ duration: 2, repeat: Infinity }}
-                              >
-                                {step.completed ? (
-                                  <CheckCircle size={20} weight="bold" />
-                                ) : (
-                                  <div className="w-2 h-2 rounded-full bg-current" />
-                                )}
-                              </motion.div>
-                              {index < trackingResult.timeline.length - 1 && (
-                                <div className={`w-0.5 h-12 ${
-                                  step.completed ? 'bg-foreground' : 'bg-border'
-                                }`} />
-                              )}
-                            </div>
-                            <div className="flex-1 pb-4">
-                              <p className={`font-semibold ${
-                                step.current ? 'text-coke-red' : step.completed ? 'text-foreground' : 'text-muted-foreground'
-                              }`}>
-                                {step.status}
-                              </p>
-                              <p className="text-sm text-muted-foreground">{step.date}</p>
-                              <p className="text-xs text-muted-foreground/70">{step.location}</p>
-                            </div>
-                          </motion.div>
-                        ))}
+                {/* Left — Timeline */}
+                <div className="md:col-span-2 order-2 md:order-1">
+                  <Card className="border-border rounded-2xl overflow-hidden">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold font-typewriter text-foreground">
+                          Shipment Timeline
+                        </h3>
+                        <button
+                          onClick={() => fetchTracking(shipment.tracking_number || shipment.domestic_awb || '', true)}
+                          disabled={refreshing}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          <ArrowClockwise size={14} weight="bold" className={refreshing ? 'animate-spin' : ''} />
+                          {refreshing ? 'Refreshing...' : 'Refresh'}
+                        </button>
                       </div>
+                      <TrackingTimeline entries={timeline} />
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Right - Map & Details */}
-                <div className="lg:col-span-3 order-1 lg:order-2 space-y-6">
-                  {/* Expected Delivery Banner */}
+                {/* Right — Status & Details */}
+                <div className="md:col-span-3 order-1 md:order-2 space-y-4">
+                  {/* Status Banner */}
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-coke-red via-coke-red to-coke-red/90 p-6 text-white shadow-xl shadow-coke-red/20"
+                    initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                    className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-coke-red to-coke-red/80 p-6 text-white shadow-xl shadow-coke-red/20"
                   >
-                    {/* Background pattern */}
-                    <div className="absolute inset-0 opacity-10">
-                      <div className="absolute inset-0" style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M20 20h20v20H20V20zm0-20h20v20H20V0zM0 20h20v20H0V20zM0 0h20v20H0V0z'/%3E%3C/g%3E%3C/svg%3E")`,
-                      }} />
-                    </div>
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
-                          <CalendarBlank size={28} weight="bold" />
-                        </div>
-                        <div>
-                          <p className="text-white/80 text-sm font-medium">Expected Delivery</p>
-                          <p className="text-2xl md:text-3xl font-bold font-typewriter">
-                            {trackingResult.estimatedDelivery}
-                          </p>
-                        </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-white/70 text-sm">Current Status</p>
+                        <p className="text-2xl font-bold font-typewriter mt-1">
+                          {currentStatusInfo?.label ?? shipment.current_status}
+                        </p>
+                        <p className="text-white/70 text-sm mt-1">{currentLegLabel}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-white/80 text-sm">Delivering to</p>
-                        <p className="font-semibold">{trackingResult.destination}</p>
+                        <p className="text-white/70 text-sm">Est. Delivery</p>
+                        <p className="font-semibold mt-1">{getEstimatedDelivery(shipment.created_at)}</p>
                       </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mt-4">
+                      <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full bg-white rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${progress}%` }}
+                          transition={{ duration: 1, ease: 'easeOut' }}
+                        />
+                      </div>
+                      <p className="text-white/60 text-xs mt-1">{progress}% complete</p>
                     </div>
                   </motion.div>
 
-                  {/* Countdown Timer */}
-                  <Card className="border-border shadow-lg dark:shadow-none rounded-2xl overflow-hidden">
-                    <CardContent className="p-6">
-                      <div className="text-center mb-6">
-                        <h3 className="text-lg font-bold font-typewriter text-foreground mb-1">
-                          Arriving In
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Your package is on its way!
-                        </p>
-                      </div>
-                      <CountdownTimer targetDate={trackingResult.estimatedDeliveryDate} />
-                    </CardContent>
-                  </Card>
-
-                  {/* Status Header */}
-                  <Card className="border-border shadow-lg dark:shadow-none rounded-2xl overflow-hidden">
-                    <CardContent className="p-8">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                  {/* Shipment Info */}
+                  <Card className="border-border rounded-2xl">
+                    <CardContent className="p-6 space-y-4">
+                      <div className="flex items-center gap-3 pb-3 border-b border-border">
+                        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                          <Package size={20} weight="bold" className="text-muted-foreground" />
+                        </div>
                         <div>
-                          <p className="text-sm text-muted-foreground mb-1">Tracking Number</p>
-                          <p className="text-2xl font-bold font-typewriter text-foreground">
-                            {trackingResult.trackingNumber}
-                          </p>
-                        </div>
-                        <motion.div 
-                          className="px-5 py-2.5 rounded-full bg-coke-red/10 text-coke-red font-semibold"
-                          animate={{ 
-                            boxShadow: ['0 0 0 0 rgba(244,0,0,0.2)', '0 0 0 8px rgba(244,0,0,0)', '0 0 0 0 rgba(244,0,0,0.2)']
-                          }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        >
-                          {trackingResult.statusLabel}
-                        </motion.div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="mb-6">
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-muted-foreground">Delivery Progress</span>
-                          <span className="font-semibold text-foreground">{trackingResult.progress}%</span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <motion.div
-                            className="h-full bg-gradient-to-r from-coke-red to-coke-red/70 rounded-full"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${trackingResult.progress}%` }}
-                            transition={{ duration: 1, ease: "easeOut" }}
-                          />
+                          <p className="font-typewriter font-bold">{shipment.tracking_number}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{shipment.shipment_type} shipment</p>
                         </div>
                       </div>
 
-                      {/* Details Grid */}
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {[
-                          { icon: MapPin, label: 'From', value: trackingResult.origin, color: 'text-foreground' },
-                          { icon: MapPin, label: 'To', value: trackingResult.destination, color: 'text-coke-red' },
-                          { icon: Package, label: 'Type', value: trackingResult.shipmentType, color: 'text-foreground' },
-                          { icon: Clock, label: 'Est. Delivery', value: trackingResult.estimatedDelivery, color: 'text-candlestick-green' },
-                        ].map((item, i) => (
-                          <motion.div 
-                            key={i}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 + i * 0.1 }}
-                            className="p-4 rounded-xl bg-muted/50"
-                          >
-                            <item.icon className={`h-5 w-5 ${item.color} mb-2`} />
-                            <p className="text-xs text-muted-foreground">{item.label}</p>
-                            <p className={`font-semibold text-sm ${item.color}`}>{item.value}</p>
-                          </motion.div>
-                        ))}
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground text-xs">Recipient</p>
+                          <p className="font-medium">{shipment.recipient_name}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs">Destination</p>
+                          <p className="font-medium">{shipment.destination_country}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs">Origin</p>
+                          <p className="font-medium text-xs">{shipment.origin_address}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs">Weight</p>
+                          <p className="font-medium">{shipment.weight_kg ? `${shipment.weight_kg} kg` : 'N/A'}</p>
+                        </div>
+                        {shipment.domestic_awb && (
+                          <div>
+                            <p className="text-muted-foreground text-xs">Domestic AWB</p>
+                            <p className="font-typewriter text-xs">{shipment.domestic_awb}</p>
+                          </div>
+                        )}
+                        {shipment.international_awb && (
+                          <div>
+                            <p className="text-muted-foreground text-xs">Intl AWB</p>
+                            <p className="font-typewriter text-xs">{shipment.international_awb}</p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Map */}
-                  <Card className="border-border shadow-lg dark:shadow-none rounded-2xl overflow-hidden">
+                  {/* Leg Progress Steps */}
+                  <Card className="border-border rounded-2xl">
                     <CardContent className="p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Airplane className="h-5 w-5 text-coke-red" />
-                        <h3 className="font-bold text-foreground">Live Tracking</h3>
+                      <h4 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wide">Journey Progress</h4>
+                      <div className="flex items-center gap-2">
+                        {(['DOMESTIC', 'COUNTER', 'INTERNATIONAL', 'COMPLETED'] as ShipmentLeg[]).map((leg, idx) => {
+                          const legOrder = ['DOMESTIC', 'COUNTER', 'INTERNATIONAL', 'COMPLETED'];
+                          const currentIdx = legOrder.indexOf(shipment.current_leg);
+                          const isDone = idx < currentIdx;
+                          const isCurrent = idx === currentIdx;
+                          return (
+                            <div key={leg} className="flex items-center gap-2 flex-1">
+                              <div className="flex flex-col items-center flex-1">
+                                <div className={cn(
+                                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold',
+                                  isDone ? 'bg-green-500 text-white' :
+                                  isCurrent ? 'bg-coke-red text-white ring-2 ring-coke-red/30' :
+                                  'bg-muted text-muted-foreground'
+                                )}>
+                                  {isDone ? <CheckCircle size={16} weight="bold" /> : idx + 1}
+                                </div>
+                                <p className={cn('text-[10px] mt-1 text-center', isCurrent ? 'text-coke-red font-semibold' : 'text-muted-foreground')}>
+                                  {LEG_LABEL_MAP[leg].split(' ')[0]}
+                                </p>
+                              </div>
+                              {idx < 3 && (
+                                <div className={cn('h-0.5 flex-1 -mt-4', isDone ? 'bg-green-500' : 'bg-border')} />
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <WorldMap 
-                        origin={trackingResult.originCoords}
-                        destination={trackingResult.destCoords}
-                        progress={trackingResult.progress}
-                      />
                     </CardContent>
                   </Card>
                 </div>
@@ -760,6 +594,7 @@ const PublicTracking = () => {
           </AnimatePresence>
         </div>
       </main>
+
       <LandingFooter />
     </div>
   );

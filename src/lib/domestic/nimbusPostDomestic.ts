@@ -288,3 +288,103 @@ export async function createDomesticShipment(
     label_url: shipmentData?.label || shipmentData?.label_url,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Track Domestic Shipment — real-time status from NimbusPost
+// ---------------------------------------------------------------------------
+
+export interface NimbusTrackingEvent {
+  status: string;
+  location: string;
+  timestamp: string;
+  remarks?: string;
+}
+
+export interface TrackDomesticShipmentResponse {
+  success: boolean;
+  awb?: string;
+  currentStatus?: string;
+  currentLocation?: string;
+  events?: NimbusTrackingEvent[];
+  error?: string;
+}
+
+/**
+ * Fetches real-time tracking data for a domestic AWB from NimbusPost.
+ * Returns the full event history so we can build a complete timeline.
+ *
+ * NimbusPost tracking endpoint: POST /v1/courier/track
+ * Body: { awb_number: string }
+ * Response: { status: true, data: { current_status, current_location, tracking_data: [...] } }
+ */
+export async function trackDomesticShipment(
+  awb: string,
+): Promise<TrackDomesticShipmentResponse> {
+  const token = await getToken();
+
+  const res = await fetch(`${NIMBUS_API_BASE}/courier/track`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ awb_number: awb }),
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      tokenCache = null;
+      const newToken = await authenticate();
+      const retry = await fetch(`${NIMBUS_API_BASE}/courier/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${newToken}`,
+        },
+        body: JSON.stringify({ awb_number: awb }),
+      });
+      if (!retry.ok) {
+        return { success: false, error: `NimbusPost track failed: ${retry.status}` };
+      }
+      const retryData = await retry.json();
+      return parseTrackResponse(retryData);
+    }
+    return { success: false, error: `NimbusPost track failed: ${res.status}` };
+  }
+
+  const data = await res.json();
+  return parseTrackResponse(data);
+}
+
+function parseTrackResponse(data: any): TrackDomesticShipmentResponse {
+  if (!data?.status && !data?.data) {
+    return { success: false, error: 'Invalid response from NimbusPost' };
+  }
+
+  const trackData = data?.data;
+  if (!trackData) {
+    return { success: false, error: 'No tracking data in response' };
+  }
+
+  // NimbusPost returns tracking_data as array of events
+  const rawEvents: any[] = Array.isArray(trackData.tracking_data)
+    ? trackData.tracking_data
+    : Array.isArray(trackData.scans)
+      ? trackData.scans
+      : [];
+
+  const events: NimbusTrackingEvent[] = rawEvents.map((e: any) => ({
+    status: e.status || e.Status || e.activity || '',
+    location: e.location || e.Location || e.city || '',
+    timestamp: e.timestamp || e.date || e.DateTime || e.created_at || '',
+    remarks: e.remarks || e.Remarks || e.description || '',
+  }));
+
+  return {
+    success: true,
+    awb,
+    currentStatus: trackData.current_status || trackData.status || (events[events.length - 1]?.status ?? ''),
+    currentLocation: trackData.current_location || trackData.location || (events[events.length - 1]?.location ?? ''),
+    events,
+  };
+}

@@ -168,6 +168,30 @@ const ShipmentDetailSheet = ({
   onClose: () => void;
 }) => {
   const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(shipment.id);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+
+  const handleRefreshTracking = async () => {
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setRefreshMsg('Not authenticated'); return; }
+      const res = await fetch(`/api/shipments/track?id=${shipment.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (json.nimbusRefreshed) setRefreshMsg('Tracking updated from NimbusPost');
+      else if (json.nimbusError) setRefreshMsg(`Nimbus: ${json.nimbusError}`);
+      else setRefreshMsg('Already up to date');
+    } catch {
+      setRefreshMsg('Refresh failed');
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setRefreshMsg(null), 4000);
+    }
+  };
 
   const statusInfo = STATUS_LABEL_MAP[shipment.currentStatus];
   const legLabel = getLegLabel(shipment.currentLeg);
@@ -313,7 +337,22 @@ const ShipmentDetailSheet = ({
 
           {/* Real Timeline from shipment_timeline table */}
           <div>
-            <h4 className="font-medium mb-4">Shipment Timeline</h4>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-medium">Shipment Timeline</h4>
+              {shipment.currentLeg === 'DOMESTIC' && shipment.domesticAwb && (
+                <button
+                  onClick={handleRefreshTracking}
+                  disabled={refreshing}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  <CircleNotch size={14} weight="bold" className={refreshing ? 'animate-spin' : ''} />
+                  {refreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+              )}
+            </div>
+            {refreshMsg && (
+              <p className="text-xs text-muted-foreground mb-3 px-1">{refreshMsg}</p>
+            )}
             <ShipmentTimeline entries={timelineEntries} loading={timelineLoading} />
           </div>
         </div>

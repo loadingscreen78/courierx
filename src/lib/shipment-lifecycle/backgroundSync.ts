@@ -14,7 +14,7 @@
  */
 
 import { getServiceRoleClient } from './supabaseAdmin';
-import { trackShipment } from './nimbusClient';
+import { trackDomesticShipment } from '@/lib/domestic/nimbusPostDomestic';
 import { mapNimbusStatus } from './statusMapping';
 import { updateShipmentStatus } from './stateMachine';
 import { ShipmentRow } from './types';
@@ -104,11 +104,10 @@ async function processShipment(
     return;
   }
 
-  // Track with retry (Nimbus client already retries internally,
-  // but we handle the case where it still throws after exhausting retries)
+  // Track with retry (nimbusPostDomestic already handles 401 retry internally)
   let trackResponse;
   try {
-    trackResponse = await trackShipment(shipment.domestic_awb);
+    trackResponse = await trackDomesticShipment(shipment.domestic_awb);
   } catch (err) {
     result.errors++;
     console.error(
@@ -118,13 +117,13 @@ async function processShipment(
     return;
   }
 
-  if (!trackResponse.success || !trackResponse.rawStatus) {
+  if (!trackResponse.success || !trackResponse.currentStatus) {
     result.skipped++;
     return;
   }
 
   // Map raw Nimbus status to internal status
-  const mappedStatus = mapNimbusStatus(trackResponse.rawStatus);
+  const mappedStatus = mapNimbusStatus(trackResponse.currentStatus);
   if (!mappedStatus) {
     result.skipped++;
     return;
@@ -148,7 +147,7 @@ async function processShipment(
       source: 'NIMBUS',
       metadata: {
         trigger: 'domestic_sync_warehouse_delivery',
-        rawNimbusStatus: trackResponse.rawStatus,
+        rawNimbusStatus: trackResponse.currentStatus,
       },
       expectedVersion: shipment.version,
     });
@@ -171,7 +170,8 @@ async function processShipment(
     source: 'NIMBUS',
     metadata: {
       trigger: 'domestic_sync',
-      rawNimbusStatus: trackResponse.rawStatus,
+      rawNimbusStatus: trackResponse.currentStatus,
+      location: trackResponse.currentLocation,
     },
     expectedVersion: shipment.version,
   });
