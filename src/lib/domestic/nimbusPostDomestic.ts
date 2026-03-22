@@ -347,16 +347,16 @@ export async function trackDomesticShipment(
         return { success: false, error: `NimbusPost track failed: ${retry.status}` };
       }
       const retryData = await retry.json();
-      return parseTrackResponse(retryData);
+      return parseTrackResponse(retryData, awb);
     }
     return { success: false, error: `NimbusPost track failed: ${res.status}` };
   }
 
   const data = await res.json();
-  return parseTrackResponse(data);
+  return parseTrackResponse(data, awb);
 }
 
-function parseTrackResponse(data: any): TrackDomesticShipmentResponse {
+function parseTrackResponse(data: any, awb?: string): TrackDomesticShipmentResponse {
   if (!data?.status && !data?.data) {
     return { success: false, error: 'Invalid response from NimbusPost' };
   }
