@@ -4,18 +4,18 @@ import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  Home,
+  House,
   Truck,
   PlusCircle,
   Wallet,
-  Menu,
+  List,
   Pill,
   FileText,
   Gift,
   X,
-  Sparkles,
+  Sparkle,
   MapPin
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useHaptics } from '@/hooks/useHaptics';
 import { MobileMoreDrawer } from './MobileMoreDrawer';
@@ -176,32 +176,32 @@ export const MobileNav = () => {
       <nav className="sticky-nav safe-bottom">
         <div className="flex items-center justify-around h-[60px] px-3">
           <NavItem 
-            icon={<Home className="h-5 w-5" />} 
+            icon={<House className="h-5 w-5" weight="bold" />}
             label="Home" 
             href="/dashboard"
             isActive={pathname === '/dashboard'} 
           />
           <NavItem 
-            icon={<Truck className="h-5 w-5" />} 
+            icon={<Truck className="h-5 w-5" weight="bold" />}
             label="Track" 
             href="/shipments"
             isActive={pathname === '/shipments'}
           />
           <NavItem 
-            icon={<PlusCircle className="h-6 w-6" />} 
+            icon={<PlusCircle className="h-6 w-6" weight="bold" />}
             label="Ship" 
             href="#"
             isPrimary
             onClick={() => setShipDrawerOpen(true)}
           />
           <NavItem 
-            icon={<Wallet className="h-5 w-5" />} 
+            icon={<Wallet className="h-5 w-5" weight="bold" />}
             label="Wallet" 
             href="/wallet"
             isActive={pathname === '/wallet'}
           />
           <NavItem 
-            icon={<Menu className="h-5 w-5" />} 
+            icon={<List className="h-5 w-5" weight="bold" />}
             label="More" 
             href="#"
             isActive={drawerOpen}
@@ -265,7 +265,7 @@ export const MobileNav = () => {
           </div>
 
           <div className="mx-4 mt-4 p-3 rounded-xl bg-muted/50 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-coke-red shrink-0" />
+            <Sparkle className="h-4 w-4 text-coke-red shrink-0" />
             <p className="text-xs text-muted-foreground">
               {isDomestic
                 ? 'Pickup raised automatically. AWB label provided instantly.'

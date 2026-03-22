@@ -9,16 +9,16 @@ import {
   Gift, 
   Package,
   Clock,
-  CheckCircle2,
+  CheckCircle,
   Wallet,
   MapPin,
   Truck,
   Eye,
-  Plane,
+  Airplane,
   Box,
-  ChevronRight,
-  Sparkles,
-} from 'lucide-react';
+  CaretRight,
+  Sparkle,
+} from '@phosphor-icons/react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
@@ -171,7 +171,7 @@ const ShipmentCard = ({ shipment, index }: { shipment: Shipment; index: number }
             <div className="rounded-2xl bg-muted/50 border border-border p-4 mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-background">
-                  <Plane className="h-4 w-4 text-muted-foreground" />
+                  <Airplane className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-foreground">{getDestinationCity()}</p>
@@ -203,7 +203,7 @@ const ShipmentCard = ({ shipment, index }: { shipment: Shipment; index: number }
               <button className="flex items-center gap-1.5 text-sm text-coke-red font-semibold group-hover:gap-2.5 transition-all">
                 <Eye className="h-4 w-4" />
                 View
-                <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-all" />
+                <CaretRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-all" />
               </button>
             </div>
           </div>
@@ -302,7 +302,7 @@ const Index = () => {
               
               <div className="relative">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="h-4 w-4 text-coke-red" />
+                  <Sparkle className="h-4 w-4 text-coke-red" />
                   <p className="text-sm text-muted-foreground font-medium">
                     {format(new Date(), 'EEEE, MMMM d, yyyy')}
                   </p>
@@ -339,7 +339,7 @@ const Index = () => {
             href="/wallet"
           />
           <StatCard
-            icon={CheckCircle2}
+            icon={CheckCircle}
             value={deliveredShipments.length}
             label="Delivered"
             href="/history"
@@ -397,7 +397,7 @@ const Index = () => {
                 onClick={() => router.push('/shipments')}
                 className="text-coke-red hover:text-coke-red hover:bg-coke-red/10 rounded-full gap-1 font-medium"
               >
-                View All <ChevronRight className="h-4 w-4" />
+                View All <CaretRight className="h-4 w-4" />
               </Button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -448,7 +448,7 @@ const Index = () => {
                   <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
                       <div className="p-2.5 rounded-xl bg-coke-red/10">
-                        <CheckCircle2 className="h-5 w-5 text-coke-red" />
+                        <CheckCircle className="h-5 w-5 text-coke-red" />
                       </div>
                       <h2 className="text-lg font-bold text-foreground font-typewriter">Recently Delivered</h2>
                     </div>
@@ -458,7 +458,7 @@ const Index = () => {
                       onClick={() => router.push('/history')}
                       className="text-muted-foreground hover:text-foreground rounded-full gap-1 text-sm"
                     >
-                      History <ChevronRight className="h-4 w-4" />
+                      History <CaretRight className="h-4 w-4" />
                     </Button>
                   </div>
                   
@@ -474,7 +474,7 @@ const Index = () => {
                       >
                         <div className="flex items-center gap-4">
                           <div className="p-2.5 rounded-xl bg-coke-red/10">
-                            <CheckCircle2 className="h-4 w-4 text-coke-red" />
+                            <CheckCircle className="h-4 w-4 text-coke-red" />
                           </div>
                           <div>
                             <p className="font-medium text-foreground">

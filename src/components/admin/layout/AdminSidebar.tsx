@@ -3,38 +3,38 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  ScanLine, 
-  ClipboardCheck, 
-  Truck, 
+  SquaresFour,
+  Barcode,
+  ClipboardText,
+  Truck,
   Package,
-  LogOut,
+  SignOut,
   ShieldCheck,
   Briefcase,
-  ChevronRight,
-  Zap,
-  DollarSign,
-  FileBarChart2,
+  CaretRight,
+  Lightning,
+  CurrencyDollar,
+  ChartBar,
   Users,
-  Settings,
-} from 'lucide-react';
+  Gear,
+} from '@phosphor-icons/react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 const navItems = [
-  { title: 'Dashboard', href: '/admin', icon: LayoutDashboard, end: true },
-  { title: 'Inbound Station', href: '/admin/inbound', icon: ScanLine },
-  { title: 'AWB Labels', href: '/admin/awb-labels', icon: FileBarChart2 },
-  { title: 'QC Workbench', href: '/admin/qc', icon: ClipboardCheck },
+  { title: 'Dashboard', href: '/admin', icon: SquaresFour, end: true },
+  { title: 'Inbound Station', href: '/admin/inbound', icon: Barcode },
+  { title: 'AWB Labels', href: '/admin/awb-labels', icon: ChartBar },
+  { title: 'QC Workbench', href: '/admin/qc', icon: ClipboardText },
   { title: 'Outbound', href: '/admin/outbound', icon: Truck },
   { title: 'All Shipments', href: '/admin/shipments', icon: Package },
   { title: 'Customer CRM', href: '/admin/customers', icon: Users, adminOnly: true },
   { title: 'CXBC Partners', href: '/admin/cxbc-partners', icon: Briefcase, adminOnly: true },
-  { title: 'Finance', href: '/admin/finance', icon: DollarSign, adminOnly: true },
+  { title: 'Finance', href: '/admin/finance', icon: CurrencyDollar, adminOnly: true },
   { title: 'Role Management', href: '/admin/roles', icon: ShieldCheck, adminOnly: true },
-  { title: 'Settings', href: '/admin/settings', icon: Settings, adminOnly: true },
+  { title: 'Settings', href: '/admin/settings', icon: Gear, adminOnly: true },
 ];
 
 interface AdminSidebarProps {
@@ -105,7 +105,7 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
                   <item.icon className="h-4 w-4" />
                 </div>
                 <span className="flex-1">{item.title}</span>
-                {isActive && <ChevronRight className="h-3.5 w-3.5 text-red-500/60 shrink-0" />}
+                {isActive && <CaretRight className="h-3.5 w-3.5 text-red-500/60 shrink-0" />}
               </Link>
             );
           })}
@@ -121,7 +121,7 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-200 truncate">{displayName}</p>
             <div className="flex items-center gap-1 mt-0.5">
-              <Zap className="h-2.5 w-2.5 text-red-400" />
+              <Lightning className="h-2.5 w-2.5 text-red-400" />
               <span className="text-[10px] text-gray-500">{isAdmin ? 'Super Admin' : 'Staff'}</span>
             </div>
           </div>
@@ -132,7 +132,7 @@ export const AdminSidebar = ({ isMobile = false, onNavigate }: AdminSidebarProps
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-white/5 hover:text-gray-300 transition-all duration-200"
         >
           <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0">
-            <LogOut className="h-4 w-4" />
+            <SignOut className="h-4 w-4" />
           </div>
           Sign Out
         </button>

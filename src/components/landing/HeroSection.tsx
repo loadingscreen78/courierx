@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { ArrowRight, Package, Shield, Clock, Globe, Sparkles } from 'lucide-react';
+import { ArrowRight as ArrowRightLucide } from 'lucide-react';
+import { Package, ShieldCheck, Clock, Globe, Sparkle, ArrowRight } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -74,7 +75,7 @@ export const HeroSection = () => {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-primary/20 bg-primary/5 text-primary text-sm font-medium"
             >
-              <Sparkles className="h-4 w-4 text-coke-red" />
+              <Sparkle className="h-4 w-4 text-coke-red" />
               <span>Shipping to 150+ Countries</span>
             </motion.div>
             
@@ -127,7 +128,7 @@ export const HeroSection = () => {
               className="flex flex-wrap gap-6 text-sm"
             >
               {[
-                { icon: Shield, text: 'CSB-IV Compliant', color: 'text-candlestick-green' },
+                { icon: ShieldCheck, text: 'CSB-IV Compliant', color: 'text-candlestick-green' },
                 { icon: Clock, text: '3-7 Days Delivery', color: 'text-candlestick-green' },
                 { icon: Package, text: '50,000+ Shipments', color: 'text-candlestick-green' },
               ].map((badge, i) => (
@@ -157,7 +158,7 @@ export const HeroSection = () => {
                 onClick={() => router.push('/auth?panel=customer')}
               >
                 Start Shipping
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" weight="bold" />
               </Button>
               <Button 
                 variant="outline" 

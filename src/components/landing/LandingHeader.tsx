@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Menu, X, Package, ChevronRight } from 'lucide-react';
+import { List, X, Package, CaretRight } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useRouter } from 'next/navigation';
@@ -97,11 +97,11 @@ export const LandingHeader = () => {
               <AnimatePresence mode="wait" initial={false}>
                 {mobileMenuOpen ? (
                   <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
-                    <X className="h-5 w-5" />
+              <X className="h-5 w-5" />
                   </motion.div>
                 ) : (
                   <motion.div key="menu" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
-                    <Menu className="h-5 w-5" />
+              <List className="h-5 w-5" />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -133,7 +133,7 @@ export const LandingHeader = () => {
                       className="flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl hover:bg-muted/60 transition-colors"
                     >
                       {link.label}
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                      <CaretRight className="h-4 w-4 text-muted-foreground/50" />
                     </Link>
                   </motion.div>
                 ))}

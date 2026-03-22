@@ -1,6 +1,6 @@
 "use client";
 
-import { UserPlus, Package, CreditCard, Truck, CheckCircle } from 'lucide-react';
+import { UserCirclePlus, Package, CreditCard, Truck, CheckCircle } from '@phosphor-icons/react';
 import { AnimatedSection, StaggerContainer, StaggerItem } from './AnimatedSection';
 import { motion } from 'framer-motion';
 

@@ -4,14 +4,14 @@ import {
   Package, 
   Wallet, 
   FolderOpen, 
-  HelpCircle,
+  Question,
   Truck,
-  Send,
-  LogOut,
-  Home,
-  FileEdit,
-  ChevronRight,
-} from 'lucide-react';
+  PaperPlaneTilt,
+  SignOut,
+  House,
+  NotePencil,
+  CaretRight,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
@@ -160,18 +160,18 @@ export const DesktopSidebar = () => {
     {
       label: 'Main',
       items: [
-        { icon: <Home className="h-4 w-4" />, label: 'Dashboard', href: '/dashboard' },
-        { icon: <Truck className="h-4 w-4" />, label: 'Track Shipments', href: '/shipments', badge: activeShipments.length > 0 ? String(activeShipments.length) : undefined },
-        { icon: <Package className="h-4 w-4" />, label: 'History', href: '/history' },
-        { icon: <FileEdit className="h-4 w-4" />, label: 'Saved Drafts', href: '/drafts' },
+        { icon: <House className="h-4 w-4" weight="bold" />, label: 'Dashboard', href: '/dashboard' },
+        { icon: <Truck className="h-4 w-4" weight="bold" />, label: 'Track Shipments', href: '/shipments', badge: activeShipments.length > 0 ? String(activeShipments.length) : undefined },
+        { icon: <Package className="h-4 w-4" weight="bold" />, label: 'History', href: '/history' },
+        { icon: <NotePencil className="h-4 w-4" weight="bold" />, label: 'Saved Drafts', href: '/drafts' },
       ]
     },
     {
       label: 'Account',
       items: [
-        { icon: <Wallet className="h-4 w-4" />, label: 'Wallet & Billing', href: '/wallet' },
-        { icon: <FolderOpen className="h-4 w-4" />, label: 'My Vault', href: '/vault' },
-        { icon: <HelpCircle className="h-4 w-4" />, label: 'Help & Support', href: '/support' },
+        { icon: <Wallet className="h-4 w-4" weight="bold" />, label: 'Wallet & Billing', href: '/wallet' },
+        { icon: <FolderOpen className="h-4 w-4" weight="bold" />, label: 'My Vault', href: '/vault' },
+        { icon: <Question className="h-4 w-4" weight="bold" />, label: 'Help & Support', href: '/support' },
       ]
     }
   ];
@@ -206,7 +206,7 @@ export const DesktopSidebar = () => {
           className="group relative flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-coke-red to-red-600 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-md shadow-coke-red/25 hover:shadow-lg hover:shadow-coke-red/35 hover:brightness-105 overflow-hidden"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-600" />
-          <Send className="h-4 w-4 relative z-10" />
+          <PaperPlaneTilt className="h-4 w-4 relative z-10" weight="bold" />
           <span className="relative z-10">New Shipment</span>
         </Link>
       </div>
@@ -266,14 +266,14 @@ export const DesktopSidebar = () => {
               <VerificationBadge isVerified={!!isVerified} size="sm" showLabel={true} />
             </div>
           </div>
-          <ChevronRight className="h-3.5 w-3.5 text-sidebar-foreground/30 shrink-0" />
+          <CaretRight className="h-3.5 w-3.5 text-sidebar-foreground/30 shrink-0" />
         </Link>
         
         <button
           onClick={handleSignOut}
           className="w-full flex items-center justify-center gap-2 py-2.5 text-xs text-sidebar-foreground/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
         >
-          <LogOut className="h-3.5 w-3.5" />
+          <SignOut className="h-3.5 w-3.5" />
           Sign Out
         </button>
       </div>

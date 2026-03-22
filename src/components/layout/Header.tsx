@@ -1,6 +1,6 @@
 "use client";
 
-import { Wallet, Calculator, Bell, Globe, LogOut, AlertTriangle, Sparkles, ChevronDown } from 'lucide-react';
+import { Wallet, Calculator, Bell, SignOut, Warning, Sparkle, CaretDown } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -65,7 +65,7 @@ export const Header = () => {
             )}
           >
             {isLowBalance ? (
-              <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
+            <Warning className="h-3.5 w-3.5 text-destructive shrink-0" />
             ) : (
               <div className="w-5 h-5 rounded-md bg-green-500/15 flex items-center justify-center shrink-0">
                 <Wallet className="h-3 w-3 text-green-600" />
@@ -109,7 +109,7 @@ export const Header = () => {
                 : 'bg-muted/60 border-border/50 text-foreground'
             )}
           >
-            {isLowBalance && <AlertTriangle className="h-3 w-3" />}
+            {isLowBalance && <Warning className="h-3 w-3" />}
             <Wallet className="h-3 w-3" />
             ₹{balance.toLocaleString('en-IN')}
             {isLowBalance && (
@@ -121,7 +121,7 @@ export const Header = () => {
 
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="rounded-xl hover:bg-muted/80 relative h-9 w-9">
-            <Bell className="h-4 w-4" />
+            <Bell className="h-4 w-4" weight="bold" />
             <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-coke-red rounded-full border-2 border-background" />
           </Button>
 
@@ -133,7 +133,7 @@ export const Header = () => {
                   {displayName.charAt(0).toUpperCase()}
                 </div>
                 <span className="hidden sm:block text-sm font-medium max-w-[80px] truncate">{displayName.split(' ')[0]}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
+                <CaretDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-border/60">
@@ -155,7 +155,7 @@ export const Header = () => {
               
               {!isVerified && (
                 <DropdownMenuItem onClick={() => router.push('/auth/kyc')} className="rounded-lg text-sm">
-                  <Sparkles className="mr-2 h-3.5 w-3.5 text-amber-500" />
+                  <Sparkle className="mr-2 h-3.5 w-3.5 text-amber-500" />
                   Complete KYC
                 </DropdownMenuItem>
               )}
@@ -167,7 +167,7 @@ export const Header = () => {
               <DropdownMenuSeparator className="my-1" />
               
               <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive focus:bg-destructive/10 rounded-lg text-sm">
-                <LogOut className="mr-2 h-3.5 w-3.5" />
+                <SignOut className="mr-2 h-3.5 w-3.5" />
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>

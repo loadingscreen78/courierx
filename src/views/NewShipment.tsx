@@ -1,6 +1,6 @@
 "use client";
 
-import { Pill, FileText, Gift, ArrowRight, MapPin } from 'lucide-react';
+import { Pill, FileText, Gift, ArrowRight, MapPin } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card } from '@/components/ui/card';
