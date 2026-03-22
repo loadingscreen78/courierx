@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
+import { getOtpStore } from '@/lib/admin/walletOtpStore';
 
-const ADMIN_VERIFY_PASSWORD = 'we-are-champions';
+const MAX_OTP_ATTEMPTS = 3;
 
 async function requireAdmin(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -16,19 +17,58 @@ async function requireAdmin(request: NextRequest) {
 
 /**
  * POST /api/admin/wallet-adjust
- * Body: { userId, amount, description, verificationPassword }
+ * Body: { userId, amount, description, otp }
  */
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { userId, amount, description, verificationPassword } = await request.json();
+    const { userId, amount, description, otp } = await request.json();
 
-    // Step 1: Verify admin password
-    if (verificationPassword !== ADMIN_VERIFY_PASSWORD) {
-      return NextResponse.json({ error: 'Invalid verification password' }, { status: 403 });
+    // Step 1: Validate OTP
+    if (!otp || typeof otp !== 'string' || otp.length !== 6) {
+      return NextResponse.json({ error: 'Please enter a valid 6-digit OTP' }, { status: 400 });
     }
+
+    const otpStore = getOtpStore();
+    const stored = otpStore.get(admin.id);
+
+    if (!stored) {
+      return NextResponse.json({ error: 'No OTP found. Please request a new one.' }, { status: 400 });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      otpStore.delete(admin.id);
+      return NextResponse.json({ error: 'OTP expired. Please request a new one.' }, { status: 400 });
+    }
+
+    if (stored.attempts >= MAX_OTP_ATTEMPTS) {
+      otpStore.delete(admin.id);
+      return NextResponse.json(
+        { error: 'Too many wrong attempts. Please request a new OTP.', otpExpired: true },
+        { status: 429 }
+      );
+    }
+
+    if (stored.code !== otp) {
+      stored.attempts += 1;
+      const remaining = MAX_OTP_ATTEMPTS - stored.attempts;
+      if (remaining <= 0) {
+        otpStore.delete(admin.id);
+        return NextResponse.json(
+          { error: 'Incorrect OTP. No attempts remaining. Please request a new OTP.', otpExpired: true },
+          { status: 429 }
+        );
+      }
+      return NextResponse.json(
+        { error: `Incorrect OTP. ${remaining} attempt(s) remaining.`, attemptsRemaining: remaining },
+        { status: 400 }
+      );
+    }
+
+    // OTP is valid — clear it so it can't be reused
+    otpStore.delete(admin.id);
 
     // Step 2: Validate inputs
     if (!userId || typeof userId !== 'string') {
@@ -50,7 +90,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Step 4: Insert wallet ledger entry (credit/adjustment)
+    // Step 4: Insert wallet ledger entry
     const idempotencyKey = `admin_adjust_${admin.id}_${userId}_${Date.now()}`;
     const { error: ledgerErr } = await supabase
       .from('wallet_ledger')

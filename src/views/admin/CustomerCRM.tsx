@@ -135,9 +135,16 @@ export function CustomerCRM() {
 
   // Wallet adjustment dialog
   const [walletDialog, setWalletDialog] = useState(false);
-  const [walletForm, setWalletForm] = useState({ amount: '', description: '', password: '' });
+  const [walletForm, setWalletForm] = useState({ amount: '', description: '' });
   const [walletTarget, setWalletTarget] = useState<Customer | null>(null);
   const [walletSaving, setWalletSaving] = useState(false);
+  // OTP verification state
+  const [walletStep, setWalletStep] = useState<'form' | 'otp'>('form');
+  const [walletOtp, setWalletOtp] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpSendsRemaining, setOtpSendsRemaining] = useState(2);
+  const [otpAttemptsLeft, setOtpAttemptsLeft] = useState(3);
+  const [otpError, setOtpError] = useState('');
 
   const { session } = useAuth();
 
@@ -352,13 +359,42 @@ export function CustomerCRM() {
   // ─── Wallet adjustment ───────────────────────────────────────────
   const openWalletAdjust = (customer: Customer) => {
     setWalletTarget(customer);
-    setWalletForm({ amount: '', description: '', password: '' });
+    setWalletForm({ amount: '', description: '' });
+    setWalletStep('form');
+    setWalletOtp('');
+    setOtpError('');
+    setOtpAttemptsLeft(3);
     setWalletDialog(true);
+  };
+
+  const sendWalletOtp = async () => {
+    if (!session?.access_token) return;
+    setOtpSending(true);
+    setOtpError('');
+    try {
+      const res = await fetch('/api/admin/wallet-otp/send', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
+      setOtpSendsRemaining(data.sendsRemaining ?? 0);
+      setWalletStep('otp');
+      setWalletOtp('');
+      setOtpAttemptsLeft(3);
+      toast.success('OTP sent to admin email');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send OTP');
+      setOtpError(err.message || 'Failed to send OTP');
+    } finally {
+      setOtpSending(false);
+    }
   };
 
   const submitWalletAdjust = async () => {
     if (!walletTarget || !session?.access_token) return;
     setWalletSaving(true);
+    setOtpError('');
     try {
       const res = await fetch('/api/admin/wallet-adjust', {
         method: 'POST',
@@ -370,11 +406,22 @@ export function CustomerCRM() {
           userId: walletTarget.user_id,
           amount: Number(walletForm.amount),
           description: walletForm.description,
-          verificationPassword: walletForm.password,
+          otp: walletOtp,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to adjust wallet');
+      if (!res.ok) {
+        if (data.otpExpired) {
+          setOtpError(data.error);
+          setOtpAttemptsLeft(0);
+        } else if (data.attemptsRemaining !== undefined) {
+          setOtpAttemptsLeft(data.attemptsRemaining);
+          setOtpError(data.error);
+        } else {
+          throw new Error(data.error || 'Failed to adjust wallet');
+        }
+        return;
+      }
       toast.success(data.message || 'Wallet adjusted successfully');
       setWalletDialog(false);
       fetchCustomers();
@@ -1014,7 +1061,7 @@ export function CustomerCRM() {
       </Dialog>
 
       {/* Wallet Adjustment Dialog */}
-      <Dialog open={walletDialog} onOpenChange={setWalletDialog}>
+      <Dialog open={walletDialog} onOpenChange={(open) => { if (!open) { setWalletDialog(false); setWalletStep('form'); setOtpError(''); } }}>
         <DialogContent className="bg-[#16161a] border-white/10 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1022,59 +1069,113 @@ export function CustomerCRM() {
               Adjust Wallet
             </DialogTitle>
             <DialogDescription className="text-gray-500">
-              Add funds to {walletTarget?.full_name || walletTarget?.email || 'customer'}&apos;s wallet.
-              Current balance: ₹{walletTarget?.wallet_balance.toLocaleString('en-IN') || '0'}
+              {walletStep === 'form'
+                ? <>Add funds to {walletTarget?.full_name || walletTarget?.email || 'customer'}&apos;s wallet. Current balance: ₹{walletTarget?.wallet_balance.toLocaleString('en-IN') || '0'}</>
+                : 'Enter the OTP sent to admin email to confirm.'
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Amount (₹)</label>
-              <Input
-                type="number"
-                min="1"
-                max="1000000"
-                placeholder="Enter amount"
-                value={walletForm.amount}
-                onChange={e => setWalletForm(f => ({ ...f, amount: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white text-lg font-semibold"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Reason / Description</label>
-              <Textarea
-                placeholder="e.g. Promotional credit, Refund adjustment, etc."
-                value={walletForm.description}
-                onChange={e => setWalletForm(f => ({ ...f, description: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white resize-none"
-                rows={2}
-              />
-            </div>
-            <div className="border-t border-white/5 pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="h-4 w-4 text-amber-400" />
-                <label className="text-xs text-amber-400 font-medium">Admin Verification Required</label>
+
+          {walletStep === 'form' && (
+            <>
+              <div className="space-y-4 py-2">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Amount (₹)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    placeholder="Enter amount"
+                    value={walletForm.amount}
+                    onChange={e => setWalletForm(f => ({ ...f, amount: e.target.value }))}
+                    className="bg-white/5 border-white/10 text-white text-lg font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Reason / Description</label>
+                  <Textarea
+                    placeholder="e.g. Promotional credit, Refund adjustment, etc."
+                    value={walletForm.description}
+                    onChange={e => setWalletForm(f => ({ ...f, description: e.target.value }))}
+                    className="bg-white/5 border-white/10 text-white resize-none"
+                    rows={2}
+                  />
+                </div>
               </div>
-              <Input
-                type="password"
-                placeholder="Enter admin verification password"
-                value={walletForm.password}
-                onChange={e => setWalletForm(f => ({ ...f, password: e.target.value }))}
-                className="bg-white/5 border-white/10 text-white"
-              />
-              <p className="text-[10px] text-gray-600 mt-1">This is a security step to confirm your identity.</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setWalletDialog(false)} className="text-gray-400">Cancel</Button>
-            <Button
-              onClick={submitWalletAdjust}
-              disabled={walletSaving || !walletForm.amount || !walletForm.description || !walletForm.password}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {walletSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <IndianRupee className="h-4 w-4 mr-1" />}
-              Add ₹{walletForm.amount ? Number(walletForm.amount).toLocaleString('en-IN') : '0'} to Wallet
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setWalletDialog(false)} className="text-gray-400">Cancel</Button>
+                <Button
+                  onClick={sendWalletOtp}
+                  disabled={otpSending || !walletForm.amount || !walletForm.description || Number(walletForm.amount) <= 0}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {otpSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                  Send OTP to Verify
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {walletStep === 'otp' && (
+            <>
+              <div className="space-y-4 py-2">
+                <div className="bg-white/[0.04] rounded-xl p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">Amount</p>
+                    <p className="text-lg font-bold text-green-400">₹{walletForm.amount ? Number(walletForm.amount).toLocaleString('en-IN') : '0'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Customer</p>
+                    <p className="text-sm text-white">{walletTarget?.full_name || walletTarget?.email || '—'}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Mail className="h-4 w-4 text-amber-400" />
+                    <label className="text-xs text-amber-400 font-medium">Enter 6-digit OTP from admin email</label>
+                  </div>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={walletOtp}
+                    onChange={e => { setWalletOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
+                    className="bg-white/5 border-white/10 text-white text-center text-2xl font-mono tracking-[0.5em]"
+                  />
+                  {otpError && (
+                    <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
+                      <XCircle className="h-3 w-3" /> {otpError}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[10px] text-gray-600">{otpAttemptsLeft} attempt(s) remaining</p>
+                    {otpAttemptsLeft === 0 || otpSendsRemaining > 0 ? (
+                      <button
+                        onClick={sendWalletOtp}
+                        disabled={otpSending || otpSendsRemaining <= 0}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 disabled:text-gray-600 disabled:cursor-not-allowed"
+                      >
+                        {otpSending ? 'Sending...' : otpSendsRemaining > 0 ? `Resend OTP (${otpSendsRemaining} left)` : 'No resends left (24h limit)'}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setWalletStep('form')} className="text-gray-400">Back</Button>
+                <Button
+                  onClick={submitWalletAdjust}
+                  disabled={walletSaving || walletOtp.length !== 6 || otpAttemptsLeft <= 0}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {walletSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <IndianRupee className="h-4 w-4 mr-1" />}
+                  Confirm &amp; Add ₹{walletForm.amount ? Number(walletForm.amount).toLocaleString('en-IN') : '0'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </AdminLayout>
