@@ -1,8 +1,11 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 
 export type ShippingMode = 'international' | 'domestic';
+
+const STORAGE_KEY = 'courierx_shipping_mode';
 
 interface ShippingModeContextType {
   mode: ShippingMode;
@@ -14,17 +17,31 @@ interface ShippingModeContextType {
 const ShippingModeContext = createContext<ShippingModeContextType | undefined>(undefined);
 
 export const ShippingModeProvider = ({ children }: { children: ReactNode }) => {
-  const [mode, setModeState] = useState<ShippingMode>('international');
+  const [mode, setModeState] = useState<ShippingMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === 'domestic' || saved === 'international') return saved;
+    }
+    return 'international';
+  });
   const [isSwitching, setIsSwitching] = useState(false);
+  const router = useRouter();
 
   const setMode = useCallback((newMode: ShippingMode) => {
     if (newMode === mode) return;
     setIsSwitching(true);
     setTimeout(() => {
       setModeState(newMode);
+      localStorage.setItem(STORAGE_KEY, newMode);
+      // Navigate to the appropriate dashboard after switching
+      if (newMode === 'international') {
+        router.push('/dashboard');
+      } else {
+        router.push('/new-shipment');
+      }
       setTimeout(() => setIsSwitching(false), 600);
     }, 800);
-  }, [mode]);
+  }, [mode, router]);
 
   const toggleMode = useCallback(() => {
     setMode(mode === 'international' ? 'domestic' : 'international');

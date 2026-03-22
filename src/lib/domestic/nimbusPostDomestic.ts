@@ -224,7 +224,8 @@ export async function createDomesticShipment(
     cod_charges: 0,
     payment_type: params.payment_type,
     order_amount: params.order_amount,
-    package_weight: params.weight,
+    // NimbusPost expects weight in grams (integer)
+    package_weight: Math.round(params.weight * 1000),
     package_length: params.length,
     package_breadth: params.breadth,
     package_height: params.height,

@@ -64,6 +64,7 @@ export default function AllShipments() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [legFilter, setLegFilter] = useState('all');
   const router = useRouter();
 
   useEffect(() => {
@@ -82,6 +83,12 @@ export default function AllShipments() {
 
         if (typeFilter !== 'all') {
           query = query.eq('shipment_type', typeFilter as any);
+        }
+
+        if (legFilter === 'domestic') {
+          query = query.eq('current_leg', 'DOMESTIC');
+        } else if (legFilter === 'international') {
+          query = query.in('current_leg', ['COUNTER', 'INTERNATIONAL', 'COMPLETED']);
         }
 
         const { data, error } = await query;
@@ -138,7 +145,7 @@ export default function AllShipments() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [statusFilter, typeFilter]);
+  }, [statusFilter, typeFilter, legFilter]);
 
   const filteredShipments = shipments.filter(s => 
     s.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -195,6 +202,16 @@ export default function AllShipments() {
               <SelectItem value="gift" className="text-gray-300 focus:bg-white/10 focus:text-white">Gift</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={legFilter} onValueChange={setLegFilter}>
+            <SelectTrigger className="w-[160px] bg-[#16161a] border-white/10 text-white">
+              <SelectValue placeholder="Route" />
+            </SelectTrigger>
+            <SelectContent className="bg-[#16161a] border-white/10">
+              <SelectItem value="all" className="text-gray-300 focus:bg-white/10 focus:text-white">All Routes</SelectItem>
+              <SelectItem value="domestic" className="text-gray-300 focus:bg-white/10 focus:text-white">🇮🇳 Domestic</SelectItem>
+              <SelectItem value="international" className="text-gray-300 focus:bg-white/10 focus:text-white">🌍 International</SelectItem>
+            </SelectContent>
+          </Select>
         </motion.div>
 
         {/* Stats */}
@@ -206,6 +223,14 @@ export default function AllShipments() {
         >
           <span className="shrink-0 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-white">
             Total: {filteredShipments.length}
+          </span>
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-green-400">
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            🇮🇳 Domestic: {filteredShipments.filter(s => s.current_leg === 'DOMESTIC').length}
+          </span>
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-blue-400">
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            🌍 International: {filteredShipments.filter(s => s.current_leg !== 'DOMESTIC').length}
           </span>
           <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-amber-400">
             <span className="w-2 h-2 rounded-full bg-amber-500" />
@@ -255,6 +280,16 @@ export default function AllShipments() {
                         <p className="font-medium text-white">
                           {shipment.tracking_number || 'No tracking'}
                         </p>
+                        {/* Domestic / International badge */}
+                        {shipment.current_leg === 'DOMESTIC' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 border border-green-500/30 text-green-400">
+                            🇮🇳 Domestic
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                            🌍 International
+                          </span>
+                        )}
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 border border-white/10">
                           <span className={`w-2 h-2 rounded-full ${getStatusDotColor(shipment.current_status as any)}`} />
                           <span className="text-gray-300">{getStatusLabel(shipment.current_status as any)}</span>
