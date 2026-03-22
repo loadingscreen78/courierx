@@ -3,7 +3,11 @@ import { z } from 'zod';
 export const bookingRequestSchema = z.object({
   bookingReferenceId: z.string().min(1).max(64),
   recipientName: z.string().min(1).max(200),
-  recipientPhone: z.string().regex(/^\+?[\d\s\-().]{6,20}$/).transform(v => v.replace(/[\s\-().]/g, '')),
+  recipientPhone: z.string()
+    .transform(v => v.replace(/[\s\-().]/g, ''))
+    .pipe(z.string().min(0))
+    .optional()
+    .default(''),
   recipientEmail: z.string().email().optional(),
   originAddress: z.string().min(1).max(500),
   destinationAddress: z.string().min(1).max(500),
