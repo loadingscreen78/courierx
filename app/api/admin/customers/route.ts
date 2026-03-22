@@ -12,7 +12,7 @@ async function requireAdmin(request: NextRequest) {
   return user;
 }
 
-// GET /api/admin/customers — returns all auth users merged with profiles + shipment aggregates
+// GET /api/admin/customers — all auth users merged with real wallet + shipment data
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,27 +20,48 @@ export async function GET(request: NextRequest) {
   const supabase = getServiceRoleClient();
 
   try {
-    // 1. Get all auth users (service role only)
+    // 1. All auth users (service role)
     const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers({ perPage: 1000 });
     if (authErr) throw authErr;
 
-    // 2. Get all profiles
+    // 2. Profiles (KYC data, avatar, phone)
     const { data: profiles } = await supabase.from('profiles').select('*');
     const profileMap = new Map<string, any>();
     (profiles || []).forEach((p: any) => profileMap.set(p.user_id, p));
 
-    // 3. Get shipment aggregates
-    const { data: shipments } = await supabase.from('shipments').select('user_id, total_amount, created_at');
-    const shipAgg = new Map<string, { count: number; total: number; lastAt: string | null }>();
-    for (const s of shipments || []) {
-      const agg = shipAgg.get(s.user_id) || { count: 0, total: 0, lastAt: null };
-      agg.count++;
-      agg.total += s.total_amount || 0;
-      if (!agg.lastAt || s.created_at > agg.lastAt) agg.lastAt = s.created_at;
-      shipAgg.set(s.user_id, agg);
+    // 3. Wallet ledger — compute real balance and total spend per user
+    const { data: ledger } = await supabase
+      .from('wallet_ledger')
+      .select('user_id, transaction_type, amount');
+
+    const walletMap = new Map<string, { balance: number; total_spent: number }>();
+    for (const entry of ledger || []) {
+      const w = walletMap.get(entry.user_id) || { balance: 0, total_spent: 0 };
+      if (['credit', 'refund', 'release'].includes(entry.transaction_type)) {
+        w.balance += Number(entry.amount);
+      } else if (['debit', 'hold'].includes(entry.transaction_type)) {
+        w.balance -= Number(entry.amount);
+        if (entry.transaction_type === 'debit') {
+          w.total_spent += Number(entry.amount);
+        }
+      }
+      walletMap.set(entry.user_id, w);
     }
 
-    // 4. Get roles
+    // 4. Shipment counts and last shipment date
+    const { data: shipments } = await supabase
+      .from('shipments')
+      .select('user_id, created_at');
+
+    const shipCountMap = new Map<string, { count: number; lastAt: string | null }>();
+    for (const s of shipments || []) {
+      const agg = shipCountMap.get(s.user_id) || { count: 0, lastAt: null };
+      agg.count++;
+      if (!agg.lastAt || s.created_at > agg.lastAt) agg.lastAt = s.created_at;
+      shipCountMap.set(s.user_id, agg);
+    }
+
+    // 5. Roles
     const { data: roles } = await supabase.from('user_roles').select('user_id, role');
     const roleMap = new Map<string, string[]>();
     for (const r of roles || []) {
@@ -49,34 +70,45 @@ export async function GET(request: NextRequest) {
       roleMap.set(r.user_id, arr);
     }
 
-    // 5. Merge: auth users as the source of truth, enrich with profile data
+    // 6. Merge everything — auth users as source of truth
     const customers = authUsers.map((u: any) => {
       const profile = profileMap.get(u.id);
-      const agg = shipAgg.get(u.id) || { count: 0, total: 0, lastAt: null };
-      // Prefer profile data, fall back to auth user metadata
-      const fullName = profile?.full_name || u.user_metadata?.full_name || u.user_metadata?.name || null;
-      const email = profile?.email || u.email || null;
-      const phone = profile?.phone_number || u.phone || null;
+      const wallet = walletMap.get(u.id) || { balance: 0, total_spent: 0 };
+      const shipAgg = shipCountMap.get(u.id) || { count: 0, lastAt: null };
       return {
         user_id: u.id,
-        full_name: fullName,
-        email,
-        phone_number: phone,
-        wallet_balance: profile?.wallet_balance || 0,
+        full_name: profile?.full_name || u.user_metadata?.full_name || u.user_metadata?.name || null,
+        email: profile?.email || u.email || null,
+        phone_number: profile?.phone_number || u.phone || null,
+        wallet_balance: Math.max(0, wallet.balance),
+        total_spent: wallet.total_spent,
         aadhaar_verified: profile?.aadhaar_verified || false,
         kyc_completed_at: profile?.kyc_completed_at || null,
         created_at: u.created_at,
         updated_at: profile?.updated_at || u.updated_at || u.created_at,
         avatar_url: profile?.avatar_url || u.user_metadata?.avatar_url || null,
         aadhaar_address: profile?.aadhaar_address || null,
-        shipment_count: agg.count,
-        total_spent: agg.total,
-        last_shipment_at: agg.lastAt,
+        shipment_count: shipAgg.count,
+        last_shipment_at: shipAgg.lastAt,
         roles: roleMap.get(u.id) || [],
       };
     });
 
-    return NextResponse.json({ customers });
+    // 7. Top 10 by total_spent for coupon recommendations
+    const top10 = [...customers]
+      .filter(c => c.total_spent > 0)
+      .sort((a, b) => b.total_spent - a.total_spent)
+      .slice(0, 10)
+      .map(c => ({
+        user_id: c.user_id,
+        full_name: c.full_name,
+        email: c.email,
+        total_spent: c.total_spent,
+        shipment_count: c.shipment_count,
+        wallet_balance: c.wallet_balance,
+      }));
+
+    return NextResponse.json({ customers, top10 });
   } catch (err) {
     console.error('[admin/customers] error:', err);
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });

@@ -112,6 +112,7 @@ function StatCard({ label, value, icon: Icon, trend, trendLabel, color }: {
 export function CustomerCRM() {
   // Data state
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [top10, setTop10] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
@@ -143,8 +144,9 @@ export function CustomerCRM() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { customers: data } = await res.json();
+      const { customers: data, top10: topData } = await res.json();
       setCustomers(data || []);
+      setTop10(topData || []);
     } catch (err) {
       console.error('[CRM] fetch error:', err);
       toast.error('Failed to load customers');
@@ -498,6 +500,70 @@ export function CustomerCRM() {
             </div>
           </div>
         </div>
+
+        {/* Top 10 Customers — Coupon Recommendations */}
+        {top10.length > 0 && (
+          <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-white flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-amber-400" />
+                  Top 10 Customers — Coupon Recommendations
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">Highest spenders based on real-time wallet transactions</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="text-left text-gray-500 font-semibold pb-2 pr-4">#</th>
+                    <th className="text-left text-gray-500 font-semibold pb-2 pr-4">Customer</th>
+                    <th className="text-left text-gray-500 font-semibold pb-2 pr-4">Email</th>
+                    <th className="text-right text-gray-500 font-semibold pb-2 pr-4">Total Spent</th>
+                    <th className="text-right text-gray-500 font-semibold pb-2 pr-4">Shipments</th>
+                    <th className="text-right text-gray-500 font-semibold pb-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top10.map((c, i) => (
+                    <tr key={c.user_id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                      <td className="py-2.5 pr-4">
+                        <span className={cn(
+                          "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold",
+                          i === 0 ? "bg-amber-500/20 text-amber-400" :
+                          i === 1 ? "bg-gray-400/20 text-gray-300" :
+                          i === 2 ? "bg-orange-600/20 text-orange-400" :
+                          "bg-white/5 text-gray-500"
+                        )}>
+                          {i + 1}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <p className="text-white font-medium truncate max-w-[140px]">{c.full_name || 'Unnamed'}</p>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <p className="text-gray-400 truncate max-w-[180px]">{c.email || '—'}</p>
+                      </td>
+                      <td className="py-2.5 pr-4 text-right">
+                        <span className="text-green-400 font-semibold">₹{c.total_spent.toLocaleString('en-IN')}</span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-right text-gray-300">{c.shipment_count}</td>
+                      <td className="py-2.5 text-right">
+                        <a
+                          href="/admin/coupons"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors text-[10px] font-medium"
+                        >
+                          <IndianRupee className="h-3 w-3" /> Assign Coupon
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Filters & Search */}
         <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4">
