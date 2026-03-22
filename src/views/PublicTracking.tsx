@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Search, Package, MapPin, Clock, CheckCircle, Plane, Globe, Phone, Shield, ChevronDown, X, Calendar } from 'lucide-react';
+import { MagnifyingGlass, Package, MapPin, Clock, CheckCircle, Airplane, Globe, Phone, Shield, CaretDown, X, CalendarBlank } from '@phosphor-icons/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -320,7 +320,7 @@ const OTPModal = ({
             </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
+            <X size={20} weight="bold" />
           </button>
         </div>
 
@@ -343,7 +343,7 @@ const OTPModal = ({
           onClick={() => onVerify(otp)}
           disabled={otp.length !== 6}
         >
-          <Shield className="h-5 w-5 mr-2" />
+          <Shield size={20} weight="bold" className="mr-2" />
           Verify & Track
         </Button>
 
@@ -445,7 +445,7 @@ const PublicTracking = () => {
               animate={{ scale: 1 }}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-coke-red/10 text-coke-red mb-6"
             >
-              <Globe className="h-5 w-5" />
+              <Globe size={20} weight="bold" />
               <span className="font-semibold text-sm">Real-Time Tracking</span>
             </motion.div>
             <h1 className="text-4xl md:text-5xl font-bold font-typewriter text-foreground mb-4">
@@ -480,7 +480,7 @@ const PublicTracking = () => {
                     onClick={handleTrackByNumber}
                     disabled={!trackingNumber.trim() || loading}
                   >
-                    <Search className="h-5 w-5" />
+                    <MagnifyingGlass size={20} weight="bold" />
                     {loading ? 'Tracking...' : 'Track'}
                   </Button>
                 </div>
@@ -493,7 +493,7 @@ const PublicTracking = () => {
                   className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <span>Advanced Search</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+                  <CaretDown size={16} weight="bold" className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
                 </button>
               </div>
 
@@ -508,7 +508,7 @@ const PublicTracking = () => {
                   >
                     <div className="mt-4 p-6 rounded-2xl bg-muted/50 border border-border">
                       <div className="flex items-center gap-2 mb-4">
-                        <Phone className="h-5 w-5 text-coke-red" />
+                        <Phone size={20} weight="bold" className="text-coke-red" />
                         <span className="font-semibold text-foreground">Search by Phone Number</span>
                       </div>
                       <p className="text-sm text-muted-foreground mb-4">
@@ -531,7 +531,7 @@ const PublicTracking = () => {
                           onClick={handlePhoneSearch}
                           disabled={phoneNumber.length !== 10}
                         >
-                          <Shield className="h-4 w-4 mr-2" />
+                          <Shield size={16} weight="bold" className="mr-2" />
                           Send OTP
                         </Button>
                       </div>
@@ -604,7 +604,7 @@ const PublicTracking = () => {
                                 transition={{ duration: 2, repeat: Infinity }}
                               >
                                 {step.completed ? (
-                                  <CheckCircle className="h-5 w-5" />
+                                  <CheckCircle size={20} weight="bold" />
                                 ) : (
                                   <div className="w-2 h-2 rounded-full bg-current" />
                                 )}
@@ -648,7 +648,7 @@ const PublicTracking = () => {
                     <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
-                          <Calendar className="h-7 w-7" />
+                          <CalendarBlank size={28} weight="bold" />
                         </div>
                         <div>
                           <p className="text-white/80 text-sm font-medium">Expected Delivery</p>
@@ -744,7 +744,7 @@ const PublicTracking = () => {
                   <Card className="border-border shadow-lg dark:shadow-none rounded-2xl overflow-hidden">
                     <CardContent className="p-6">
                       <div className="flex items-center gap-2 mb-4">
-                        <Plane className="h-5 w-5 text-coke-red" />
+                        <Airplane className="h-5 w-5 text-coke-red" />
                         <h3 className="font-bold text-foreground">Live Tracking</h3>
                       </div>
                       <WorldMap 

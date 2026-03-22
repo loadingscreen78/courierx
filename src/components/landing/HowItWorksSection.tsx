@@ -1,12 +1,12 @@
 "use client";
 
-import { UserCirclePlus, Package, CreditCard, Truck, CheckCircle } from '@phosphor-icons/react';
+import { UserCirclePlus, Package, CreditCard, Truck, CheckCircle, Airplane } from '@phosphor-icons/react';
 import { AnimatedSection, StaggerContainer, StaggerItem } from './AnimatedSection';
 import { motion } from 'framer-motion';
 
 const steps = [
   {
-    icon: UserPlus,
+    icon: UserCirclePlus,
     title: 'Sign Up & KYC',
     description: 'Quick registration with Aadhaar verification for compliance.',
     step: '01',

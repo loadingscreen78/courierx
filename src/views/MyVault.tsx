@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, FileText, Plus, ChevronRight, CheckCircle, Clock } from 'lucide-react';
+import { MapPin, FileText, Plus, CaretRight, CheckCircle, Clock } from '@phosphor-icons/react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +39,7 @@ const AddressPreviewCard = ({ address }: { address: Address }) => {
           </p>
         </div>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              <CaretRight size={16} weight="bold" className="text-muted-foreground" />
     </div>
   );
 };
@@ -83,11 +83,11 @@ const MyVault = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="addresses" className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
+              <MapPin size={16} weight="bold" />
               Addresses
             </TabsTrigger>
             <TabsTrigger value="documents" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
+              <FileText size={16} weight="bold" />
               Documents
             </TabsTrigger>
           </TabsList>
@@ -114,7 +114,7 @@ const MyVault = () => {
                     <AddressesTabSkeleton />
                   ) : addresses.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
-                      <MapPin className="h-12 w-12 mx-auto mb-4 opacity-30" />
+          <MapPin size={48} weight="bold" className="mx-auto mb-4 opacity-30" />
                       <p>No saved addresses yet</p>
                       <p className="text-sm mb-4">Add addresses for quick checkout</p>
                       <Button 
@@ -158,7 +158,7 @@ const MyVault = () => {
                           onClick={() => router.push('/addresses')}
                         >
                           View all {addresses.length} addresses
-                          <ChevronRight className="h-4 w-4 ml-2" />
+                          <CaretRight className="h-4 w-4 ml-2" />
                         </Button>
                       )}
                     </>
@@ -217,7 +217,7 @@ const MyVault = () => {
 
                       {/* Uploaded Documents */}
                       <div className="text-center py-8 text-muted-foreground border-t pt-8">
-                        <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <FileText size={40} weight="bold" className="mx-auto mb-3 opacity-30" />
                         <p className="text-sm">Other documents will appear here</p>
                         <p className="text-xs">Prescriptions, IDs, and invoices from bookings</p>
                       </div>
