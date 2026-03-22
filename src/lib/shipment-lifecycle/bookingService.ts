@@ -2,7 +2,91 @@ import { ShipmentRow } from './types';
 import { bookingRequestSchema } from './inputValidator';
 import { getServiceRoleClient } from './supabaseAdmin';
 import { updateShipmentStatus } from './stateMachine';
-import * as nimbusClient from './nimbusClient';
+
+// ---------------------------------------------------------------------------
+// NimbusPost direct integration (mirrors nimbusPostDomestic pattern)
+// Uses NIMBUS_EMAIL + NIMBUS_PASSWORD — NOT the legacy nimbusClient
+// ---------------------------------------------------------------------------
+
+const NIMBUS_API_BASE = 'https://api.nimbuspost.com/v1';
+
+interface NimbusTokenCache { token: string; expiresAt: number }
+let _tokenCache: NimbusTokenCache | null = null;
+
+async function getNimbusToken(): Promise<string> {
+  if (_tokenCache && _tokenCache.expiresAt > Date.now()) return _tokenCache.token;
+  const email = process.env.NIMBUS_EMAIL?.trim();
+  const password = process.env.NIMBUS_PASSWORD?.trim();
+  if (!email || !password) throw new Error('NIMBUS_EMAIL / NIMBUS_PASSWORD not configured');
+  const res = await fetch(`${NIMBUS_API_BASE}/users/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(`Nimbus auth failed: ${res.status}`);
+  const data = await res.json();
+  const token = data?.data;
+  if (!token) throw new Error('No token in Nimbus auth response');
+  _tokenCache = { token, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
+  return token;
+}
+
+interface NimbusBookingResult { success: boolean; awb?: string; label_url?: string; error?: string }
+
+async function createNimbusShipment(req: BookingRequest): Promise<NimbusBookingResult> {
+  const token = await getNimbusToken();
+  const payload = {
+    order_number: `CX-${Date.now()}`,
+    shipping_charges: 0,
+    discount: 0,
+    cod_charges: 0,
+    payment_type: 'prepaid',
+    order_amount: req.declaredValue,
+    package_weight: Math.round((req.weightKg || 0.5) * 1000), // kg → grams
+    package_length: req.dimensions?.lengthCm ?? 10,
+    package_breadth: req.dimensions?.widthCm ?? 10,
+    package_height: req.dimensions?.heightCm ?? 5,
+    consignee: {
+      name: req.recipientName,
+      address: req.destinationAddress,
+      address_2: '',
+      city: '',
+      state: req.destinationCountry,
+      pincode: '000000',
+      phone: req.recipientPhone || '0000000000',
+    },
+    pickup: {
+      warehouse_name: 'default',
+      name: 'CourierX Warehouse',
+      address: req.originAddress,
+      address_2: '',
+      city: 'Cuttack',
+      state: 'Odisha',
+      pincode: '753001',
+      phone: '9999999999',
+    },
+    order_items: [{ name: req.shipmentType, qty: 1, price: req.declaredValue || 1 }],
+    courier_id: 1, // default courier; will be overridden by NimbusPost auto-selection
+  };
+  const res = await fetch(`${NIMBUS_API_BASE}/shipments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    return { success: false, error: `NimbusPost error: ${res.status} ${err}` };
+  }
+  const data = await res.json();
+  if (data?.status === false || data?.status_code !== 200) {
+    return { success: false, error: data?.message || 'Shipment creation failed' };
+  }
+  return {
+    success: true,
+    awb: data?.data?.awb_number || data?.data?.awb,
+    label_url: data?.data?.label || data?.data?.label_url,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -90,14 +174,14 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
     return { success: true, shipment: existing as unknown as ShipmentRow };
   }
 
-  // 3. Create shipment row
+  // 3. Create shipment row — international bookings start at COUNTER (warehouse intake)
   const { data: created, error: insertError } = await supabase
     .from('shipments')
     .insert({
       user_id: req.userId,
       booking_reference_id: req.bookingReferenceId,
       current_status: 'PENDING',
-      current_leg: 'DOMESTIC',
+      current_leg: 'COUNTER',
       version: 1,
       recipient_name: req.recipientName,
       recipient_phone: req.recipientPhone,
@@ -127,89 +211,47 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
 
   const shipment = created as unknown as ShipmentRow;
 
-  // 4. Call Nimbus createShipment (retries + logging handled internally)
-  // If NIMBUS_BASE_URL is not configured, use mock mode (dev/staging without Nimbus account)
-  const skipNimbus = !process.env.NIMBUS_BASE_URL && !process.env.NIMBUS_TOKEN;
+  // 4. Call NimbusPost to create shipment & get AWB
+  // Falls back to mock only if credentials are missing (dev/staging)
+  const skipNimbus = !process.env.NIMBUS_EMAIL || !process.env.NIMBUS_PASSWORD;
 
-  let nimbusResponse: nimbusClient.NimbusCreateResponse;
+  let awb: string;
+  let labelUrl: string | undefined;
+
   if (skipNimbus) {
-    // Mock AWB for development — real Nimbus integration requires env vars
-    nimbusResponse = {
-      success: true,
-      awb: `CX-MOCK-${Date.now()}`,
-    };
+    awb = `CX-MOCK-${Date.now()}`;
   } else {
-    try {
-      nimbusResponse = await nimbusClient.createShipment({
-        senderName: 'CourierX',
-        senderPhone: '',
-        senderAddress: req.originAddress,
-        recipientName: req.recipientName,
-        recipientPhone: req.recipientPhone,
-        recipientAddress: req.destinationAddress,
-        weightKg: req.weightKg,
-        declaredValue: req.declaredValue,
-        shipmentType: req.shipmentType,
-      });
-    } catch {
-      // Nimbus failed after retries — mark FAILED
+    const nimbusResult = await createNimbusShipment(req);
+    if (!nimbusResult.success || !nimbusResult.awb) {
       await supabase
         .from('shipments')
         .update({ current_status: 'FAILED' })
         .eq('id', shipment.id)
         .eq('version', 1);
-
       return {
         success: false,
-        error: 'Nimbus API call failed after retries',
+        error: nimbusResult.error ?? 'Nimbus API returned no AWB',
         errorCode: 'NIMBUS_API_FAILURE',
       };
     }
-
-    if (!nimbusResponse.success || !nimbusResponse.awb) {
-      await supabase
-        .from('shipments')
-        .update({ current_status: 'FAILED' })
-        .eq('id', shipment.id)
-        .eq('version', 1);
-
-      return {
-        success: false,
-        error: nimbusResponse.error ?? 'Nimbus API returned no AWB',
-        errorCode: 'NIMBUS_API_FAILURE',
-      };
-    }
+    awb = nimbusResult.awb;
+    labelUrl = nimbusResult.label_url;
   }
 
-  // 5. Update domestic_awb and transition to BOOKING_CONFIRMED
+  // 5. Update domestic_awb (used for label fetch) and optionally label URL
   await supabase
     .from('shipments')
-    .update({ domestic_awb: nimbusResponse.awb })
+    .update({
+      domestic_awb: awb,
+      ...(labelUrl && { domestic_label_url: labelUrl }),
+    })
     .eq('id', shipment.id);
-
-  // 5a. Fetch AWB label from Nimbus (non-blocking — failure doesn't abort booking, skip in mock mode)
-  if (!skipNimbus) {
-    try {
-      const labelResponse = await nimbusClient.fetchLabel(nimbusResponse.awb!);
-      if (labelResponse.success) {
-        const labelValue = labelResponse.labelUrl ?? labelResponse.labelBase64 ?? null;
-        if (labelValue) {
-          await supabase
-            .from('shipments')
-            .update({ domestic_label_url: labelValue })
-            .eq('id', shipment.id);
-        }
-      }
-    } catch (err) {
-      console.warn('[bookingService] Label fetch failed (non-fatal):', err instanceof Error ? err.message : err);
-    }
-  }
 
   const result = await updateShipmentStatus({
     shipmentId: shipment.id,
     newStatus: 'BOOKING_CONFIRMED',
     source: 'NIMBUS',
-    metadata: { awb: nimbusResponse.awb, bookingReferenceId: req.bookingReferenceId },
+    metadata: { awb, bookingReferenceId: req.bookingReferenceId },
     expectedVersion: 1,
   });
 
