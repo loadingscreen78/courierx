@@ -143,11 +143,11 @@ const Auth = () => {
   const initialMode = searchParams.get('mode') as AuthMode | null;
 
   useEffect(() => {
-    if (initialPanel && !selectedPanel) {
+    if (initialPanel && step === 'panel-select' && !selectedPanel) {
       setSelectedPanel(initialPanel);
       setStep('method');
     }
-  }, [initialPanel, selectedPanel]);
+  }, [initialPanel]);
 
   useEffect(() => {
     if (initialMode && (initialMode === 'signin' || initialMode === 'signup')) {
@@ -801,6 +801,8 @@ const Auth = () => {
                 onClick={() => { 
                   setStep('panel-select'); 
                   setSelectedPanel(null);
+                  // Clear URL params so the useEffect doesn't re-select the panel
+                  router.replace('/auth');
                 }}
                 className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
               >
