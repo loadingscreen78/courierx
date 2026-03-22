@@ -133,6 +133,12 @@ export function CustomerCRM() {
   const [editForm, setEditForm] = useState({ full_name: '', phone_number: '', email: '' });
   const [saving, setSaving] = useState(false);
 
+  // Wallet adjustment dialog
+  const [walletDialog, setWalletDialog] = useState(false);
+  const [walletForm, setWalletForm] = useState({ amount: '', description: '', password: '' });
+  const [walletTarget, setWalletTarget] = useState<Customer | null>(null);
+  const [walletSaving, setWalletSaving] = useState(false);
+
   const { session } = useAuth();
 
   // ─── Fetch all customers via admin API (reads auth.users, not just profiles) ──
@@ -340,6 +346,42 @@ export function CustomerCRM() {
       toast.error('Failed to update customer');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ─── Wallet adjustment ───────────────────────────────────────────
+  const openWalletAdjust = (customer: Customer) => {
+    setWalletTarget(customer);
+    setWalletForm({ amount: '', description: '', password: '' });
+    setWalletDialog(true);
+  };
+
+  const submitWalletAdjust = async () => {
+    if (!walletTarget || !session?.access_token) return;
+    setWalletSaving(true);
+    try {
+      const res = await fetch('/api/admin/wallet-adjust', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          userId: walletTarget.user_id,
+          amount: Number(walletForm.amount),
+          description: walletForm.description,
+          verificationPassword: walletForm.password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to adjust wallet');
+      toast.success(data.message || 'Wallet adjusted successfully');
+      setWalletDialog(false);
+      fetchCustomers();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to adjust wallet');
+    } finally {
+      setWalletSaving(false);
     }
   };
 
@@ -731,6 +773,10 @@ export function CustomerCRM() {
                               <DropdownMenuItem onClick={e => { e.stopPropagation(); openEdit(c); }}>
                                 <Edit2 className="h-4 w-4 mr-2" /> Edit Profile
                               </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); openWalletAdjust(c); }}>
+                                <Wallet className="h-4 w-4 mr-2" /> Adjust Wallet
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -962,6 +1008,71 @@ export function CustomerCRM() {
             <Button onClick={saveEdit} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Wallet Adjustment Dialog */}
+      <Dialog open={walletDialog} onOpenChange={setWalletDialog}>
+        <DialogContent className="bg-[#16161a] border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-green-400" />
+              Adjust Wallet
+            </DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Add funds to {walletTarget?.full_name || walletTarget?.email || 'customer'}&apos;s wallet.
+              Current balance: ₹{walletTarget?.wallet_balance.toLocaleString('en-IN') || '0'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Amount (₹)</label>
+              <Input
+                type="number"
+                min="1"
+                max="1000000"
+                placeholder="Enter amount"
+                value={walletForm.amount}
+                onChange={e => setWalletForm(f => ({ ...f, amount: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white text-lg font-semibold"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Reason / Description</label>
+              <Textarea
+                placeholder="e.g. Promotional credit, Refund adjustment, etc."
+                value={walletForm.description}
+                onChange={e => setWalletForm(f => ({ ...f, description: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white resize-none"
+                rows={2}
+              />
+            </div>
+            <div className="border-t border-white/5 pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-4 w-4 text-amber-400" />
+                <label className="text-xs text-amber-400 font-medium">Admin Verification Required</label>
+              </div>
+              <Input
+                type="password"
+                placeholder="Enter admin verification password"
+                value={walletForm.password}
+                onChange={e => setWalletForm(f => ({ ...f, password: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white"
+              />
+              <p className="text-[10px] text-gray-600 mt-1">This is a security step to confirm your identity.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setWalletDialog(false)} className="text-gray-400">Cancel</Button>
+            <Button
+              onClick={submitWalletAdjust}
+              disabled={walletSaving || !walletForm.amount || !walletForm.description || !walletForm.password}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {walletSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <IndianRupee className="h-4 w-4 mr-1" />}
+              Add ₹{walletForm.amount ? Number(walletForm.amount).toLocaleString('en-IN') : '0'} to Wallet
             </Button>
           </DialogFooter>
         </DialogContent>

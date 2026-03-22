@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { CASHFREE_VERIFICATION_BASE } from '@/lib/wallet/cashfreeConfig';
+import crypto from 'crypto';
 
 /**
  * POST /api/kyc/verify-otp
@@ -84,6 +85,28 @@ export async function POST(request: NextRequest) {
 
     const last4 = aadhaarNumber ? aadhaarNumber.slice(-4) : (docData.uid?.slice(-4) || '');
 
+    // Compute aadhaar_hash for uniqueness enforcement
+    const aadhaarHash = aadhaarNumber
+      ? crypto.createHash('sha256').update(aadhaarNumber).digest('hex')
+      : null;
+
+    // Double-check uniqueness before saving
+    if (aadhaarHash) {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('aadhaar_hash', aadhaarHash)
+        .not('user_id', 'eq', user.id)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return NextResponse.json(
+          { error: 'This Aadhaar number is already verified with another account.' },
+          { status: 409 }
+        );
+      }
+    }
+
     // Update profile — never store full Aadhaar
     const { error: updateError } = await supabase
       .from('profiles')
@@ -91,6 +114,7 @@ export async function POST(request: NextRequest) {
         aadhaar_verified: true,
         aadhaar_address: verifiedAddress || null,
         kyc_completed_at: new Date().toISOString(),
+        ...(aadhaarHash ? { aadhaar_hash: aadhaarHash } : {}),
       })
       .eq('user_id', user.id);
 

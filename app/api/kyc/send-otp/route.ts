@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { CASHFREE_VERIFICATION_BASE } from '@/lib/wallet/cashfreeConfig';
+import crypto from 'crypto';
 
 /**
  * POST /api/kyc/send-otp
@@ -42,6 +43,22 @@ export async function POST(request: NextRequest) {
 
     if (!aadhaarNumber || !/^\d{12}$/.test(aadhaarNumber)) {
       return NextResponse.json({ error: 'Invalid Aadhaar number' }, { status: 400 });
+    }
+
+    // Check if this Aadhaar is already used by another account
+    const aadhaarHash = crypto.createHash('sha256').update(aadhaarNumber).digest('hex');
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('aadhaar_hash', aadhaarHash)
+      .not('user_id', 'eq', user.id)
+      .maybeSingle();
+
+    if (existingProfile) {
+      return NextResponse.json(
+        { error: 'This Aadhaar number is already verified with another account. Each Aadhaar can only be linked to one account.' },
+        { status: 409 }
+      );
     }
 
     const verificationId = `kyc_${user.id.slice(0, 8)}_${Date.now()}`;
