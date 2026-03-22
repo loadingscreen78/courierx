@@ -28,12 +28,14 @@ import { cn } from '@/lib/utils';
 interface GiftAddressStepProps {
   data: GiftBookingData;
   onUpdate: (updates: Partial<GiftBookingData>) => void;
+  flushRef?: React.MutableRefObject<(() => void) | null>;
+  fieldErrors?: Record<string, string>;
 }
 
 // Use comprehensive country list from shared data
 const COUNTRIES = COUNTRY_DATA.map(c => ({ code: c.code, name: c.name }));
 
-export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
+export const GiftAddressStep = ({ data, onUpdate, flushRef, fieldErrors = {} }: GiftAddressStepProps) => {
   const { lightTap } = useHaptics();
   const [passportFront, setPassportFront] = useState<File | null>(null);
   const [passportBack, setPassportBack] = useState<File | null>(null);
@@ -78,6 +80,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
       consigneeAddress: consigneeRef.current,
     });
   }, []);
+
+  // Expose flushSync to parent via ref so it can flush before validation
+  if (flushRef) flushRef.current = flushSync;
 
   // Get cities for selected state
   const availableCities = localPickupAddress.state
@@ -272,9 +277,10 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   placeholder="Full name"
                   value={localPickupAddress.fullName}
                   onChange={(value) => updatePickupAddress('fullName', value)}
-                  className="input-premium pl-10"
+                  className={cn("input-premium pl-10", fieldErrors.pickupName && "border-destructive")}
                 />
               </div>
+              {fieldErrors.pickupName && <p className="text-xs text-destructive">{fieldErrors.pickupName}</p>}
             </div>
             <div className="space-y-2">
               <Label>Phone Number *</Label>
@@ -285,10 +291,11 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   placeholder="+91 98765 43210"
                   value={localPickupAddress.phone}
                   onChange={(value) => updatePickupAddress('phone', value)}
-                  className="input-premium pl-10"
+                  className={cn("input-premium pl-10", fieldErrors.pickupPhone && "border-destructive")}
                 />
               </div>
               <p className="text-xs text-muted-foreground">Indian mobile number (+91 optional)</p>
+              {fieldErrors.pickupPhone && <p className="text-xs text-destructive">{fieldErrors.pickupPhone}</p>}
             </div>
           </div>
 
@@ -298,8 +305,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
               placeholder="House/Flat number, Building name"
               value={localPickupAddress.addressLine1}
               onChange={(value) => updatePickupAddress('addressLine1', value)}
-              className="input-premium"
+              className={cn("input-premium", fieldErrors.pickupAddress && "border-destructive")}
             />
+            {fieldErrors.pickupAddress && <p className="text-xs text-destructive">{fieldErrors.pickupAddress}</p>}
           </div>
 
           <div className="space-y-2">
@@ -321,7 +329,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   maxLength={6}
                   value={localPickupAddress.pincode}
                   onChange={handlePincodeChange}
-                  className="input-premium font-typewriter pr-10"
+                  className={cn("input-premium font-typewriter pr-10", (pincodeError || fieldErrors.pickupPincode) && "border-destructive")}
                 />
                 {pincodeLoading && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -330,9 +338,8 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                 )}
               </div>
-              {pincodeError && (
-                <p className="text-xs text-destructive">{pincodeError}</p>
-              )}
+              {pincodeError && <p className="text-xs text-destructive">{pincodeError}</p>}
+              {!pincodeError && fieldErrors.pickupPincode && <p className="text-xs text-destructive">{fieldErrors.pickupPincode}</p>}
             </div>
             <div className="space-y-2">
               <Label>State *</Label>
@@ -393,8 +400,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 placeholder="Recipient name"
                 value={localConsigneeAddress.fullName}
                 onChange={(value) => updateConsigneeAddress('fullName', value)}
-                className="input-premium"
+                className={cn("input-premium", fieldErrors.consigneeName && "border-destructive")}
               />
+              {fieldErrors.consigneeName && <p className="text-xs text-destructive">{fieldErrors.consigneeName}</p>}
             </div>
             <div className="space-y-2">
               <Label>Phone Number *</Label>
@@ -439,7 +447,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                   variant="outline"
                   role="combobox"
                   aria-expanded={countryOpen}
-                  className="w-full justify-between input-premium font-normal"
+                  className={cn("w-full justify-between input-premium font-normal", fieldErrors.consigneeCountry && "border-destructive")}
                 >
                   {selectedCountry ? (
                     <span className="flex items-center gap-2">
@@ -485,6 +493,7 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
                 </Command>
               </PopoverContent>
             </Popover>
+            {fieldErrors.consigneeCountry && <p className="text-xs text-destructive">{fieldErrors.consigneeCountry}</p>}
           </div>
 
           <div className="space-y-2">
@@ -493,8 +502,9 @@ export const GiftAddressStep = ({ data, onUpdate }: GiftAddressStepProps) => {
               placeholder="Street address"
               value={localConsigneeAddress.addressLine1}
               onChange={(value) => updateConsigneeAddress('addressLine1', value)}
-              className="input-premium"
+              className={cn("input-premium", fieldErrors.consigneeAddress && "border-destructive")}
             />
+            {fieldErrors.consigneeAddress && <p className="text-xs text-destructive">{fieldErrors.consigneeAddress}</p>}
           </div>
 
           <div className="space-y-2">

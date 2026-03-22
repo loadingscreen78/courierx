@@ -9,7 +9,7 @@ import { DocumentAddonsStep } from '@/components/booking/document/DocumentAddons
 import { DocumentReviewStep } from '@/components/booking/document/DocumentReviewStep';
 import { BookingProgress } from '@/components/booking/BookingProgress';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Warning, CircleNotch } from '@phosphor-icons/react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useAuth } from '@/contexts/AuthContext';
@@ -397,7 +397,7 @@ const DocumentBooking = () => {
 
         {validationErrors.length > 0 && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Warning className="h-4 w-4" weight="bold" />
             <AlertTitle>Please fix the following errors</AlertTitle>
             <AlertDescription>
               <ul className="list-disc list-inside mt-2 space-y-1">
@@ -432,7 +432,7 @@ const DocumentBooking = () => {
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <CircleNotch className="h-4 w-4 mr-2 animate-spin" weight="bold" />
                   Processing...
                 </>
               ) : (

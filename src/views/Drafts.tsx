@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useAllDrafts } from '@/hooks/useDraft';
 import { formatRelativeTime, getProgressPercentage, Draft } from '@/lib/drafts/draftService';
-import { FileText, Gift, Pill, Package, Trash2, ArrowRight, Clock, FolderOpen } from 'lucide-react';
+import { FileText, Gift, Pill, Package, Trash, ArrowRight, Clock, FolderOpen } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -133,7 +133,7 @@ const Drafts = () => {
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
+                              <Trash className="h-4 w-4" weight="bold" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>

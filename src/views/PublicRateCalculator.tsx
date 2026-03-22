@@ -6,22 +6,22 @@ import {
   Calculator,
   Package,
   MapPin,
-  Scale,
+  Scales,
   Clock,
   Truck,
-  AlertCircle,
+  Warning,
   Check,
   X,
   Star,
   ArrowRight,
-  Sparkles,
-  Zap,
+  Sparkle,
+  Lightning,
   Shield,
   Globe,
-  ChevronRight,
-  Box,
-  Plane,
-} from 'lucide-react';
+  CaretRight,
+  Cube,
+  Airplane,
+} from '@phosphor-icons/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +43,7 @@ import { useRouter } from 'next/navigation';
 
 const carrierFeatures = [
   { id: 'tracking', label: 'Real-time tracking', icon: MapPin, dhl: true, fedex: true, aramex: true, shipglobal: false },
-  { id: 'express', label: 'Express delivery', icon: Zap, dhl: true, fedex: true, aramex: false, shipglobal: false },
+  { id: 'express', label: 'Express delivery', icon: Lightning, dhl: true, fedex: true, aramex: false, shipglobal: false },
   { id: 'temperature', label: 'Temperature controlled', icon: Shield, dhl: true, fedex: false, aramex: false, shipglobal: false },
   { id: 'insurance', label: 'Insurance included', icon: Shield, dhl: true, fedex: true, aramex: true, shipglobal: true },
   { id: 'customs', label: 'Customs support', icon: Globe, dhl: true, fedex: true, aramex: true, shipglobal: false },
@@ -158,7 +158,7 @@ const CarrierCard = ({
           className="absolute -top-3 -right-3 z-10"
         >
           <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-lg px-3 py-1">
-            <Star className="h-3 w-3 mr-1 fill-current" />
+            <Star size={12} weight="fill" className="mr-1" />
             Best Value
           </Badge>
         </motion.div>
@@ -173,7 +173,7 @@ const CarrierCard = ({
             exit={{ scale: 0 }}
             className="absolute top-4 left-4 w-6 h-6 rounded-full bg-coke-red flex items-center justify-center"
           >
-            <Check className="h-4 w-4 text-white" />
+            <Check size={16} weight="bold" className="text-white" />
           </motion.div>
         )}
       </AnimatePresence>
@@ -188,7 +188,7 @@ const CarrierCard = ({
             isSelected ? "bg-coke-red text-white" : "bg-muted"
           )}
         >
-          <Truck className="h-8 w-8" />
+          <Truck size={32} weight="bold" />
         </motion.div>
         
         <div>
@@ -211,7 +211,7 @@ const CarrierCard = ({
         
         {/* Transit time */}
         <div className="flex items-center justify-center gap-2 text-sm">
-          <Clock className="h-4 w-4 text-muted-foreground" />
+          <Clock size={16} weight="bold" className="text-muted-foreground" />
           <span>{option.transitDays.min}-{option.transitDays.max} business days</span>
         </div>
         
@@ -228,9 +228,9 @@ const CarrierCard = ({
                 )}
               >
                 {hasFeature ? (
-                  <Check className="h-3 w-3 text-candlestick-green" />
+                  <Check size={12} weight="bold" className="text-candlestick-green" />
                 ) : (
-                  <X className="h-3 w-3" />
+                  <X size={12} weight="bold" />
                 )}
                 <span>{feature.label}</span>
               </div>
@@ -248,13 +248,13 @@ const CarrierCard = ({
         >
           {isSelected ? (
             <>
-              <Check className="h-4 w-4 mr-2" />
+              <Check size={16} weight="bold" className="mr-2" />
               Selected
             </>
           ) : (
             <>
               Select Carrier
-              <ChevronRight className="h-4 w-4 ml-2" />
+              <CaretRight size={16} weight="bold" className="ml-2" />
             </>
           )}
         </Button>
@@ -371,7 +371,7 @@ const SummaryCard = ({
         animate={{ x: [0, 10, 0], y: [0, -5, 0] }}
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       >
-        <Plane className="h-16 w-16" />
+        <Airplane size={64} weight="bold" />
       </motion.div>
       
       <div className="relative z-10 space-y-6">
@@ -381,7 +381,7 @@ const SummaryCard = ({
             <h3 className="text-2xl font-bold font-typewriter mt-1">{info.fullName}</h3>
             {selectedOption.isRecommended && (
               <Badge className="mt-2 bg-amber-500/20 text-amber-400 border-amber-500/30">
-                <Star className="h-3 w-3 mr-1 fill-current" />
+                <Star size={12} weight="fill" className="mr-1" />
                 Recommended
               </Badge>
             )}
@@ -391,7 +391,7 @@ const SummaryCard = ({
             transition={{ duration: 0.5 }}
             className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center"
           >
-            <Truck className="h-7 w-7" />
+            <Truck size={28} weight="bold" />
           </motion.div>
         </div>
         
@@ -412,12 +412,12 @@ const SummaryCard = ({
         {/* Details grid */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white/5 rounded-2xl p-4">
-            <Clock className="h-5 w-5 text-coke-red mb-2" />
+            <Clock size={20} weight="bold" className="text-coke-red mb-2" />
             <p className="text-white/60 text-xs">Transit Time</p>
             <p className="font-semibold">{selectedOption.transitDays.min}-{selectedOption.transitDays.max} days</p>
           </div>
           <div className="bg-white/5 rounded-2xl p-4">
-            <Shield className="h-5 w-5 text-candlestick-green mb-2" />
+            <Shield size={20} weight="bold" className="text-candlestick-green mb-2" />
             <p className="text-white/60 text-xs">Insurance</p>
             <p className="font-semibold">Included</p>
           </div>
@@ -430,9 +430,9 @@ const SummaryCard = ({
             onClick={onBook}
             className="w-full h-14 text-lg bg-coke-red hover:bg-coke-red/90 shadow-lg shadow-coke-red/30"
           >
-            <Package className="h-5 w-5 mr-2" />
+            <Package size={20} weight="bold" className="mr-2" />
             Book This Shipment
-            <ArrowRight className="h-5 w-5 ml-2" />
+            <ArrowRight size={20} weight="bold" className="ml-2" />
           </Button>
         </motion.div>
         
@@ -514,7 +514,7 @@ const PublicRateCalculator = () => {
                 transition={{ type: 'spring', delay: 0.2 }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-coke-red/10 text-coke-red"
               >
-                <Sparkles className="h-5 w-5" />
+                <Sparkle className="h-5 w-5" />
                 <span className="font-semibold">Instant Rate Calculator</span>
               </motion.div>
               
@@ -556,7 +556,7 @@ const PublicRateCalculator = () => {
                     <div className="space-y-4">
                       <Label className="flex items-center gap-2 text-base font-semibold">
                         <div className="w-8 h-8 rounded-lg bg-coke-red/10 flex items-center justify-center">
-                          <MapPin className="h-4 w-4 text-coke-red" />
+                          <MapPin size={16} weight="bold" className="text-coke-red" />
                         </div>
                         Where are you shipping to?
                       </Label>
@@ -603,7 +603,7 @@ const PublicRateCalculator = () => {
                     <div className="space-y-4">
                       <Label className="flex items-center gap-2 text-base font-semibold">
                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <Scale className="h-4 w-4 text-primary" />
+                          <Scales size={16} weight="bold" className="text-primary" />
                         </div>
                         Package Weight
                       </Label>
@@ -625,8 +625,7 @@ const PublicRateCalculator = () => {
                   className="mt-6"
                 >
                   <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Country not available</AlertTitle>
+                    <Warning size={16} weight="bold" />
                     <AlertDescription>
                       {selectedCountry?.notServedReason || 'We do not currently ship to this destination.'}
                     </AlertDescription>
@@ -722,7 +721,7 @@ const PublicRateCalculator = () => {
                         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                         className="w-24 h-24 mx-auto rounded-3xl bg-muted flex items-center justify-center"
                       >
-                        <Box className="h-12 w-12 text-muted-foreground" />
+                        <Cube size={48} weight="bold" className="text-muted-foreground" />
                       </motion.div>
                       <div>
                         <h3 className="font-bold text-xl font-typewriter">Ready to Calculate?</h3>
@@ -734,7 +733,7 @@ const PublicRateCalculator = () => {
                         {[
                           { icon: Globe, label: '150+ Countries' },
                           { icon: Truck, label: '4 Carriers' },
-                          { icon: Zap, label: 'Instant Quotes' },
+                          { icon: Lightning, label: 'Instant Quotes' },
                         ].map((item, i) => (
                           <motion.div
                             key={item.label}
@@ -743,7 +742,7 @@ const PublicRateCalculator = () => {
                             transition={{ delay: 0.5 + i * 0.1 }}
                             className="flex items-center gap-2 text-sm text-muted-foreground"
                           >
-                            <item.icon className="h-4 w-4 text-coke-red" />
+                            <item.icon size={16} weight="bold" className="text-coke-red" />
                             <span>{item.label}</span>
                           </motion.div>
                         ))}

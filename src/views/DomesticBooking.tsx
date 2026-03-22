@@ -9,7 +9,7 @@ import { DomesticAddressStep } from '@/components/booking/domestic/DomesticAddre
 import { DomesticCourierStep } from '@/components/booking/domestic/DomesticCourierStep';
 import { DomesticReviewStep } from '@/components/booking/domestic/DomesticReviewStep';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CircleNotch } from '@phosphor-icons/react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -227,7 +227,7 @@ const DomesticBooking = () => {
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <CircleNotch className="h-4 w-4 animate-spin" weight="bold" />
                   Booking...
                 </>
               ) : (

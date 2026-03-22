@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Warehouse, Save, RefreshCw } from 'lucide-react';
+import { Warehouse, FloppyDisk, ArrowsClockwise } from '@phosphor-icons/react';
 
 interface WarehouseAddress {
   name: string;
@@ -91,7 +91,7 @@ export default function WarehouseSettings() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-500 text-sm">
-          <RefreshCw className="h-4 w-4 animate-spin" />
+          <ArrowsClockwise className="h-4 w-4 animate-spin" weight="bold" />
           Loading...
         </div>
       ) : (
@@ -122,7 +122,7 @@ export default function WarehouseSettings() {
             disabled={saving}
             className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
           >
-            {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? <ArrowsClockwise className="h-4 w-4 animate-spin" weight="bold" /> : <FloppyDisk className="h-4 w-4" weight="bold" />}
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>

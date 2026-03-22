@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowRight, Loader2, User, Sparkles, Shield, Package, Clock } from 'lucide-react';
+import { ArrowRight, CircleNotch, User, Sparkle, Shield, Package, Clock } from '@phosphor-icons/react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,7 +97,7 @@ const Onboarding = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <CircleNotch size={32} weight="bold" className="animate-spin text-primary" />
       </div>
     );
   }
@@ -122,7 +122,7 @@ const Onboarding = () => {
           <Card className="border-border/50 shadow-lg animate-fade-in">
             <CardHeader className="text-center pb-4">
               <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-accent flex items-center justify-center">
-                <Sparkles className="h-8 w-8 text-accent-foreground" />
+                <Sparkle size={32} weight="bold" className="text-accent-foreground" />
               </div>
               <CardTitle className="font-typewriter text-xl">Welcome to CourierX!</CardTitle>
               <CardDescription>
@@ -134,15 +134,15 @@ const Onboarding = () => {
               {/* Benefits */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg">
-                  <Package className="h-5 w-5 text-foreground" />
+                <Package size={20} weight="bold" className="text-foreground" />
                   <span className="text-sm">Ship medicines, documents & gifts worldwide</span>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg">
-                  <Shield className="h-5 w-5 text-foreground" />
+                <Shield size={20} weight="bold" className="text-foreground" />
                   <span className="text-sm">CSB IV compliant with customs support</span>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg">
-                  <Clock className="h-5 w-5 text-foreground" />
+                <Clock size={20} weight="bold" className="text-foreground" />
                   <span className="text-sm">Fast delivery with real-time tracking</span>
                 </div>
               </div>
@@ -152,7 +152,7 @@ const Onboarding = () => {
                 className="w-full btn-press"
               >
                 Get Started
-                <ArrowRight className="h-4 w-4 ml-2" />
+                <ArrowRight size={16} weight="bold" className="ml-2" />
               </Button>
               
               <p className="text-center text-xs text-muted-foreground">
@@ -166,7 +166,7 @@ const Onboarding = () => {
           <Card className="border-border/50 shadow-lg animate-fade-in">
             <CardHeader className="text-center pb-4">
               <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-accent flex items-center justify-center">
-                <User className="h-8 w-8 text-accent-foreground" />
+                <User size={32} weight="bold" className="text-accent-foreground" />
               </div>
               <CardTitle className="font-typewriter text-xl">Complete Your Profile</CardTitle>
               <CardDescription>
@@ -246,9 +246,9 @@ const Onboarding = () => {
                     disabled={isLoading}
                   >
                     {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <CircleNotch size={16} weight="bold" className="animate-spin mr-2" />
                     ) : (
-                      <ArrowRight className="h-4 w-4 mr-2" />
+                      <ArrowRight size={16} weight="bold" className="mr-2" />
                     )}
                     Continue
                   </Button>
@@ -262,13 +262,13 @@ const Onboarding = () => {
           <Card className="border-border/50 shadow-lg animate-fade-in">
             <CardContent className="py-8 text-center">
               <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-accent flex items-center justify-center animate-scale-in">
-                <Shield className="h-8 w-8 text-accent-foreground" />
+                <Shield size={32} weight="bold" className="text-accent-foreground" />
               </div>
               <h3 className="font-typewriter text-xl font-semibold mb-2">Profile Saved!</h3>
               <p className="text-muted-foreground text-sm mb-4">
                 Redirecting to dashboard...
               </p>
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-destructive" />
+              <CircleNotch size={24} weight="bold" className="animate-spin mx-auto text-destructive" />
             </CardContent>
           </Card>
         )}

@@ -10,7 +10,7 @@ import { AddonsStep } from '@/components/booking/medicine/AddonsStep';
 import { ReviewStep } from '@/components/booking/medicine/ReviewStep';
 import { BookingProgress } from '@/components/booking/BookingProgress';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Warning, CircleNotch } from '@phosphor-icons/react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useAuth } from '@/contexts/AuthContext';
@@ -525,7 +525,7 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
         {/* Blocking Alerts */}
         {hasBlockingIssue && currentStep === 1 && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Warning className="h-4 w-4" weight="bold" />
             <AlertTitle>Booking Blocked</AlertTitle>
             <AlertDescription>
               {hasBlockingMedicine && (
@@ -544,7 +544,7 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Warning className="h-4 w-4" weight="bold" />
             <AlertTitle>Please fix the following errors</AlertTitle>
             <AlertDescription>
               <ul className="list-disc list-inside mt-2 space-y-1">
@@ -590,13 +590,13 @@ const MedicineBooking = ({ isAdminMode = false }: MedicineBookingProps) => {
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <CircleNotch className="h-4 w-4 mr-2 animate-spin" weight="bold" />
                   Processing...
                 </>
               ) : (
                 <>
                   Confirm & Pay
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  <ArrowRight className="h-4 w-4 ml-2" weight="bold" />
                 </>
               )}
             </Button>
