@@ -4,14 +4,14 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { 
   Package, 
-  ClipboardCheck, 
+  ClipboardText, 
   Truck,
-  AlertTriangle,
+  Warning,
   Clock,
-  CheckCircle2,
-  MoreHorizontal,
-  IndianRupee,
-} from 'lucide-react';
+  CheckCircle,
+  DotsThree,
+  CurrencyInr,
+} from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { getStatusLabel, getStatusDotColor, getLegLabel } from '@/lib/shipment-lifecycle/statusLabelMap';
 import type { ShipmentStatus } from '@/lib/shipment-lifecycle/types';
@@ -179,9 +179,9 @@ function AdminDashboard() {
   }, []);
 
   const statCards = [
-    { title: 'Pending QC', value: stats?.pendingQC || 0, icon: ClipboardCheck, color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
+    { title: 'Pending QC', value: stats?.pendingQC || 0, icon: ClipboardText, color: 'text-amber-500', bgColor: 'bg-amber-500/10' },
     { title: 'Ready to Dispatch', value: stats?.readyToDispatch || 0, icon: Truck, color: 'text-green-500', bgColor: 'bg-green-500/10' },
-    { title: 'On Hold', value: stats?.onHold || 0, icon: AlertTriangle, color: 'text-red-500', bgColor: 'bg-red-500/10' },
+    { title: 'On Hold', value: stats?.onHold || 0, icon: Warning, color: 'text-red-500', bgColor: 'bg-red-500/10' },
   ];
 
   const queueTabs = [
@@ -253,7 +253,7 @@ function AdminDashboard() {
                 <span className="ml-3 text-gray-400 font-medium">Processed</span>
               </div>
               <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <CheckCircle2 className="h-6 w-6 text-green-500" />
+                <CheckCircle size={24} weight="bold" className="text-green-500" />
               </div>
             </div>
             <div className="w-full h-2 bg-white/5 rounded-full mt-6 relative overflow-hidden">
@@ -269,7 +269,7 @@ function AdminDashboard() {
                 <p className="text-3xl font-mono text-gray-300">{stats?.avgQCTime || '--'}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-blue-500" />
+                <Clock size={24} weight="bold" className="text-blue-500" />
               </div>
             </div>
           </div>
@@ -284,7 +284,7 @@ function AdminDashboard() {
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                <IndianRupee className="h-6 w-6 text-emerald-500" />
+                <CurrencyInr size={24} weight="bold" className="text-emerald-500" />
               </div>
             </div>
           </div>
@@ -317,7 +317,7 @@ function AdminDashboard() {
                   </div>
                 ) : tab.items.length === 0 ? (
                   <div className="text-center py-12">
-                    <Package className="h-12 w-12 mx-auto mb-3 text-gray-600" />
+                    <Package size={48} weight="bold" className="mx-auto mb-3 text-gray-600" />
                     <p className="text-gray-500">No shipments in this queue</p>
                   </div>
                 ) : (
@@ -330,7 +330,7 @@ function AdminDashboard() {
                       >
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center border border-white/10">
-                            <Package size={20} className="text-gray-400" />
+                            <Package size={20} weight="bold" className="text-gray-400" />
                           </div>
                           <div>
                             <h4 className="text-white font-semibold text-sm">{shipment.tracking_number || 'No tracking'}</h4>
@@ -359,7 +359,7 @@ function AdminDashboard() {
         >
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-bold text-white">Recent Activity</h3>
-            <MoreHorizontal className="text-gray-500 cursor-pointer hover:text-white transition-colors" />
+            <DotsThree size={24} weight="bold" className="text-gray-500 cursor-pointer hover:text-white transition-colors" />
           </div>
 
           {isLoading ? (
@@ -370,7 +370,7 @@ function AdminDashboard() {
             </div>
           ) : recentShipments.length === 0 ? (
             <div className="text-center py-12">
-              <Package className="h-12 w-12 mx-auto mb-3 text-gray-600" />
+              <Package size={48} weight="bold" className="mx-auto mb-3 text-gray-600" />
               <p className="text-gray-500">No shipments yet</p>
             </div>
           ) : (
@@ -383,7 +383,7 @@ function AdminDashboard() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center border border-white/10">
-                      <Package size={20} className="text-gray-400" />
+                      <Package size={20} weight="bold" className="text-gray-400" />
                     </div>
                     <div>
                       <h4 className="text-white font-semibold text-sm">{shipment.tracking_number || 'No tracking'}</h4>
@@ -413,7 +413,7 @@ function AdminDashboard() {
               <div key={stat.title} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
-                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                    <stat.icon size={20} weight="bold" className={stat.color} />
                   </div>
                   <span className="text-gray-400 text-sm font-medium">{stat.title}</span>
                 </div>

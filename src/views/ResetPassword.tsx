@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Loader2, ArrowRight, CheckCircle } from 'lucide-react';
+import { Eye, EyeSlash, CircleNotch, ArrowRight, CheckCircle } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -116,7 +116,7 @@ export default function ResetPassword() {
         <div className="bg-card border border-border rounded-2xl p-8 shadow-lg space-y-6">
           {done ? (
             <div className="text-center space-y-4">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
+              <CheckCircle size={64} weight="bold" className="text-green-500 mx-auto" />
               <h2 className="text-xl font-semibold font-typewriter">Password Updated</h2>
               <p className="text-muted-foreground text-sm">Redirecting you to sign in...</p>
             </div>
@@ -135,7 +135,7 @@ export default function ResetPassword() {
             </div>
           ) : !sessionReady ? (
             <div className="text-center space-y-4">
-              <Loader2 className="w-10 h-10 animate-spin text-coke-red mx-auto" />
+              <CircleNotch size={40} weight="bold" className="animate-spin text-coke-red mx-auto" />
               <p className="text-muted-foreground text-sm">Verifying reset link...</p>
             </div>
           ) : (
@@ -165,7 +165,7 @@ export default function ResetPassword() {
                               onClick={() => setShowPassword(!showPassword)}
                               className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                             >
-                              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                              {showPassword ? <EyeSlash size={20} weight="bold" /> : <Eye size={20} weight="bold" />}
                             </button>
                           </div>
                         </FormControl>
@@ -192,7 +192,7 @@ export default function ResetPassword() {
                               onClick={() => setShowConfirm(!showConfirm)}
                               className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                             >
-                              {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                              {showConfirm ? <EyeSlash size={20} weight="bold" /> : <Eye size={20} weight="bold" />}
                             </button>
                           </div>
                         </FormControl>
@@ -207,10 +207,10 @@ export default function ResetPassword() {
                     className="w-full h-12 rounded-full bg-coke-red hover:bg-coke-red/90 text-white font-semibold shadow-lg shadow-coke-red/25 font-typewriter"
                   >
                     {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <CircleNotch size={20} weight="bold" className="animate-spin" />
                     ) : (
                       <>
-                        <ArrowRight className="w-5 h-5 mr-2" />
+                        <ArrowRight size={20} weight="bold" className="mr-2" />
                         Update Password
                       </>
                     )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, memo } from 'react';
-import { Calculator, Package, MapPin, Scale, Clock, Truck, AlertCircle, Info, Check, X, Star } from 'lucide-react';
+import { Calculator, Package, MapPin, Scale, Clock, Truck, Warning, Info, Check, X, Star } from '@phosphor-icons/react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -130,7 +130,7 @@ const RateCalculator = () => {
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary">
-            <Calculator className="h-5 w-5" />
+            <Calculator size={20} weight="bold" />
             <span className="font-semibold">Shipping Rate Calculator</span>
           </div>
           <h1 className="text-3xl font-bold font-typewriter">Estimate Your Shipping Cost</h1>
@@ -146,7 +146,7 @@ const RateCalculator = () => {
               {/* Shipment Type */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
+                  <Package size={16} weight="bold" />
                   Shipment Type
                 </Label>
                 <div className="grid grid-cols-3 gap-2">
@@ -180,7 +180,7 @@ const RateCalculator = () => {
               {/* Destination */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
+                  <MapPin size={16} weight="bold" />
                   Destination Country
                 </Label>
                 <CountrySelector
@@ -223,7 +223,7 @@ const RateCalculator = () => {
               {/* Weight */}
               <div className="space-y-4 isolate-render" style={{ contain: 'layout style' }}>
                 <Label className="flex items-center gap-2">
-                  <Scale className="h-4 w-4" />
+                  <Scale size={16} weight="bold" />
                   Package Weight
                 </Label>
                 
@@ -297,7 +297,7 @@ const RateCalculator = () => {
         {/* Country not served warning */}
         {destinationCountry && !isCountryServed && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Warning size={16} weight="bold" />
             <AlertTitle>Country not available</AlertTitle>
             <AlertDescription>
               {selectedCountry?.notServedReason || 'We do not currently ship to this destination.'}
@@ -318,7 +318,7 @@ const RateCalculator = () => {
               <CardHeader className="border-b border-gray-800">
                 <CardTitle className="flex items-center gap-3 text-white">
                   <div className="p-2 rounded-lg bg-coke-red/20 border border-coke-red/30">
-                    <Truck className="h-5 w-5 text-coke-red" />
+                    <Truck size={20} weight="bold" className="text-coke-red" />
                   </div>
                   Carrier Comparison
                 </CardTitle>
@@ -352,7 +352,7 @@ const RateCalculator = () => {
                                   isSelected ? "text-coke-red" : "text-white"
                                 )}>{info.name}</span>
                                 {option.isRecommended && (
-                                  <Star className="h-4 w-4 fill-amber-500 text-amber-500 animate-pulse" />
+                                  <Star size={16} weight="fill" className="text-amber-500 animate-pulse" />
                                 )}
                               </div>
                               <Badge 
@@ -408,7 +408,7 @@ const RateCalculator = () => {
                     <TableRow className="border-b border-gray-800 hover:bg-black/20 transition-colors">
                       <TableCell className="font-semibold text-white bg-black/40">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-coke-red" />
+                          <Clock size={16} weight="bold" className="text-coke-red" />
                           Transit Time
                         </div>
                       </TableCell>
@@ -466,13 +466,13 @@ const RateCalculator = () => {
                                     "p-1.5 rounded-full",
                                     isSelected ? "bg-candlestick-green/20" : "bg-candlestick-green/10"
                                   )}>
-                                    <Check className="h-4 w-4 text-candlestick-green" />
+                                    <Check size={16} weight="bold" className="text-candlestick-green" />
                                   </div>
                                 </div>
                               ) : (
                                 <div className="flex justify-center">
                                   <div className="p-1.5 rounded-full bg-gray-800/50">
-                                    <X className="h-4 w-4 text-gray-600" />
+                                    <X size={16} weight="bold" className="text-gray-600" />
                                   </div>
                                 </div>
                               )}
@@ -508,7 +508,7 @@ const RateCalculator = () => {
                             >
                               {isSelected ? (
                                 <>
-                                  <Check className="h-4 w-4 mr-1" />
+                                  <Check size={16} weight="bold" className="mr-1" />
                                   Selected
                                 </>
                               ) : (
@@ -534,14 +534,14 @@ const RateCalculator = () => {
                       <p className="text-sm text-gray-400 uppercase tracking-wider font-medium">Selected Carrier</p>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-coke-red/20 border border-coke-red/30">
-                          <Truck className="h-5 w-5 text-coke-red" />
+                          <Truck size={20} weight="bold" className="text-coke-red" />
                         </div>
                         <span className="text-2xl font-bold text-white font-typewriter">
                           {selectedOption ? getCarrierInfo(selectedOption.carrier).fullName : '—'}
                         </span>
                         {selectedOption?.isRecommended && (
                           <Badge className="gap-1 bg-coke-red/20 text-coke-red border-coke-red/50 hover:bg-coke-red/30">
-                            <Star className="h-3 w-3 fill-current" />
+                            <Star size={12} weight="fill" />
                             Recommended
                           </Badge>
                         )}
@@ -549,7 +549,7 @@ const RateCalculator = () => {
                       {selectedOption && (
                         <div className="flex items-center gap-4 text-sm text-gray-400 mt-3">
                           <span className="flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-lg border border-gray-800">
-                            <Clock className="h-4 w-4 text-coke-red" />
+                            <Clock size={16} weight="bold" className="text-coke-red" />
                             {selectedOption.transitDays.min}-{selectedOption.transitDays.max} business days
                           </span>
                         </div>
@@ -573,7 +573,7 @@ const RateCalculator = () => {
                       className="flex-1 gap-2 bg-gradient-to-r from-coke-red to-red-600 hover:from-red-600 hover:to-coke-red text-white font-bold shadow-lg shadow-coke-red/30 hover:shadow-coke-red/50 transition-all duration-300 hover:scale-[1.02]" 
                       onClick={handleBookNow}
                     >
-                      <Package className="h-5 w-5" />
+                      <Package size={20} weight="bold" />
                       Book Shipment
                     </Button>
                     <Button 

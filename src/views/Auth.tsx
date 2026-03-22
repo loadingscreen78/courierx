@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Mail, Phone, ArrowRight, Loader2, Eye, EyeOff, User, Settings, Briefcase, ArrowLeft, Package, Plane, MapPin, Globe, Truck } from 'lucide-react';
+import { Envelope, Phone, ArrowRight, CircleNotch, Eye, EyeSlash, User, Gear, Briefcase, ArrowLeft, Package, Airplane, MapPin, Globe, Truck } from '@phosphor-icons/react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +43,7 @@ type PanelType = 'customer' | 'admin' | 'cxbc';
 
 const panelOptions = [
   { id: 'customer' as PanelType, title: 'Customer Panel', description: 'Ship internationally', icon: User, available: true },
-  { id: 'admin' as PanelType, title: 'Admin Panel', description: 'Manage operations', icon: Settings, available: true },
+  { id: 'admin' as PanelType, title: 'Admin Panel', description: 'Manage operations', icon: Gear, available: true },
   { id: 'cxbc' as PanelType, title: 'CXBC Panel', description: 'Partner portal', icon: Briefcase, available: false },
 ];
 
@@ -573,14 +573,14 @@ const Auth = () => {
           animate={{ y: [0, -20, 0], rotate: [0, 10, 0] }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         >
-          <Package className="w-8 h-8 text-coke-red" />
+          <Package size={32} weight="bold" className="text-coke-red" />
         </motion.div>
         <motion.div
           className="absolute top-40 left-6 opacity-15"
           animate={{ y: [0, -15, 0], rotate: [0, -10, 0] }}
           transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
         >
-          <Package className="w-6 h-6 text-coke-red" />
+          <Package size={24} weight="bold" className="text-coke-red" />
         </motion.div>
         
         {/* Flying plane */}
@@ -590,7 +590,7 @@ const Auth = () => {
           animate={{ x: ['0%', '100%'] }}
           transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
         >
-          <Plane className="w-6 h-6 text-coke-red transform -rotate-12" />
+          <Airplane size={24} weight="bold" className="text-coke-red transform -rotate-12" />
         </motion.div>
         
         {/* Floating location pins */}
@@ -599,14 +599,14 @@ const Auth = () => {
           animate={{ y: [0, -10, 0] }}
           transition={{ duration: 2.5, repeat: Infinity }}
         >
-          <MapPin className="w-5 h-5 text-coke-red" />
+          <MapPin size={20} weight="bold" className="text-coke-red" />
         </motion.div>
         <motion.div
           className="absolute bottom-60 left-8 opacity-10"
           animate={{ y: [0, -8, 0] }}
           transition={{ duration: 3, repeat: Infinity, delay: 1 }}
         >
-          <MapPin className="w-4 h-4 text-coke-red" />
+          <MapPin size={16} weight="bold" className="text-coke-red" />
         </motion.div>
         
         {/* Globe */}
@@ -615,7 +615,7 @@ const Auth = () => {
           animate={{ rotate: 360 }}
           transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
         >
-          <Globe className="w-48 h-48 text-coke-red" />
+          <Globe size={192} weight="bold" className="text-coke-red" />
         </motion.div>
         
         {/* Truck animation at bottom */}
@@ -624,7 +624,7 @@ const Auth = () => {
           animate={{ x: ['-10%', '110%'] }}
           transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
         >
-          <Truck className="w-8 h-8 text-coke-red" />
+          <Truck size={32} weight="bold" className="text-coke-red" />
         </motion.div>
         
         {/* Glowing dots */}
@@ -679,7 +679,7 @@ const Auth = () => {
                 animate={{ rotate: 360 }}
                 transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
               >
-                <Globe className="w-32 h-32 text-paper-white/10" />
+                <Globe size={128} weight="bold" className="text-paper-white/10" />
               </motion.div>
             </div>
 
@@ -691,7 +691,7 @@ const Auth = () => {
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
             >
               <div className="relative">
-                <Plane className="w-10 h-10 text-coke-red transform -rotate-45" />
+                <Airplane size={40} weight="bold" className="text-coke-red transform -rotate-45" />
                 <motion.div
                   className="absolute -left-20 top-1/2 h-0.5 bg-gradient-to-r from-transparent to-coke-red/50"
                   animate={{ width: [0, 80, 0] }}
@@ -709,7 +709,7 @@ const Auth = () => {
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 bg-coke-red/20 rounded-xl flex items-center justify-center">
-                  <Package className="w-6 h-6 text-coke-red" />
+                  <Package size={24} weight="bold" className="text-coke-red" />
                 </div>
                 <div>
                   <p className="text-paper-white font-semibold font-typewriter text-sm">Medicine Shipment</p>
@@ -751,7 +751,7 @@ const Auth = () => {
               transition={{ duration: 2, repeat: Infinity }}
             >
               <div className="bg-coke-red/20 p-2 rounded-full">
-                <MapPin className="w-5 h-5 text-coke-red" />
+                <MapPin size={20} weight="bold" className="text-coke-red" />
               </div>
             </motion.div>
             
@@ -761,7 +761,7 @@ const Auth = () => {
               transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
             >
               <div className="bg-coke-red/20 p-2 rounded-full">
-                <MapPin className="w-5 h-5 text-coke-red" />
+                <MapPin size={20} weight="bold" className="text-coke-red" />
               </div>
             </motion.div>
 
@@ -770,7 +770,7 @@ const Auth = () => {
               animate={{ x: [0, 280, 0] }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
             >
-              <Truck className="w-8 h-8 text-paper-white/30" />
+              <Truck size={32} weight="bold" className="text-paper-white/30" />
             </motion.div>
           </div>
         </div>
@@ -804,7 +804,7 @@ const Auth = () => {
                 }}
                 className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft size={16} weight="bold" />
                 Back
               </button>
             )}
@@ -838,7 +838,7 @@ const Auth = () => {
                             ? 'bg-muted group-hover:bg-coke-red/10'
                             : 'bg-muted/50'
                         }`}>
-                          <panel.icon className={`w-6 h-6 transition-colors ${
+                          <panel.icon size={24} weight="bold" className={`transition-colors ${
                             panel.available
                               ? 'text-muted-foreground group-hover:text-coke-red'
                               : 'text-muted-foreground/50'
@@ -848,7 +848,7 @@ const Auth = () => {
                           <p className="font-semibold text-foreground font-typewriter">{panel.title}</p>
                           <p className="text-sm text-muted-foreground">{panel.description}</p>
                         </div>
-                        <ArrowRight className={`w-5 h-5 transition-colors ${
+                        <ArrowRight size={20} weight="bold" className={`transition-colors ${
                           panel.available
                             ? 'text-muted-foreground/50 group-hover:text-coke-red'
                             : 'text-muted-foreground/30'
@@ -892,7 +892,7 @@ const Auth = () => {
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        {m === 'email' ? <Mail className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+                        {m === 'email' ? <Envelope size={16} weight="bold" /> : <Phone size={16} weight="bold" />}
                         {m === 'email' ? 'Email' : 'WhatsApp'}
                       </button>
                     ))}
@@ -938,7 +938,7 @@ const Auth = () => {
                                   onClick={() => setShowPassword(!showPassword)}
                                   className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                                 >
-                                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                  {showPassword ? <EyeSlash size={20} weight="bold" /> : <Eye size={20} weight="bold" />}
                                 </button>
                               </div>
                             </FormControl>
@@ -1017,9 +1017,9 @@ const Auth = () => {
                         disabled={isLoading}
                         className="w-full h-12 rounded-full bg-coke-red hover:bg-coke-red/90 text-white font-semibold shadow-lg shadow-coke-red/25 font-typewriter"
                       >
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                        {isLoading ? <CircleNotch size={20} weight="bold" className="animate-spin" /> : (
                           <>
-                            <ArrowRight className="w-5 h-5 mr-2" />
+                            <ArrowRight size={20} weight="bold" className="mr-2" />
                             {mode === 'signin' ? 'Sign In' : 'Create Account'}
                           </>
                         )}
@@ -1090,7 +1090,7 @@ const Auth = () => {
                         disabled={isLoading}
                         className="w-full h-12 rounded-full bg-coke-red hover:bg-coke-red/90 text-white font-semibold shadow-lg shadow-coke-red/25 font-typewriter"
                       >
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Send OTP'}
+                        {isLoading ? <CircleNotch size={20} weight="bold" className="animate-spin" /> : 'Send OTP'}
                       </Button>
                       <p className="text-center text-xs text-muted-foreground">
                         New users will be automatically registered
@@ -1109,7 +1109,7 @@ const Auth = () => {
                     onClick={() => setStep('method')}
                     className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-4 transition-colors"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft size={16} weight="bold" />
                     Back
                   </button>
                   <h2 className="text-2xl font-bold text-foreground font-typewriter">Verify OTP</h2>
@@ -1145,7 +1145,7 @@ const Auth = () => {
                       disabled={isLoading}
                       className="w-full h-12 rounded-full bg-coke-red hover:bg-coke-red/90 text-white font-semibold font-typewriter"
                     >
-                      {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Verify'}
+                      {isLoading ? <CircleNotch size={20} weight="bold" className="animate-spin" /> : 'Verify'}
                     </Button>
                     <button
                       type="button"

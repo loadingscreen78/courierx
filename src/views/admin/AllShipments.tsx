@@ -6,10 +6,10 @@ import { AdminLayout } from '@/components/admin/layout';
 import { Button } from '@/components/ui/button';
 import { 
   Package, 
-  Search,
-  Filter,
+  MagnifyingGlass,
+  Funnel,
   ArrowRight
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
 import {
@@ -170,7 +170,7 @@ export default function AllShipments() {
           className="flex flex-col sm:flex-row gap-3"
         >
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <MagnifyingGlass size={16} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -180,7 +180,7 @@ export default function AllShipments() {
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px] bg-[#16161a] border-white/10 text-white">
-              <Filter className="h-4 w-4 mr-2 text-gray-400" />
+              <Funnel size={16} weight="bold" className="mr-2 text-gray-400" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent className="bg-[#16161a] border-white/10">
@@ -255,7 +255,7 @@ export default function AllShipments() {
             ))
           ) : filteredShipments.length === 0 ? (
             <div className="bg-[#16161a] rounded-[2rem] border border-white/5 shadow-2xl py-12 text-center">
-              <Package className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+              <Package size={48} weight="bold" className="h-12 w-12 mx-auto mb-4 text-gray-600" />
               <h3 className="font-semibold text-white mb-1">No Shipments Found</h3>
               <p className="text-gray-500 text-sm">
                 Try adjusting your filters or search query
@@ -315,7 +315,7 @@ export default function AllShipments() {
                     </p>
                   </div>
                   <Button variant="ghost" size="icon" className="shrink-0 text-gray-400 hover:text-white hover:bg-white/10">
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight size={16} weight="bold" />
                   </Button>
                 </div>
               </div>

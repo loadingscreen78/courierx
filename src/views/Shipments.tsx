@@ -15,18 +15,17 @@ import {
 import {
   Truck,
   Package,
-  Search,
+  MagnifyingGlass,
   Clock,
-  Circle,
-  AlertTriangle,
-  Plane,
+  Warning,
+  Airplane,
   Globe,
   FileText,
   Pill,
   Gift,
-  ChevronRight,
-  Loader2,
-} from 'lucide-react';
+  CaretRight,
+  CircleNotch,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useShipments, getShipmentDetails, type Shipment as DBShipment, type ShipmentWithItems } from '@/hooks/useShipments';
 import { useShipmentTimeline } from '@/hooks/useShipmentTimeline';
@@ -104,9 +103,9 @@ function transformShipment(dbShipment: DBShipment): UIShipment {
 }
 
 const TYPE_ICONS: Record<ShipmentType, React.ReactNode> = {
-  medicine: <Pill className="h-5 w-5" />,
-  document: <FileText className="h-5 w-5" />,
-  gift: <Gift className="h-5 w-5" />,
+  medicine: <Pill size={20} weight="bold" />,
+  document: <FileText size={20} weight="bold" />,
+  gift: <Gift size={20} weight="bold" />,
 };
 
 const ShipmentCard = ({ shipment, onClick }: { shipment: UIShipment; onClick: () => void }) => {
@@ -122,7 +121,7 @@ const ShipmentCard = ({ shipment, onClick }: { shipment: UIShipment; onClick: ()
     >
       <div className="flex items-center gap-3">
         <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center shrink-0">
-          {TYPE_ICONS[shipment.type] || <Package className="h-5 w-5 text-muted-foreground" />}
+          {TYPE_ICONS[shipment.type] || <Package size={20} weight="bold" className="text-muted-foreground" />}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -141,17 +140,17 @@ const ShipmentCard = ({ shipment, onClick }: { shipment: UIShipment; onClick: ()
           </p>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-1.5">
             <span className="flex items-center gap-1">
-              <Truck className="h-3 w-3" />
+              <Truck size={12} weight="bold" />
               {legLabel}
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
+              <Clock size={12} weight="bold" />
               ETA {format(shipment.estimatedDelivery, 'dd MMM')}
             </span>
           </div>
         </div>
 
-        <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+        <CaretRight size={16} weight="bold" className="text-muted-foreground/40 shrink-0" />
       </div>
     </button>
   );
@@ -187,7 +186,7 @@ const ShipmentDetailSheet = ({
 
       {loadingDetails ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <CircleNotch size={32} weight="bold" className="animate-spin text-muted-foreground" />
         </div>
       ) : (
         <div className="space-y-6">
@@ -212,7 +211,7 @@ const ShipmentDetailSheet = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-0.5 bg-muted-foreground/30" />
-                  <Plane className="h-4 w-4 text-muted-foreground" />
+                  <Airplane size={16} weight="bold" className="text-muted-foreground" />
                   <div className="w-8 h-0.5 bg-muted-foreground/30" />
                 </div>
                 <div className="flex-1 text-right">
@@ -376,7 +375,7 @@ const ShipmentsPage = () => {
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <CircleNotch size={32} weight="bold" className="animate-spin text-muted-foreground" />
           </div>
         )}
 
@@ -384,7 +383,7 @@ const ShipmentsPage = () => {
         {error && (
           <Card className="border-destructive bg-destructive/5">
             <CardContent className="py-6 text-center">
-              <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
+              <Warning size={32} weight="bold" className="text-destructive mx-auto mb-2" />
               <p className="text-sm text-destructive">{error}</p>
             </CardContent>
           </Card>
@@ -404,7 +403,7 @@ const ShipmentsPage = () => {
                       </p>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <Plane className="h-6 w-6 text-primary" />
+                      <Airplane size={24} weight="bold" className="text-primary" />
                     </div>
                   </div>
                 </CardContent>
@@ -420,7 +419,7 @@ const ShipmentsPage = () => {
                       </p>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                      <Globe className="h-6 w-6 text-amber-600" />
+                      <Globe size={24} weight="bold" className="text-amber-600" />
                     </div>
                   </div>
                 </CardContent>
@@ -436,7 +435,7 @@ const ShipmentsPage = () => {
                       </p>
                     </div>
                     <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-                      <AlertTriangle className="h-6 w-6 text-destructive" />
+                      <Warning size={24} weight="bold" className="text-destructive" />
                     </div>
                   </div>
                 </CardContent>
@@ -445,7 +444,7 @@ const ShipmentsPage = () => {
 
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <MagnifyingGlass size={16} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search by tracking number, recipient, or destination..."
                 value={searchQuery}
@@ -459,7 +458,7 @@ const ShipmentsPage = () => {
               <Card className="border-destructive bg-destructive/5">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2 text-destructive">
-                    <AlertTriangle className="h-5 w-5" />
+                    <Warning size={20} weight="bold" />
                     Needs Your Attention ({needsAttention.length})
                   </CardTitle>
                 </CardHeader>
@@ -479,7 +478,7 @@ const ShipmentsPage = () => {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Package className="h-5 w-5" />
+                  <Package size={20} weight="bold" />
                   Active Shipments
                 </CardTitle>
               </CardHeader>
@@ -487,7 +486,7 @@ const ShipmentsPage = () => {
                 {activeShipments.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                      <Truck className="h-8 w-8 opacity-50" />
+                      <Truck size={32} weight="bold" className="opacity-50" />
                     </div>
                     <h3 className="font-semibold mb-1">No active shipments</h3>
                     <p className="text-sm mb-4">Start shipping your medicines, documents, or gifts internationally</p>

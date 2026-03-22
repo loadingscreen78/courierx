@@ -25,25 +25,25 @@ import {
   Plus,
   ArrowDownLeft,
   ArrowUpRight,
-  RotateCcw,
+  ArrowCounterClockwise,
   TrendingUp,
   TrendingDown,
-  IndianRupee,
+  CurrencyInr,
   Clock,
   FileText,
-  Download,
-  Loader2,
-  Smartphone,
+  DownloadSimple,
+  CircleNotch,
+  DeviceMobile,
   CreditCard,
-  Building2,
+  Bank,
   Receipt,
-  ChevronRight,
-  Shield,
+  CaretRight,
+  ShieldCheck,
   Info,
   Tag,
   Check,
   X,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
 import { motion } from 'framer-motion';
@@ -58,9 +58,9 @@ const TransactionIcon = ({ type }: { type: Transaction['type'] }) => {
     refund: 'bg-blue-500/10 text-blue-600',
   };
   const icons = {
-    credit: <ArrowDownLeft className="h-4 w-4" />,
-    debit: <ArrowUpRight className="h-4 w-4" />,
-    refund: <RotateCcw className="h-4 w-4" />,
+    credit: <ArrowDownLeft size={16} weight="bold" />,
+    debit: <ArrowUpRight size={16} weight="bold" />,
+    refund: <ArrowCounterClockwise size={16} weight="bold" />,
   };
   return (
     <div className={cn("p-2.5 rounded-xl shrink-0", styles[type])}>
@@ -324,7 +324,7 @@ const WalletPage = () => {
             <div className="flex items-start justify-between mb-6">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <WalletIcon className="h-4 w-4 text-white/60" />
+                  <WalletIcon size={16} weight="bold" className="text-white/60" />
                   <span className="text-sm text-white/60">Available Balance</span>
                 </div>
                 <p className="font-typewriter text-4xl font-bold tracking-tight">
@@ -333,7 +333,7 @@ const WalletPage = () => {
                 <p className="text-xs text-white/40 mt-1.5">Min. ₹1,000 required for bookings</p>
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/10 rounded-xl border border-white/10">
-                <Shield className="h-3.5 w-3.5 text-green-400" />
+                <ShieldCheck size={14} weight="bold" className="text-green-400" />
                 <span className="text-xs text-white/70 font-medium">Secured</span>
               </div>
             </div>
@@ -342,7 +342,7 @@ const WalletPage = () => {
               onClick={() => setShowRechargeDialog(true)}
               className="flex items-center gap-2 px-5 py-3 bg-coke-red hover:bg-red-600 text-white rounded-2xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-coke-red/30 hover:shadow-coke-red/50 active:scale-[0.97]"
             >
-              <Plus className="h-4 w-4" />
+              <Plus size={16} weight="bold" />
               Add Money
             </button>
           </div>
@@ -353,7 +353,7 @@ const WalletPage = () => {
           {[
             { label: 'Credits', value: totalCredits, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-500/10' },
             { label: 'Debits', value: totalDebits, icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-500/10' },
-            { label: 'Refunds', value: totalRefunds, icon: RotateCcw, color: 'text-blue-600', bg: 'bg-blue-500/10' },
+            { label: 'Refunds', value: totalRefunds, icon: ArrowCounterClockwise, color: 'text-blue-600', bg: 'bg-blue-500/10' },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -363,7 +363,7 @@ const WalletPage = () => {
               className="bg-card border border-border/50 rounded-2xl p-3.5"
             >
               <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center mb-2", stat.bg)}>
-                <stat.icon className={cn("h-4 w-4", stat.color)} />
+                <stat.icon size={16} weight="bold" className={stat.color} />
               </div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{stat.label}</p>
               <p className={cn("font-typewriter font-bold text-sm mt-0.5", stat.color)}>
@@ -377,11 +377,11 @@ const WalletPage = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full h-11 bg-muted/60 rounded-2xl p-1">
             <TabsTrigger value="transactions" className="flex-1 rounded-xl text-sm data-[state=active]:shadow-sm">
-              <Clock className="h-3.5 w-3.5 mr-1.5" />
+              <Clock size={14} weight="bold" className="mr-1.5" />
               Transactions
             </TabsTrigger>
             <TabsTrigger value="invoices" className="flex-1 rounded-xl text-sm data-[state=active]:shadow-sm">
-              <FileText className="h-3.5 w-3.5 mr-1.5" />
+              <FileText size={14} weight="bold" className="mr-1.5" />
               Invoices
             </TabsTrigger>
           </TabsList>
@@ -411,7 +411,7 @@ const WalletPage = () => {
               {filteredTransactions.length === 0 ? (
                 <div className="text-center py-12 px-6">
                   <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <IndianRupee className="h-6 w-6 text-muted-foreground/50" />
+                    <CurrencyInr size={24} weight="bold" className="text-muted-foreground/50" />
                   </div>
                   <p className="font-medium text-sm">No transactions yet</p>
                   <p className="text-xs text-muted-foreground mt-1">Add money to get started</p>
@@ -463,7 +463,7 @@ const WalletPage = () => {
                             onClick={() => downloadTransactionReceipt(transaction.id)}
                             title="Download Receipt"
                           >
-                            <Receipt className="h-3.5 w-3.5" />
+                            <Receipt size={14} weight="bold" />
                           </button>
                         )}
                       </div>
@@ -475,7 +475,7 @@ const WalletPage = () => {
 
             {/* Guidelines */}
             <div className="flex items-start gap-3 p-4 bg-muted/40 rounded-2xl border border-border/40">
-              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <Info size={16} weight="bold" className="text-muted-foreground shrink-0 mt-0.5" />
               <div className="text-xs text-muted-foreground space-y-1">
                 <p className="font-medium text-foreground text-sm">Wallet Guidelines</p>
                 <p>Min. recharge: ₹{MIN_RECHARGE_AMOUNT} · Min. booking balance: ₹1,000</p>
@@ -495,7 +495,7 @@ const WalletPage = () => {
                 onClick={handleExportAllInvoices}
                 disabled={invoices.length === 0}
               >
-                <Download className="h-3.5 w-3.5" />
+                <DownloadSimple size={14} weight="bold" />
                 Export All
               </Button>
             </div>
@@ -503,12 +503,12 @@ const WalletPage = () => {
             <div className="bg-card border border-border/50 rounded-3xl overflow-hidden">
               {invoicesLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <CircleNotch size={20} weight="bold" className="animate-spin text-muted-foreground" />
                 </div>
               ) : invoices.length === 0 ? (
                 <div className="text-center py-12 px-6">
                   <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <FileText className="h-6 w-6 text-muted-foreground/50" />
+                    <FileText size={24} weight="bold" className="text-muted-foreground/50" />
                   </div>
                   <p className="font-medium text-sm">No invoices yet</p>
                   <p className="text-xs text-muted-foreground mt-1">Invoices appear after your first shipment</p>
@@ -524,7 +524,7 @@ const WalletPage = () => {
                       className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors"
                     >
                       <div className="p-2.5 rounded-xl bg-muted shrink-0">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <FileText size={16} weight="bold" className="text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{invoice.description}</p>
@@ -549,7 +549,7 @@ const WalletPage = () => {
                           className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                           onClick={() => handleDownloadInvoice(invoice)}
                         >
-                          <Download className="h-3.5 w-3.5" />
+                          <DownloadSimple size={14} weight="bold" />
                         </button>
                       </div>
                     </motion.div>
@@ -637,7 +637,7 @@ const WalletPage = () => {
               {couponResult?.valid ? (
                 <div className="flex items-center gap-2 p-3 rounded-2xl border-2 border-green-500/40 bg-green-500/5">
                   <div className="p-1.5 rounded-lg bg-green-500/15">
-                    <Check className="h-3.5 w-3.5 text-green-600" />
+                    <Check size={14} weight="bold" className="text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-green-700 dark:text-green-400">{couponCode.toUpperCase()}</p>
@@ -648,7 +648,7 @@ const WalletPage = () => {
                     )}
                   </div>
                   <button onClick={handleRemoveCoupon} className="p-1 rounded-lg hover:bg-muted transition-colors">
-                    <X className="h-4 w-4 text-muted-foreground" />
+                    <X size={16} weight="bold" className="text-muted-foreground" />
                   </button>
                 </div>
               ) : (
@@ -668,7 +668,7 @@ const WalletPage = () => {
                     disabled={!couponCode.trim() || couponLoading}
                     className="px-4 h-10 rounded-xl bg-foreground text-background text-sm font-semibold disabled:opacity-40 transition-all shrink-0"
                   >
-                    {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
+                    {couponLoading ? <CircleNotch size={16} weight="bold" className="animate-spin" /> : 'Apply'}
                   </button>
                 </div>
               )}
@@ -682,9 +682,9 @@ const WalletPage = () => {
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Payment Method</p>
               <div className="space-y-2">
                 {[
-                  { method: 'upi' as PaymentMethod, icon: Smartphone, label: 'UPI', description: 'GPay, PhonePe, Paytm' },
+                  { method: 'upi' as PaymentMethod, icon: DeviceMobile, label: 'UPI', description: 'GPay, PhonePe, Paytm' },
                   { method: 'card' as PaymentMethod, icon: CreditCard, label: 'Card', description: 'Visa, Mastercard, RuPay' },
-                  { method: 'netbanking' as PaymentMethod, icon: Building2, label: 'Net Banking', description: 'All major banks' },
+                  { method: 'netbanking' as PaymentMethod, icon: Bank, label: 'Net Banking', description: 'All major banks' },
                 ].map(({ method, icon: Icon, label, description }) => (
                   <button
                     key={method}
@@ -700,7 +700,7 @@ const WalletPage = () => {
                       "p-2 rounded-xl shrink-0 transition-colors",
                       selectedPaymentMethod === method ? "bg-coke-red/15 text-coke-red" : "bg-muted text-muted-foreground"
                     )}>
-                      <Icon className="h-4 w-4" />
+                      <Icon size={16} weight="bold" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={cn("font-semibold text-sm", selectedPaymentMethod === method ? "text-foreground" : "text-muted-foreground")}>
@@ -728,7 +728,7 @@ const WalletPage = () => {
               }
               className="w-full flex items-center justify-center gap-2 py-3 bg-coke-red hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-semibold text-sm transition-all duration-200 shadow-md shadow-coke-red/25"
             >
-              <Shield className="h-4 w-4 shrink-0" />
+              <ShieldCheck size={16} weight="bold" className="shrink-0" />
               <span>Pay Securely</span>
               {rechargeAmount && Number(rechargeAmount) > 0 && (
                 <span className="font-typewriter">

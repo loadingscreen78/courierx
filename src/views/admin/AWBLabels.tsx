@@ -5,9 +5,9 @@ import { AdminLayout } from '@/components/admin/layout';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  FileText, Search, Download, ExternalLink, Package,
-  RefreshCw, Filter, Globe, Truck, IndianRupee, TrendingUp,
-} from 'lucide-react';
+  FileText, MagnifyingGlass, DownloadSimple, ArrowSquareOut, Package,
+  ArrowsClockwise, Funnel, Globe, Truck, CurrencyInr, TrendingUp,
+} from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -218,7 +218,7 @@ export default function AWBLabels() {
           className="flex flex-col sm:flex-row gap-3"
         >
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <MagnifyingGlass size={16} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -228,7 +228,7 @@ export default function AWBLabels() {
           </div>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-[150px] bg-[#16161a] border-white/10 text-white">
-              <Filter className="h-4 w-4 mr-2 text-gray-400" />
+              <Funnel size={16} weight="bold" className="mr-2 text-gray-400" />
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent className="bg-[#16161a] border-white/10">
@@ -242,7 +242,7 @@ export default function AWBLabels() {
             onClick={fetchShipments}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-colors text-sm"
           >
-            <RefreshCw className="h-4 w-4" /> Refresh
+            <ArrowsClockwise size={16} weight="bold" /> Refresh
           </button>
         </motion.div>
 
@@ -251,12 +251,12 @@ export default function AWBLabels() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="bg-white/5 border border-white/10 rounded-xl p-1 gap-1 mb-4">
               <TabsTrigger value="domestic" className="rounded-lg data-[state=active]:bg-green-500/20 data-[state=active]:text-green-300 text-gray-400 text-sm px-5 py-2 flex items-center gap-2">
-                <Truck className="h-3.5 w-3.5" />
+                <Truck size={14} weight="bold" />
                 Domestic AWB
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white/10 text-[10px] font-bold text-gray-300">{filteredDomestic.length}</span>
               </TabsTrigger>
               <TabsTrigger value="international" className="rounded-lg data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300 text-gray-400 text-sm px-5 py-2 flex items-center gap-2">
-                <Globe className="h-3.5 w-3.5" />
+                <Globe size={14} weight="bold" />
                 International AWB
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white/10 text-[10px] font-bold text-gray-300">{filteredIntl.length}</span>
               </TabsTrigger>
@@ -318,7 +318,7 @@ function AWBList({ shipments, isLoading, regeneratingId, onDownload, onRegenerat
   if (isLoading) return <div className="space-y-3">{Array(4).fill(0).map((_, i) => <div key={i} className="h-24 w-full bg-white/5 rounded-xl animate-pulse" />)}</div>;
   if (shipments.length === 0) return (
     <div className="bg-[#16161a] rounded-[2rem] border border-white/5 py-12 text-center">
-      <FileText className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+      <FileText size={48} weight="bold" className="mx-auto mb-4 text-gray-600" />
       <h3 className="font-semibold text-white mb-1">No AWB Labels Found</h3>
       <p className="text-gray-500 text-sm">
         {mode === 'domestic' ? 'Book a domestic shipment to generate AWB labels' : 'International AWBs will appear here once assigned'}
@@ -376,7 +376,7 @@ function AWBCard({ shipment, isRegenerating, onDownload, onRegenerate, mode }: {
               )}
               {mode === 'international' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-blue-500/10 border-blue-500/30 text-blue-400">
-                  <Globe className="h-3 w-3" /> International
+                  <Globe size={12} weight="bold" /> International
                 </span>
               )}
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 border border-white/10 text-gray-400 capitalize">

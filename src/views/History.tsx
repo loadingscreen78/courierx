@@ -23,20 +23,20 @@ import {
 import { Separator } from '@/components/ui/separator';
 import {
   Package,
-  CalendarIcon,
+  CalendarBlank,
   FileText,
   Pill,
   Gift,
-  CheckCircle2,
+  CheckCircle,
   MapPin,
   Truck,
-  IndianRupee,
-  Download,
-  Filter,
+  CurrencyInr,
+  DownloadSimple,
+  Funnel,
   X,
-  RefreshCw,
+  ArrowsClockwise,
   Repeat,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -67,9 +67,9 @@ interface CompletedShipment {
 }
 
 const TYPE_ICONS: Record<ShipmentType, React.ReactNode> = {
-  medicine: <Pill className="h-4 w-4" />,
-  document: <FileText className="h-4 w-4" />,
-  gift: <Gift className="h-4 w-4" />,
+  medicine: <Pill size={16} weight="bold" />,
+  document: <FileText size={16} weight="bold" />,
+  gift: <Gift size={16} weight="bold" />,
 };
 
 const TYPE_LABELS: Record<ShipmentType, string> = {
@@ -96,13 +96,13 @@ const ShipmentHistoryCard = ({
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-typewriter font-bold text-sm">{shipment.trackingNumber}</p>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 text-[10px] font-semibold">
-                <CheckCircle2 className="h-2.5 w-2.5" />
+                <CheckCircle size={10} weight="bold" />
                 Delivered
               </span>
             </div>
             <p className="text-xs text-muted-foreground">→ {shipment.recipientName}</p>
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <MapPin className="h-2.5 w-2.5" />
+              <MapPin size={10} weight="bold" />
               {shipment.destination}
             </div>
           </div>
@@ -118,7 +118,7 @@ const ShipmentHistoryCard = ({
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <Truck className="h-2.5 w-2.5" />
+            <Truck size={10} weight="bold" />
             {shipment.carrier}
           </span>
           <span className="capitalize">{shipment.type}</span>
@@ -130,7 +130,7 @@ const ShipmentHistoryCard = ({
           className="gap-1.5 text-xs h-7 rounded-xl border-border/60"
           onClick={() => onRebook(shipment)}
         >
-          <Repeat className="h-3 w-3" />
+          <Repeat size={12} weight="bold" />
           Rebook
         </Button>
       </div>
@@ -373,7 +373,7 @@ const HistoryPage = () => {
               <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="justify-start text-left font-normal flex-1">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <CalendarBlank size={16} weight="bold" className="mr-2" />
                     {dateRange.from ? (
                       dateRange.to ? (
                         <>
@@ -408,26 +408,26 @@ const HistoryPage = () => {
               {/* Type Filter */}
               <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ShipmentType | 'all')}>
                 <SelectTrigger className="w-full sm:w-[180px]">
-                  <Filter className="h-4 w-4 mr-2" />
+                  <Funnel size={16} weight="bold" className="mr-2" />
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="medicine">
                     <div className="flex items-center gap-2">
-                      <Pill className="h-4 w-4" />
+                      <Pill size={16} weight="bold" />
                       Medicine
                     </div>
                   </SelectItem>
                   <SelectItem value="document">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
+                      <FileText size={16} weight="bold" />
                       Document
                     </div>
                   </SelectItem>
                   <SelectItem value="gift">
                     <div className="flex items-center gap-2">
-                      <Gift className="h-4 w-4" />
+                      <Gift size={16} weight="bold" />
                       Gift/Sample
                     </div>
                   </SelectItem>
@@ -436,7 +436,7 @@ const HistoryPage = () => {
 
               {hasActiveFilters && (
                 <Button variant="ghost" size="icon" onClick={clearFilters}>
-                  <X className="h-4 w-4" />
+                  <X size={16} weight="bold" />
                 </Button>
               )}
             </div>
@@ -463,15 +463,15 @@ const HistoryPage = () => {
             <CardContent className="py-4">
               <div className="flex items-center justify-center gap-4 text-xs">
                 <div className="flex items-center gap-1">
-                  <Pill className="h-3 w-3 text-destructive" />
+                  <Pill size={12} weight="bold" className="text-destructive" />
                   <span>{typeBreakdown.medicine}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <FileText className="h-3 w-3 text-primary" />
+                  <FileText size={12} weight="bold" className="text-primary" />
                   <span>{typeBreakdown.document}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Gift className="h-3 w-3 text-accent-foreground" />
+                  <Gift size={12} weight="bold" className="text-accent-foreground" />
                   <span>{typeBreakdown.gift}</span>
                 </div>
               </div>
@@ -481,7 +481,7 @@ const HistoryPage = () => {
           <Card className="hidden md:block">
             <CardContent className="py-4 text-center">
               <Button variant="outline" size="sm" className="gap-2">
-                <Download className="h-4 w-4" />
+                <DownloadSimple size={16} weight="bold" />
                 Export
               </Button>
               <p className="text-xs text-muted-foreground mt-2">Download CSV</p>
@@ -493,7 +493,7 @@ const HistoryPage = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4" />
+              <Package size={16} weight="bold" />
               Completed Deliveries
               <Badge variant="outline" className="ml-auto font-typewriter">
                 {filteredShipments.length} results
@@ -503,7 +503,7 @@ const HistoryPage = () => {
           <CardContent className="space-y-3">
             {filteredShipments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <Package size={48} weight="bold" className="mx-auto mb-2 opacity-20" />
                 <p>No shipments found for the selected filters</p>
                 <Button variant="link" onClick={clearFilters} className="mt-2">
                   Clear filters
