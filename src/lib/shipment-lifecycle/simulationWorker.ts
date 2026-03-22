@@ -1,189 +1,99 @@
-/**
- * International simulation worker.
- *
- * Invoked by cron (POST /api/cron/simulation-worker).
- * Generates mock international tracking events for shipments in the
- * INTERNATIONAL leg, advancing them through the status sequence:
- *   DISPATCHED → IN_INTERNATIONAL_TRANSIT → CUSTOMS_CLEARANCE
- *   → INTL_OUT_FOR_DELIVERY → INTL_DELIVERED
- *
- * - Acquires a per-shipment advisory lock to prevent duplicate/out-of-order events
- * - On error: retries once, then skips the shipment
- *
- * Requirements: 4.2, 4.3, 4.6, 4.7, 11.5
- */
-
 import { getServiceRoleClient } from './supabaseAdmin';
 import { updateShipmentStatus } from './stateMachine';
-import { ShipmentRow, ShipmentStatus } from './types';
-
-/**
- * Ordered international status sequence. Each shipment advances one step per
- * simulation cycle.
- */
-const INTERNATIONAL_SEQUENCE: ShipmentStatus[] = [
-  'DISPATCHED',
-  'IN_INTERNATIONAL_TRANSIT',
-  'CUSTOMS_CLEARANCE',
-  'INTL_OUT_FOR_DELIVERY',
-  'INTL_DELIVERED',
-];
-
-/**
- * Base key for per-shipment advisory locks. The actual lock key is computed as
- * a hash of this base + the shipment ID to avoid collisions with other lock
- * users (e.g., the domestic sync lock at 839271).
- */
-const SIM_LOCK_BASE = 920000;
+import type { ShipmentRow, ShipmentStatus } from './types';
 
 export interface SimulationResult {
   processed: number;
   advanced: number;
   errors: number;
+  details: Array<{ shipmentId: string; from: string; to?: string; error?: string }>;
 }
 
+// How many hours must pass at each status before advancing to the next
+const ADVANCE_AFTER_HOURS: Partial<Record<ShipmentStatus, number>> = {
+  DISPATCHED: 12,
+  IN_INTERNATIONAL_TRANSIT: 48,
+  CUSTOMS_CLEARANCE: 24,
+  INTL_OUT_FOR_DELIVERY: 6,
+};
+
+const NEXT_STATUS: Partial<Record<ShipmentStatus, ShipmentStatus>> = {
+  DISPATCHED: 'IN_INTERNATIONAL_TRANSIT',
+  IN_INTERNATIONAL_TRANSIT: 'CUSTOMS_CLEARANCE',
+  CUSTOMS_CLEARANCE: 'INTL_OUT_FOR_DELIVERY',
+  INTL_OUT_FOR_DELIVERY: 'INTL_DELIVERED',
+};
+
 /**
- * Runs a single simulation cycle: queries all INTERNATIONAL shipments and
- * advances each one step in the status sequence.
+ * Advances INTERNATIONAL leg shipments through simulated stages based on
+ * time elapsed since the last status update.
+ *
+ * Called by /api/cron/simulation-worker (secured by CRON_SECRET).
  */
 export async function runSimulationWorker(): Promise<SimulationResult> {
   const supabase = getServiceRoleClient();
-  const result: SimulationResult = { processed: 0, advanced: 0, errors: 0 };
+  const result: SimulationResult = { processed: 0, advanced: 0, errors: 0, details: [] };
 
-  // Query all shipments in the INTERNATIONAL leg
-  const { data: shipments, error: queryError } = await supabase
+  const { data: shipments, error } = await supabase
     .from('shipments')
     .select('*')
-    .eq('current_leg', 'INTERNATIONAL');
+    .eq('current_leg', 'INTERNATIONAL')
+    .not('current_status', 'in', '("INTL_DELIVERED","FAILED")');
 
-  if (queryError) {
-    console.error('[simulationWorker] Failed to query shipments:', queryError.message);
+  if (error) {
+    console.error('[simulationWorker] Failed to fetch shipments:', error);
     return result;
   }
 
-  if (!shipments || shipments.length === 0) {
-    return result;
-  }
+  const rows = (shipments ?? []) as unknown as ShipmentRow[];
+  result.processed = rows.length;
 
-  for (const raw of shipments) {
-    const shipment = raw as unknown as ShipmentRow;
-    result.processed++;
-
-    const lockKey = shipmentLockKey(shipment.id);
-    const locked = await acquireAdvisoryLock(supabase, lockKey);
-    if (!locked) {
-      // Another worker is already processing this shipment — skip
+  for (const shipment of rows) {
+    const nextStatus = NEXT_STATUS[shipment.current_status];
+    if (!nextStatus) {
+      result.details.push({ shipmentId: shipment.id, from: shipment.current_status, error: 'No next status defined' });
       continue;
     }
 
-    try {
-      const advanced = await advanceShipment(shipment);
-      if (advanced) {
-        result.advanced++;
-      }
-    } catch (err) {
-      // Retry once on error
-      try {
-        const advanced = await advanceShipment(shipment);
-        if (advanced) {
-          result.advanced++;
-        }
-      } catch (retryErr) {
-        result.errors++;
-        console.error(
-          `[simulationWorker] Failed after retry for shipment ${shipment.id}:`,
-          retryErr instanceof Error ? retryErr.message : retryErr,
-        );
-      }
-    } finally {
-      await releaseAdvisoryLock(supabase, lockKey);
+    const hoursRequired = ADVANCE_AFTER_HOURS[shipment.current_status] ?? 24;
+
+    // Get the timestamp of the last timeline entry for this shipment
+    const { data: lastEntry } = await supabase
+      .from('shipment_timeline')
+      .select('created_at')
+      .eq('shipment_id', shipment.id)
+      .eq('status', shipment.current_status)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const lastUpdated = lastEntry?.created_at ?? shipment.updated_at ?? shipment.created_at;
+    const hoursElapsed = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60);
+
+    if (hoursElapsed < hoursRequired) {
+      result.details.push({ shipmentId: shipment.id, from: shipment.current_status });
+      continue;
+    }
+
+    const updateResult = await updateShipmentStatus({
+      shipmentId: shipment.id,
+      newStatus: nextStatus,
+      source: 'SIMULATION',
+      metadata: { hoursElapsed: Math.floor(hoursElapsed), simulatedAt: new Date().toISOString() },
+      expectedVersion: shipment.version,
+    });
+
+    if (updateResult.success) {
+      result.advanced++;
+      result.details.push({ shipmentId: shipment.id, from: shipment.current_status, to: nextStatus });
+    } else if (updateResult.errorCode === 'VERSION_CONFLICT') {
+      result.details.push({ shipmentId: shipment.id, from: shipment.current_status, error: 'VERSION_CONFLICT (skipped)' });
+    } else {
+      result.errors++;
+      result.details.push({ shipmentId: shipment.id, from: shipment.current_status, error: updateResult.error });
     }
   }
 
+  console.log(`[simulationWorker] Done — processed: ${result.processed}, advanced: ${result.advanced}, errors: ${result.errors}`);
   return result;
-}
-
-/**
- * Determines the next status for a shipment and applies it via the state machine.
- * Returns true if the shipment was advanced, false if it's already at the end
- * of the sequence (INTL_DELIVERED).
- */
-async function advanceShipment(shipment: ShipmentRow): Promise<boolean> {
-  const currentIndex = INTERNATIONAL_SEQUENCE.indexOf(shipment.current_status);
-
-  // Not in the international sequence or already at the final status
-  if (currentIndex === -1 || currentIndex >= INTERNATIONAL_SEQUENCE.length - 1) {
-    return false;
-  }
-
-  const nextStatus = INTERNATIONAL_SEQUENCE[currentIndex + 1];
-
-  const updateResult = await updateShipmentStatus({
-    shipmentId: shipment.id,
-    newStatus: nextStatus,
-    source: 'SIMULATION',
-    metadata: {
-      trigger: 'simulation_worker',
-      previousStatus: shipment.current_status,
-    },
-    expectedVersion: shipment.version,
-  });
-
-  if (!updateResult.success) {
-    throw new Error(
-      `State machine rejected transition ${shipment.current_status} → ${nextStatus}: ${updateResult.error}`,
-    );
-  }
-
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Per-shipment advisory lock helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Derives a deterministic integer lock key from a shipment UUID.
- * Uses a djb2-style hash across all hex characters of the UUID offset by
- * SIM_LOCK_BASE to minimise collisions between distinct shipment IDs.
- */
-function shipmentLockKey(shipmentId: string): number {
-  const hex = shipmentId.replace(/-/g, '');
-  let hash = 0;
-  for (let i = 0; i < hex.length; i++) {
-    // Simple djb2-style hash
-    hash = ((hash << 5) - hash + hex.charCodeAt(i)) | 0;
-  }
-  // Ensure positive value within a bounded range and offset by SIM_LOCK_BASE
-  return SIM_LOCK_BASE + ((hash >>> 0) % 1_000_000);
-}
-
-
-async function acquireAdvisoryLock(
-  supabase: ReturnType<typeof getServiceRoleClient>,
-  lockKey: number,
-): Promise<boolean> {
-  const { data, error } = await supabase.rpc('pg_try_advisory_lock' as never, {
-    lock_key: lockKey,
-  } as never);
-
-  if (error) {
-    console.error('[simulationWorker] Advisory lock acquisition error:', error.message);
-    return false;
-  }
-
-  return data === true;
-}
-
-async function releaseAdvisoryLock(
-  supabase: ReturnType<typeof getServiceRoleClient>,
-  lockKey: number,
-): Promise<void> {
-  const { error } = await supabase.rpc('pg_advisory_unlock' as never, {
-    lock_key: lockKey,
-  } as never);
-
-  if (error) {
-    console.error('[simulationWorker] Advisory lock release error:', error.message);
-  }
 }

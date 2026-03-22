@@ -1,94 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
-import { dispatchSchema } from '@/lib/shipment-lifecycle/inputValidator';
 import { dispatchInternational } from '@/lib/shipment-lifecycle/bookingService';
+
+const bodySchema = z.object({
+  shipmentId: z.string().uuid(),
+  expectedVersion: z.number().int().positive(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getServiceRoleClient();
-
-    // 1. Authenticate user from Authorization header
+    // 1. Auth
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: 'Missing or invalid authorization header' },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const token = authHeader.slice(7);
+    const supabase = getServiceRoleClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
     if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Verify admin role — reject customers with 403
-    const { data: roles } = await supabase
-      .from('user_roles')
+    // 2. Verify admin role
+    const { data: profile } = await supabase
+      .from('profiles')
       .select('role')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .maybeSingle();
 
-    const userRoles = (roles || []).map((r) => r.role);
-    const isAdmin = userRoles.includes('admin');
-
-    if (!isAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: admin role required' },
-        { status: 403 },
-      );
+    if (!profile || !['admin', 'super_admin', 'staff'].includes(profile.role)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    // 3. Validate body with dispatchSchema
+    // 3. Validate body
     const body = await request.json();
-    const validation = dispatchSchema.safeParse(body);
-
-    if (!validation.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: validation.error.issues.map((i) => ({
-            field: i.path.join('.'),
-            message: i.message,
-          })),
-        },
-        { status: 400 },
-      );
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: 'Validation failed' }, { status: 400 });
     }
 
-    const { shipmentId, expectedVersion } = validation.data;
+    const { shipmentId, expectedVersion } = parsed.data;
 
-    // 4. Call dispatchInternational
+    // 4. Dispatch
     const result = await dispatchInternational(shipmentId, expectedVersion);
 
-    // 5. Return appropriate response
     if (!result.success) {
-      let status = 400;
-      if (result.error?.includes('VERSION_CONFLICT') || result.error?.includes('version')) {
-        status = 409;
-      } else if (result.error?.includes('Forbidden') || result.error?.includes('COMPLETED')) {
-        status = 403;
-      }
-
       return NextResponse.json(
-        { success: false, error: result.error, errorCode: result.errorCode },
-        { status },
+        { success: false, error: result.error },
+        { status: 400 }
       );
     }
 
-    return NextResponse.json(
-      { success: true, shipment: result.shipment },
-      { status: 200 },
-    );
-  } catch (error) {
-    console.error('[shipments/dispatch] Unexpected error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: true, shipment: result.shipment }, { status: 200 });
+  } catch (err) {
+    console.error('[dispatch] Unexpected error:', err);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }

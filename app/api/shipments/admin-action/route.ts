@@ -1,118 +1,112 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
-import { adminActionSchema } from '@/lib/shipment-lifecycle/inputValidator';
-import { checkRateLimit } from '@/lib/shipment-lifecycle/rateLimiter';
 import { updateShipmentStatus } from '@/lib/shipment-lifecycle/stateMachine';
-import { ShipmentStatus } from '@/lib/shipment-lifecycle/types';
+import type { ShipmentStatus } from '@/lib/shipment-lifecycle/types';
 
-const ACTION_STATUS_MAP: Record<string, ShipmentStatus> = {
+const bodySchema = z.object({
+  shipmentId: z.string().uuid(),
+  action: z.enum(['quality_check', 'package', 'approve_dispatch']),
+  expectedVersion: z.number().int().positive(),
+  notes: z.string().optional(),
+});
+
+const ACTION_TO_STATUS: Record<string, ShipmentStatus> = {
   quality_check: 'QUALITY_CHECKED',
   package: 'PACKAGED',
   approve_dispatch: 'DISPATCH_APPROVED',
 };
 
+// Simple in-memory rate limiter: max 10 actions per admin per minute
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry || entry.resetAt < now) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 });
+    return { allowed: true };
+  }
+  if (entry.count >= 10) {
+    return { allowed: false, retryAfterMs: entry.resetAt - now };
+  }
+  entry.count++;
+  return { allowed: true };
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getServiceRoleClient();
-
-    // 1. Authenticate user from Authorization header
+    // 1. Auth — verify admin session
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: 'Missing or invalid authorization header' },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const token = authHeader.slice(7);
+    const supabase = getServiceRoleClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
     if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Verify admin role — reject customers with 403
-    const { data: roles } = await supabase
-      .from('user_roles')
+    // 2. Verify admin role
+    const { data: profile } = await supabase
+      .from('profiles')
       .select('role')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .maybeSingle();
 
-    const userRoles = (roles || []).map((r) => r.role);
-    const isAdmin = userRoles.includes('admin');
-
-    if (!isAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'Forbidden: admin role required' },
-        { status: 403 },
-      );
+    if (!profile || !['admin', 'super_admin', 'staff'].includes(profile.role)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    // 3. Validate body with adminActionSchema
-    const body = await request.json();
-    const validation = adminActionSchema.safeParse(body);
-
-    if (!validation.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: validation.error.issues.map((i) => ({
-            field: i.path.join('.'),
-            message: i.message,
-          })),
-        },
-        { status: 400 },
-      );
-    }
-
-    const { shipmentId, action, expectedVersion } = validation.data;
-
-    // 4. Rate limit check (3/min per action type)
-    const rateResult = checkRateLimit(user.id, action);
-    if (!rateResult.allowed) {
+    // 3. Rate limit
+    const rl = checkRateLimit(user.id);
+    if (!rl.allowed) {
+      const retryAfterSec = Math.ceil((rl.retryAfterMs ?? 60_000) / 1000);
       return NextResponse.json(
         { success: false, error: 'Too many requests' },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(Math.ceil((rateResult.retryAfterMs ?? 0) / 1000)),
-          },
-        },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } }
       );
     }
 
-    // 5. Map action to target status
-    const targetStatus = ACTION_STATUS_MAP[action];
+    // 4. Validate body
+    const body = await request.json();
+    const parsed = bodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.issues,
+      }, { status: 400 });
+    }
 
-    // 6. Call updateShipmentStatus
+    const { shipmentId, action, expectedVersion, notes } = parsed.data;
+    const newStatus = ACTION_TO_STATUS[action];
+
+    // 5. Perform status update via state machine
     const result = await updateShipmentStatus({
       shipmentId,
-      newStatus: targetStatus,
+      newStatus,
       source: 'INTERNAL',
-      metadata: { adminUserId: user.id, action },
+      metadata: {
+        action,
+        performedBy: user.id,
+        ...(notes && { notes }),
+      },
       expectedVersion,
     });
 
-    // 7. Return appropriate response
     if (!result.success) {
       return NextResponse.json(
         { success: false, error: result.error, errorCode: result.errorCode },
-        { status: result.httpStatus ?? 400 },
+        { status: result.httpStatus ?? 400 }
       );
     }
 
-    return NextResponse.json(
-      { success: true, shipment: result.shipment },
-      { status: 200 },
-    );
-  } catch (error) {
-    console.error('[shipments/admin-action] Unexpected error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: true, shipment: result.shipment }, { status: 200 });
+  } catch (err) {
+    console.error('[admin-action] Unexpected error:', err);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }
