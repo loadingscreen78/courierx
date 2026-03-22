@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout';
 import { GiftItemsStep } from '@/components/booking/gift/GiftItemsStep';
@@ -8,7 +8,7 @@ import { GiftAddonsStep } from '@/components/booking/gift/GiftAddonsStep';
 import { GiftReviewStep } from '@/components/booking/gift/GiftReviewStep';
 import { BookingProgress } from '@/components/booking/BookingProgress';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, AlertCircle, Ban, Save, Clock, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Warning, Prohibit, FloppyDisk, Clock, Trash, CircleNotch } from '@phosphor-icons/react';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useAuth } from '@/contexts/AuthContext';
@@ -139,9 +139,11 @@ const GiftBooking = () => {
   });
 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingReferenceId, setBookingReferenceId] = useState<string | null>(null);
+  const addressFlushRef = useRef<(() => void) | null>(null);
   const { mediumTap, errorFeedback, successFeedback } = useHaptics();
   const { playClick, playError, playSuccess } = useSoundEffects();
   const { user, session } = useAuth();
@@ -199,6 +201,7 @@ const GiftBooking = () => {
 
   const validateStep = (step: number): boolean => {
     const errors: string[] = [];
+    const fields: Record<string, string> = {};
 
     switch (step) {
       case 1:
@@ -211,27 +214,28 @@ const GiftBooking = () => {
         });
         if (isOverValueCap) errors.push('Total value exceeds ₹25,000 limit. Please contact support.');
         break;
-      case 2:
-        if (!bookingData.pickupAddress.fullName.trim()) errors.push('Please enter pickup contact name');
-        if (!bookingData.pickupAddress.phone.trim()) errors.push('Please enter pickup phone number');
-        else if (!/^(\+91[\s-]?)?[6-9]\d{9}$/.test(bookingData.pickupAddress.phone.replace(/\s/g, ''))) errors.push('Pickup phone must be a valid Indian mobile number (e.g. +91 98765 43210)');
-        if (!bookingData.pickupAddress.addressLine1.trim()) errors.push('Please enter pickup address');
-        if (!bookingData.pickupAddress.pincode.trim() || bookingData.pickupAddress.pincode.length !== 6) {
-          errors.push('Please enter valid 6-digit pincode');
-        }
-        if (!bookingData.consigneeAddress.fullName.trim()) errors.push('Please enter consignee name');
-        if (!bookingData.consigneeAddress.country.trim()) errors.push('Please select destination country');
-        if (!bookingData.consigneeAddress.addressLine1.trim()) errors.push('Please enter consignee address');
+      case 2: {
+        const p = bookingData.pickupAddress;
+        const c = bookingData.consigneeAddress;
+        if (!p.fullName.trim()) { errors.push('Please enter pickup contact name'); fields.pickupName = 'Contact name is required'; }
+        if (!p.phone.trim()) { errors.push('Please enter pickup phone number'); fields.pickupPhone = 'Phone number is required'; }
+        else if (!/^(\+91[\s-]?)?[6-9]\d{9}$/.test(p.phone.replace(/\s/g, ''))) { errors.push('Pickup phone must be a valid Indian mobile number'); fields.pickupPhone = 'Enter a valid Indian mobile number (e.g. +91 98765 43210)'; }
+        if (!p.addressLine1.trim()) { errors.push('Please enter pickup address'); fields.pickupAddress = 'Address is required'; }
+        if (!p.pincode.trim() || p.pincode.length !== 6) { errors.push('Please enter valid 6-digit pincode'); fields.pickupPincode = 'Enter a valid 6-digit PIN code'; }
+        if (!c.fullName.trim()) { errors.push('Please enter consignee name'); fields.consigneeName = 'Recipient name is required'; }
+        if (!c.country.trim()) { errors.push('Please select destination country'); fields.consigneeCountry = 'Select a destination country'; }
+        if (!c.addressLine1.trim()) { errors.push('Please enter consignee address'); fields.consigneeAddress = 'Address is required'; }
         break;
-        // Validation step - only block if explicitly marked as prohibited
+      }
+      case 4:
         if (bookingData.prohibitedItemAttempted) {
           errors.push('Prohibited items detected. This shipment cannot proceed.');
         }
-        // Note: HSN validation warnings don't block progression
         break;
     }
 
     setValidationErrors(errors);
+    setFieldErrors(fields);
     if (errors.length > 0) {
       errorFeedback();
       playError();
@@ -240,6 +244,10 @@ const GiftBooking = () => {
   };
 
   const handleNext = () => {
+    // Flush any pending address debounce before validating
+    if (currentStep === 2 && addressFlushRef.current) {
+      addressFlushRef.current();
+    }
     if (validateStep(currentStep)) {
       mediumTap();
       playClick();
@@ -252,6 +260,7 @@ const GiftBooking = () => {
     playClick();
     setStep(Math.max(currentStep - 1, 1));
     setValidationErrors([]);
+    setFieldErrors({});
   };
 
   const handleDiscard = () => {
@@ -433,11 +442,11 @@ const GiftBooking = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ), [bookingData.items, bookingData.safetyChecklist, bookingData.prohibitedItemAttempted, totalValue]);
 
-  // Step 2: address — frozen snapshot on entry, never re-renders while typing
+  // Step 2: address — stable key so it never remounts (preserves passport uploads + local state)
   const step2 = useMemo(() => (
-    <GiftAddressStep data={bookingData} onUpdate={updateBookingData} />
+    <GiftAddressStep data={bookingData} onUpdate={updateBookingData} flushRef={addressFlushRef} fieldErrors={fieldErrors} />
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [currentStep === 2 ? 'step2' : 'other']);
+  ), [fieldErrors]); // re-render only when field errors change, not on every keystroke
 
   // Step 3: addons only
   const step3 = useMemo(() => (
@@ -445,11 +454,11 @@ const GiftBooking = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ), [bookingData.insurance, bookingData.giftWrapping, bookingData.passportPhotoPage, bookingData.passportAddressPage]);
 
-  // Step 4: validation
+  // Step 4: validation — include country so GiftValidationStep gets fresh data when navigating here
   const step4 = useMemo(() => (
     <GiftValidationStep data={bookingData} onUpdate={updateBookingData} />
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [bookingData.items, bookingData.safetyChecklist, bookingData.prohibitedItemAttempted]);
+  ), [bookingData.items, bookingData.safetyChecklist, bookingData.prohibitedItemAttempted, bookingData.consigneeAddress.country]);
 
   // Step 5: review — no typing, full data fine
   const step5 = useMemo(() => (
@@ -490,7 +499,7 @@ const GiftBooking = () => {
                 disabled={isSaving}
                 className="text-xs"
               >
-                <Save className="h-3 w-3 mr-1" />
+                <FloppyDisk className="h-3 w-3 mr-1" weight="bold" />
                 {isSaving ? 'Saving...' : 'Save Draft'}
               </Button>
               <Button
@@ -499,7 +508,7 @@ const GiftBooking = () => {
                 onClick={() => setShowDiscardDialog(true)}
                 className="text-xs text-muted-foreground hover:text-destructive"
               >
-                <Trash2 className="h-3 w-3 mr-1" />
+                <Trash className="h-3 w-3 mr-1" weight="bold" />
                 Discard
               </Button>
             </div>
@@ -510,7 +519,7 @@ const GiftBooking = () => {
 
         {bookingData.prohibitedItemAttempted && currentStep === 4 && (
           <Alert variant="destructive">
-            <Ban className="h-4 w-4" />
+            <Prohibit className="h-4 w-4" weight="bold" />
             <AlertTitle>Booking Blocked - Prohibited Items</AlertTitle>
             <AlertDescription>
               Your shipment contains items that are prohibited for international shipping.
@@ -521,7 +530,7 @@ const GiftBooking = () => {
 
         {isOverValueCap && currentStep === 1 && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Warning className="h-4 w-4" weight="bold" />
             <AlertTitle>Value Limit Exceeded</AlertTitle>
             <AlertDescription>
               Total value (₹{totalValue.toLocaleString('en-IN')}) exceeds CSB IV limit of ₹25,000.
@@ -534,7 +543,7 @@ const GiftBooking = () => {
 
         {validationErrors.length > 0 && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            <Warning className="h-4 w-4" weight="bold" />
             <AlertTitle>Please fix the following errors</AlertTitle>
             <AlertDescription>
               <ul className="list-disc list-inside mt-2 space-y-1">
@@ -573,7 +582,7 @@ const GiftBooking = () => {
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <CircleNotch className="h-4 w-4 mr-2 animate-spin" weight="bold" />
                   Processing...
                 </>
               ) : (

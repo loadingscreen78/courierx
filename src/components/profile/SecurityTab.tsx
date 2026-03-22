@@ -101,13 +101,42 @@ export const SecurityTab = () => {
       return;
     }
 
-    // In production, this would call a server function to handle account deletion
-    toast({
-      title: 'Account Deletion Requested',
-      description: 'Your account deletion request has been submitted. You will receive a confirmation email.',
-    });
-    
+    mediumTap();
+
+    // Get current session token
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      errorFeedback();
+      playError();
+      toast({ title: 'Error', description: 'No active session found.', variant: 'destructive' });
+      return;
+    }
+
+    // Sign out first to clear local session, then delete server-side
     await signOut();
+
+    const res = await fetch('/api/user/delete-account', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+
+    if (!res.ok) {
+      errorFeedback();
+      playError();
+      toast({
+        title: 'Deletion Failed',
+        description: 'Could not delete your account. Please contact support.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    successFeedback();
+    playSuccess();
+    toast({
+      title: 'Account Deleted',
+      description: 'Your account has been permanently deleted.',
+    });
   };
 
   return (
