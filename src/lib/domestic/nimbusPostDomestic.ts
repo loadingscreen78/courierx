@@ -239,7 +239,7 @@ export async function createDomesticShipment(
       phone: params.delivery.phone,
     },
     pickup: {
-      warehouse_name: 'default',
+      warehouse_name: process.env.NIMBUS_WAREHOUSE_NAME || 'default',
       name: params.pickup.name,
       address: params.pickup.address,
       address_2: '',
@@ -276,6 +276,7 @@ export async function createDomesticShipment(
   const data = await res.json();
 
   if (data?.status === false || data?.status_code !== 200) {
+    console.error('[nimbusPostDomestic] createDomesticShipment failed response:', JSON.stringify(data));
     return { success: false, error: data?.message || 'Shipment creation failed' };
   }
 
