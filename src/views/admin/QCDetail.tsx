@@ -493,7 +493,7 @@ export default function QCDetail() {
                           <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center gap-2">
                             <AlertTriangle className="h-8 w-8 text-amber-500" />
                             <p className="text-sm text-gray-400">Could not load preview</p>
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 underline flex items-center gap-1">
+                            <a href={url || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 underline flex items-center gap-1">
                               Open original <ExternalLink className="h-3 w-3" />
                             </a>
                           </div>
