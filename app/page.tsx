@@ -4,23 +4,35 @@ import dynamic from 'next/dynamic';
 
 // ── SEO Metadata (rendered server-side, fully crawlable) ──────────────────────
 export const metadata: Metadata = {
-  title: 'CourierX — International Courier for Medicines, Documents & Gifts',
+  title: 'CourierX — Send Medicines, Documents & Gifts Abroad from India | International Courier',
   description:
-    'India\'s trusted international courier aggregator. Ship medicines, documents, and personal gifts to 150+ countries. CSB-IV compliant, fast delivery in 3–7 days.',
+    'India\'s trusted international courier aggregator. Send prescription medicines, documents & personal gifts to USA, UK, Canada, Australia, UAE & 150+ countries. CSB-IV compliant. Compare DHL, FedEx, Aramex rates. Fast 3–7 day delivery.',
   keywords: [
     'international courier India',
-    'ship medicines abroad',
-    'send documents overseas',
+    'send medicines abroad from India',
+    'ship prescription medicine internationally',
+    'send documents overseas from India',
+    'send gifts abroad from India',
+    'courier India to USA',
+    'courier India to UK',
+    'courier India to Canada',
+    'courier India to Australia',
+    'courier India to UAE',
+    'cheapest international courier India',
     'CSB-IV compliant shipping',
-    'courier aggregator India',
     'DHL FedEx Aramex India',
+    'medicine courier service India',
+    'person to person courier India',
+    'international parcel delivery India',
+    'domestic courier India',
+    'courier aggregator India',
     'CourierX',
   ],
   openGraph: {
-    title: 'CourierX — Ship Your Essentials Across the Globe',
+    title: 'CourierX — Send Medicines, Documents & Gifts from India to 150+ Countries',
     description:
-      'Fast, compliant, and secure international shipping for medicines, documents, and gifts from India to 150+ countries.',
-    url: 'https://courierxpayments.com',
+      'India\'s #1 international courier aggregator. Ship prescription medicines, documents & gifts. Compare DHL, FedEx, Aramex rates. CSB-IV compliant. 3–7 day delivery.',
+    url: 'https://courierx.in',
     siteName: 'CourierX',
     type: 'website',
     images: [
@@ -28,7 +40,7 @@ export const metadata: Metadata = {
         url: '/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png',
         width: 1200,
         height: 630,
-        alt: 'CourierX — International Shipping',
+        alt: 'CourierX — International Courier from India for Medicines, Documents & Gifts',
       },
     ],
   },
@@ -36,11 +48,11 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'CourierX — International Courier for Medicines, Documents & Gifts',
     description:
-      'Ship to 150+ countries from India. CSB-IV compliant. Fast 3–7 day delivery.',
+      'Send medicines, documents & gifts from India to 150+ countries. CSB-IV compliant. Compare DHL, FedEx, Aramex. 3–7 day delivery.',
     images: ['/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png'],
   },
   alternates: {
-    canonical: 'https://courierxpayments.com',
+    canonical: 'https://courierx.in',
   },
   robots: {
     index: true,
@@ -115,8 +127,20 @@ export default function HomePage() {
 
       {/* Static links for crawlers — hidden visually but present in HTML */}
       <div style={{ display: 'none' }}>
+        <a href="/about">About CourierX</a>
+        <a href="/public/rate-calculator">International Shipping Rate Calculator</a>
+        <a href="/public/track">Track Shipment</a>
+        <a href="/contact">Contact Us</a>
+        <a href="/services/medicine-courier">Send Medicines Abroad from India</a>
+        <a href="/services/document-courier">International Document Courier</a>
+        <a href="/services/gift-courier">Send Gifts Abroad from India</a>
+        <a href="/services/domestic-courier">Domestic Courier India</a>
         <a href="/privacy-policy">Privacy Policy</a>
         <a href="/terms">Terms of Service</a>
+        <a href="/refund-policy">Refund Policy</a>
+        <a href="/shipping-policy">Shipping Policy</a>
+        <a href="/prohibited-items">Prohibited Items</a>
+        <a href="/cxbc/apply">Become a CourierX Business Partner</a>
       </div>
     </div>
   );

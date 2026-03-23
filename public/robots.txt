@@ -1,14 +1,49 @@
+# CourierX — https://courierx.in
+# This file is overridden by app/robots.ts at build time.
+# Kept as fallback for direct file access.
+
 User-agent: Googlebot
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api
+Disallow: /auth/kyc
+Disallow: /onboarding
+Disallow: /profile
+Disallow: /wallet
+Disallow: /vault
+Disallow: /drafts
+Disallow: /history
+Disallow: /shipments
+Disallow: /new-shipment
+Disallow: /support
+Disallow: /rate-calculator
+Disallow: /cxbc/dashboard
+Disallow: /cxbc/bills
+Disallow: /cxbc/book
+Disallow: /cxbc/settings
+Disallow: /cxbc/shipments
+Disallow: /cxbc/wallet
 
 User-agent: Bingbot
 Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api
+Disallow: /auth/kyc
+Disallow: /onboarding
+Disallow: /profile
+Disallow: /wallet
 
 User-agent: *
 Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api
+Disallow: /auth/kyc
+Disallow: /onboarding
+Disallow: /profile
+Disallow: /wallet
+
+Sitemap: https://courierx.in/sitemap.xml
+Host: https://courierx.in

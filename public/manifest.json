@@ -1,7 +1,7 @@
 {
-  "name": "CourierX - Premium International Logistics",
+  "name": "CourierX — International Courier from India for Medicines, Documents & Gifts",
   "short_name": "CourierX",
-  "description": "Send medicines, documents, and gifts internationally from India",
+  "description": "Ship medicines, documents & gifts from India to 150+ countries. Compare DHL, FedEx, Aramex rates. CSB-IV compliant international courier aggregator.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F5F5F0",
@@ -14,6 +14,8 @@
       "type": "image/x-icon"
     }
   ],
-  "categories": ["business", "logistics", "shipping"],
-  "lang": "en"
+  "categories": ["business", "logistics", "shipping", "courier", "delivery"],
+  "lang": "en",
+  "scope": "/",
+  "prefer_related_applications": false
 }

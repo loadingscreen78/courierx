@@ -2,9 +2,10 @@ import PublicTracking from '@/views/PublicTracking';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Track Shipment - Real-time Package Tracking',
-  description: 'Track your international shipment in real-time. Enter your tracking number to get live updates on your package location and delivery status.',
-  keywords: ['track shipment', 'package tracking', 'courier tracking', 'shipment status'],
+  title: 'Track Shipment — Real-Time International & Domestic Package Tracking',
+  description: 'Track your international or domestic shipment in real-time. Enter your AWB or tracking number to get live updates on package location, customs status, and estimated delivery date.',
+  keywords: ['track shipment', 'package tracking', 'courier tracking India', 'AWB tracking', 'international shipment tracking', 'DHL tracking India', 'FedEx tracking India', 'shipment status'],
+  alternates: { canonical: 'https://courierx.in/public/track' },
 };
 
 export default function PublicTrackPage() {
