@@ -86,9 +86,11 @@ interface QCChecklist {
 interface ShipmentDocument {
   id: string;
   document_type: string;
-  file_url: string;
+  file_path: string;
+  file_name: string;
+  mime_type: string | null;
   signed_url: string | null;
-  created_at: string;
+  uploaded_at: string;
 }
 
 export default function QCDetail() {
@@ -479,7 +481,7 @@ export default function QCDetail() {
                   {tabs.map(t => {
                     const doc = docMap[t.key];
                     const url = doc?.signed_url;
-                    const isPdf = url?.toLowerCase().includes('.pdf') || doc?.file_url?.toLowerCase().includes('.pdf');
+                    const isPdf = doc?.mime_type === 'application/pdf' || doc?.file_name?.toLowerCase().endsWith('.pdf');
                     return (
                       <TabsContent key={t.key} value={t.key} className="mt-4">
                         {!doc ? (

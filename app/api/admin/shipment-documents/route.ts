@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
   // Fetch document records
   const { data: docs, error: docsError } = await supabase
     .from('shipment_documents')
-    .select('id, document_type, file_url, created_at')
+    .select('id, document_type, file_path, file_name, mime_type, uploaded_at')
     .eq('shipment_id', shipmentId)
-    .order('created_at', { ascending: true });
+    .order('uploaded_at', { ascending: true });
 
   if (docsError) {
     return NextResponse.json({ error: docsError.message }, { status: 500 });
@@ -49,18 +49,17 @@ export async function GET(request: NextRequest) {
   // Generate signed URLs for each document (1 hour expiry)
   const documents = await Promise.all(
     docs.map(async (doc: any) => {
-      // file_url may be a full URL or just a storage path
-      // Extract the path portion after the bucket name
-      let storagePath = doc.file_url as string;
+      // file_path is stored as the storage path (may include bucket prefix)
+      let storagePath = doc.file_path as string;
 
-      // If it's a full Supabase storage URL, extract the path
+      // Strip bucket name prefix if present
+      if (storagePath.startsWith('shipment-documents/')) {
+        storagePath = storagePath.replace('shipment-documents/', '');
+      }
+      // Strip full URL if present
       const storageMatch = storagePath.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+)/);
       if (storageMatch) {
         storagePath = storageMatch[1];
-      }
-      // If it starts with the bucket name, strip it
-      if (storagePath.startsWith('shipment-documents/')) {
-        storagePath = storagePath.replace('shipment-documents/', '');
       }
 
       const { data: signed, error: signError } = await supabase.storage
@@ -70,9 +69,11 @@ export async function GET(request: NextRequest) {
       return {
         id: doc.id,
         document_type: doc.document_type,
-        file_url: doc.file_url,
+        file_name: doc.file_name,
+        mime_type: doc.mime_type,
+        file_path: doc.file_path,
         signed_url: signError ? null : signed?.signedUrl,
-        created_at: doc.created_at,
+        uploaded_at: doc.uploaded_at,
       };
     })
   );

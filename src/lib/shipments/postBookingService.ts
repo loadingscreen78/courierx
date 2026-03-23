@@ -178,7 +178,10 @@ export async function uploadShipmentDocuments(
         .insert({
           shipment_id: shipmentId,
           document_type: type,
-          file_url: result.url || result.path || filePath,
+          file_name: file.name,
+          file_path: result.path || filePath,
+          file_size: file.size,
+          mime_type: file.type || null,
         });
 
       if (error) {
