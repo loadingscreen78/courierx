@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AdminLayout } from '@/components/admin/layout';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,7 +15,10 @@ import {
   Ruler,
   Calculator,
   Loader2,
-  Clock
+  Clock,
+  ExternalLink,
+  Download,
+  ImageOff,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -80,6 +83,14 @@ interface QCChecklist {
   dimensions_height_cm: number;
 }
 
+interface ShipmentDocument {
+  id: string;
+  document_type: string;
+  file_url: string;
+  signed_url: string | null;
+  created_at: string;
+}
+
 export default function QCDetail() {
   const { shipmentId } = useParams<{ shipmentId: string }>();
   const router = useRouter();
@@ -93,9 +104,30 @@ export default function QCDetail() {
   const { performAction, performDispatch, loading: actionLoading, rateLimitedUntil } = useAdminAction();
   const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(shipmentId);
   const [rateLimitCountdown, setRateLimitCountdown] = useState<number>(0);
+  const [documents, setDocuments] = useState<ShipmentDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
 
-  const [checklist, setChecklist] = useState<QCChecklist>({
-    passport_name_match: false,
+  const fetchDocuments = useCallback(async () => {
+    if (!shipmentId) return;
+    setDocsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/admin/shipment-documents?shipmentId=${shipmentId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setDocuments(json.documents || []);
+      }
+    } catch (err) {
+      console.error('[QCDetail] fetchDocuments error:', err);
+    } finally {
+      setDocsLoading(false);
+    }
+  }, [shipmentId]);
+
+  const [checklist, setChecklist] = useState<QCChecklist>({    passport_name_match: false,
     prescription_patient_match: false,
     bill_patient_match: false,
     is_narcotic: false,
@@ -167,7 +199,8 @@ export default function QCDetail() {
       setIsLoading(false);
     };
     load();
-  }, [fetchShipmentData]);
+    fetchDocuments();
+  }, [fetchShipmentData, fetchDocuments]);
 
   // Realtime subscription for shipment row updates (status/leg/version changes)
   useEffect(() => {
@@ -419,28 +452,77 @@ export default function QCDetail() {
               <h3 className="text-sm font-semibold text-white">Documents</h3>
             </div>
             <p className="text-xs text-gray-500 mb-4">Review uploaded documents</p>
-            <Tabs defaultValue="prescription" className="w-full">
-              <TabsList className="w-full grid grid-cols-3 bg-white/5 border border-white/10 rounded-xl p-1">
-                <TabsTrigger value="prescription" className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400">Rx</TabsTrigger>
-                <TabsTrigger value="bill" className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400">Bill</TabsTrigger>
-                <TabsTrigger value="passport" className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400">ID</TabsTrigger>
-              </TabsList>
-              <TabsContent value="prescription" className="mt-4">
-                <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
-                  <p className="text-sm text-gray-500">Prescription Preview</p>
-                </div>
-              </TabsContent>
-              <TabsContent value="bill" className="mt-4">
-                <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
-                  <p className="text-sm text-gray-500">Pharmacy Bill Preview</p>
-                </div>
-              </TabsContent>
-              <TabsContent value="passport" className="mt-4">
-                <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
-                  <p className="text-sm text-gray-500">Passport/ID Preview</p>
-                </div>
-              </TabsContent>
-            </Tabs>
+            {docsLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+              </div>
+            ) : (() => {
+              const docMap: Record<string, ShipmentDocument> = {};
+              documents.forEach(d => { docMap[d.document_type] = d; });
+
+              const tabs = [
+                { key: 'prescription', label: 'Rx', title: 'Prescription' },
+                { key: 'pharmacy_bill', label: 'Bill', title: 'Pharmacy Bill' },
+                { key: 'consignee_id', label: 'ID', title: 'Consignee ID' },
+              ];
+
+              return (
+                <Tabs defaultValue="prescription" className="w-full">
+                  <TabsList className="w-full grid grid-cols-3 bg-white/5 border border-white/10 rounded-xl p-1">
+                    {tabs.map(t => (
+                      <TabsTrigger key={t.key} value={t.key} className="text-xs rounded-lg data-[state=active]:bg-red-600 data-[state=active]:text-white text-gray-400 relative">
+                        {t.label}
+                        {docMap[t.key] && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-green-500" />}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {tabs.map(t => {
+                    const doc = docMap[t.key];
+                    const url = doc?.signed_url;
+                    const isPdf = url?.toLowerCase().includes('.pdf') || doc?.file_url?.toLowerCase().includes('.pdf');
+                    return (
+                      <TabsContent key={t.key} value={t.key} className="mt-4">
+                        {!doc ? (
+                          <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center gap-2">
+                            <ImageOff className="h-8 w-8 text-gray-600" />
+                            <p className="text-sm text-gray-500">No {t.title} uploaded</p>
+                          </div>
+                        ) : !url ? (
+                          <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 flex flex-col items-center justify-center gap-2">
+                            <AlertTriangle className="h-8 w-8 text-amber-500" />
+                            <p className="text-sm text-gray-400">Could not load preview</p>
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 underline flex items-center gap-1">
+                              Open original <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        ) : isPdf ? (
+                          <div className="space-y-2">
+                            <iframe
+                              src={url}
+                              className="w-full rounded-xl border border-white/10 bg-white/5"
+                              style={{ height: '380px' }}
+                              title={t.title}
+                            />
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-gray-300 hover:bg-white/10 transition-colors">
+                              <ExternalLink className="h-3 w-3" /> Open PDF
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="aspect-[3/4] bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                              <img src={url} alt={t.title} className="w-full h-full object-contain" />
+                            </div>
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-gray-300 hover:bg-white/10 transition-colors">
+                              <Download className="h-3 w-3" /> Open full size
+                            </a>
+                          </div>
+                        )}
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              );
+            })()}
           </div>
 
           {/* Column 2: Validation Checklist */}
