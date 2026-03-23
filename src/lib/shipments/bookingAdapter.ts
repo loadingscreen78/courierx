@@ -57,6 +57,16 @@ export interface AdaptedBookingRequest {
   shippingCost: number;
   gstAmount: number;
   totalAmount: number;
+  // Structured pickup address for Nimbus domestic leg booking
+  pickupAddress?: {
+    fullName: string;
+    phone: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +295,15 @@ export function adaptBookingData(input: AdapterInput): AdaptedBookingRequest {
     shippingCost: costs.shippingCost,
     gstAmount: costs.gstAmount,
     totalAmount: costs.totalAmount,
+    pickupAddress: {
+      fullName: (formData.pickupAddress as PickupAddress).fullName,
+      phone: (formData.pickupAddress as PickupAddress).phone.replace(/[\s\-().]/g, ''),
+      addressLine1: (formData.pickupAddress as PickupAddress).addressLine1,
+      addressLine2: (formData.pickupAddress as PickupAddress).addressLine2 || '',
+      city: (formData.pickupAddress as PickupAddress).city,
+      state: (formData.pickupAddress as PickupAddress).state,
+      pincode: (formData.pickupAddress as PickupAddress).pincode,
+    },
   };
 
   // Include email when present

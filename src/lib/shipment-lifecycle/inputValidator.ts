@@ -25,6 +25,15 @@ export const bookingRequestSchema = z.object({
   shippingCost: z.number().nonnegative().optional(),
   gstAmount: z.number().nonnegative().optional(),
   totalAmount: z.number().nonnegative().optional(),
+  pickupAddress: z.object({
+    fullName: z.string().min(1),
+    phone: z.string().min(1),
+    addressLine1: z.string().min(1),
+    addressLine2: z.string().optional().default(''),
+    city: z.string().min(1),
+    state: z.string().min(1),
+    pincode: z.string().regex(/^\d{6}$/),
+  }).optional(),
 });
 
 export const adminActionSchema = z.object({

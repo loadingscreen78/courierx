@@ -64,9 +64,16 @@ async function bookDomesticLegToWarehouse(req: BookingRequest): Promise<NimbusBo
   const warehouse = await getWarehouseAddress();
   const token = await getNimbusToken();
 
-  // Parse pickup pincode from originAddress (last 6 digits)
-  const pincodeMatch = req.originAddress.match(/\b(\d{6})\b/);
-  const pickupPincode = pincodeMatch?.[1] ?? '000000';
+  // Use structured pickup address if available, otherwise parse from originAddress string
+  const pickup = req.pickupAddress;
+  const pickupPincode = pickup?.pincode ?? (req.originAddress.match(/\b(\d{6})\b/)?.[1] ?? '000000');
+  const pickupName = pickup?.fullName ?? req.recipientName;
+  const pickupPhone = pickup?.phone ?? req.recipientPhone ?? '9999999999';
+  const pickupAddress1 = pickup
+    ? `${pickup.addressLine1}${pickup.addressLine2 ? ' ' + pickup.addressLine2 : ''}`
+    : req.originAddress;
+  const pickupCity = pickup?.city ?? '';
+  const pickupState = pickup?.state ?? '';
 
   // Get serviceability to pick best courier
   const serviceabilityRes = await fetch(`${NIMBUS_API_BASE}/courier/serviceability`, {
@@ -115,13 +122,13 @@ async function bookDomesticLegToWarehouse(req: BookingRequest): Promise<NimbusBo
     },
     pickup: {
       warehouse_name: 'customer',
-      name: req.recipientName,
-      address: req.originAddress,
+      name: pickupName,
+      address: pickupAddress1,
       address_2: '',
-      city: '',
-      state: '',
+      city: pickupCity,
+      state: pickupState,
       pincode: pickupPincode,
-      phone: req.recipientPhone || '9999999999',
+      phone: pickupPhone,
     },
     order_items: [{ name: `${req.shipmentType} shipment`, qty: 1, price: req.declaredValue || 1 }],
     courier_id: courierId,
@@ -172,6 +179,15 @@ export interface BookingRequest {
   totalAmount?: number;
   cxbcPartnerId?: string;
   source?: 'cxbc' | 'customer';
+  pickupAddress?: {
+    fullName: string;
+    phone: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
 }
 
 export interface BookingResult {
@@ -244,6 +260,7 @@ export async function createBooking(req: BookingRequest): Promise<BookingResult>
       declared_value: req.declaredValue,
       shipment_type: req.shipmentType,
       alert_sent: false,
+      ...(req.pickupAddress && { pickup_address: req.pickupAddress }),
       ...(req.shippingCost !== undefined && { shipping_cost: req.shippingCost }),
       ...(req.gstAmount !== undefined && { gst_amount: req.gstAmount }),
       ...(req.totalAmount !== undefined && { total_amount: req.totalAmount }),
