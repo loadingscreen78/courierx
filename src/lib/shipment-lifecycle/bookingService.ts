@@ -2,6 +2,7 @@ import { ShipmentRow } from './types';
 import { bookingRequestSchema } from './inputValidator';
 import { getServiceRoleClient } from './supabaseAdmin';
 import { updateShipmentStatus } from './stateMachine';
+import { createDomesticShipment, fetchDomesticRates } from '@/lib/domestic/nimbusPostDomestic';
 
 // ---------------------------------------------------------------------------
 // Default warehouse address (fallback if DB not yet seeded)
@@ -35,126 +36,61 @@ async function getWarehouseAddress(): Promise<typeof DEFAULT_WAREHOUSE> {
 // NimbusPost — book domestic leg: customer → warehouse
 // ---------------------------------------------------------------------------
 
-const NIMBUS_API_BASE = 'https://api.nimbuspost.com/v1';
-
-interface NimbusTokenCache { token: string; expiresAt: number }
-let _tokenCache: NimbusTokenCache | null = null;
-
-async function getNimbusToken(): Promise<string> {
-  if (_tokenCache && _tokenCache.expiresAt > Date.now()) return _tokenCache.token;
-  const email = process.env.NIMBUS_EMAIL?.trim();
-  const password = process.env.NIMBUS_PASSWORD?.trim();
-  if (!email || !password) throw new Error('NIMBUS_EMAIL / NIMBUS_PASSWORD not configured');
-  const res = await fetch(`${NIMBUS_API_BASE}/users/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) throw new Error(`Nimbus auth failed: ${res.status}`);
-  const data = await res.json();
-  const token = data?.data;
-  if (!token) throw new Error('No token in Nimbus auth response');
-  _tokenCache = { token, expiresAt: Date.now() + 23 * 60 * 60 * 1000 };
-  return token;
-}
-
-interface NimbusBookingResult { success: boolean; awb?: string; label_url?: string; error?: string }
-
-async function bookDomesticLegToWarehouse(req: BookingRequest): Promise<NimbusBookingResult> {
+async function bookDomesticLegToWarehouse(req: BookingRequest) {
   const warehouse = await getWarehouseAddress();
-  const token = await getNimbusToken();
-
-  // Use structured pickup address if available, otherwise parse from originAddress string
   const pickup = req.pickupAddress;
-  const pickupPincode = pickup?.pincode ?? (req.originAddress.match(/\b(\d{6})\b/)?.[1] ?? '000000');
-  const pickupName = pickup?.fullName ?? req.recipientName;
-  const pickupPhone = pickup?.phone ?? req.recipientPhone ?? '9999999999';
-  const pickupAddress1 = pickup
-    ? `${pickup.addressLine1}${pickup.addressLine2 ? ' ' + pickup.addressLine2 : ''}`
-    : req.originAddress;
-  const pickupCity = pickup?.city ?? '';
-  const pickupState = pickup?.state ?? '';
 
-  // Get serviceability to pick best courier
-  const serviceabilityRes = await fetch(`${NIMBUS_API_BASE}/courier/serviceability`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      origin: pickupPincode,
-      destination: warehouse.pincode,
-      payment_type: 'prepaid',
-      order_amount: req.declaredValue || 1,
-      weight: Math.round((req.weightKg || 0.5) * 1000),
-      length: req.dimensions?.lengthCm ?? 10,
-      breadth: req.dimensions?.widthCm ?? 10,
-      height: req.dimensions?.heightCm ?? 5,
-    }),
-  });
-
-  let courierId = 1;
-  if (serviceabilityRes.ok) {
-    const sData = await serviceabilityRes.json();
-    const couriers = Array.isArray(sData?.data) ? sData.data : [];
-    const best = couriers.filter((c: any) => c.freight_charges > 0)
-      .sort((a: any, b: any) => a.freight_charges - b.freight_charges)[0];
-    if (best?.id) courierId = Number(best.id);
+  if (!pickup) {
+    return { success: false, error: 'No pickup address provided for domestic leg' };
   }
 
-  const payload = {
-    order_number: `CXI-${Date.now()}`,
-    shipping_charges: 0,
-    discount: 0,
-    cod_charges: 0,
-    payment_type: 'prepaid',
-    order_amount: req.declaredValue || 1,
-    package_weight: Math.round((req.weightKg || 0.5) * 1000),
-    package_length: req.dimensions?.lengthCm ?? 10,
-    package_breadth: req.dimensions?.widthCm ?? 10,
-    package_height: req.dimensions?.heightCm ?? 5,
-    consignee: {
+  const pickupPincode = pickup.pincode;
+  const pickupAddress1 = `${pickup.addressLine1}${pickup.addressLine2 ? ' ' + pickup.addressLine2 : ''}`;
+
+  // Get best courier via serviceability check
+  let courierId = 1;
+  try {
+    const rates = await fetchDomesticRates({
+      pickupPincode,
+      deliveryPincode: warehouse.pincode,
+      weightKg: req.weightKg || 0.5,
+      declaredValue: req.declaredValue || 1,
+      lengthCm: req.dimensions?.lengthCm ?? 10,
+      widthCm: req.dimensions?.widthCm ?? 10,
+      heightCm: req.dimensions?.heightCm ?? 5,
+      shipmentType: 'document', // not used in API call, just satisfies type
+    });
+    if (rates.length > 0) courierId = rates[0].courier_company_id;
+  } catch (e) {
+    console.warn('[bookingService] Serviceability check failed, using default courier:', e);
+  }
+
+  return createDomesticShipment({
+    courier_id: courierId,
+    pickup: {
+      name: pickup.fullName,
+      phone: pickup.phone,
+      address: pickupAddress1,
+      city: pickup.city,
+      state: pickup.state,
+      pincode: pickupPincode,
+    },
+    delivery: {
       name: warehouse.name,
+      phone: warehouse.phone,
       address: warehouse.address,
-      address_2: '',
       city: warehouse.city,
       state: warehouse.state,
       pincode: warehouse.pincode,
-      phone: warehouse.phone,
     },
-    pickup: {
-      warehouse_name: 'customer',
-      name: pickupName,
-      address: pickupAddress1,
-      address_2: '',
-      city: pickupCity,
-      state: pickupState,
-      pincode: pickupPincode,
-      phone: pickupPhone,
-    },
-    order_items: [{ name: `${req.shipmentType} shipment`, qty: 1, price: req.declaredValue || 1 }],
-    courier_id: courierId,
-  };
-
-  const res = await fetch(`${NIMBUS_API_BASE}/shipments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    order_amount: req.declaredValue || 1,
+    weight: req.weightKg || 0.5,
+    length: req.dimensions?.lengthCm ?? 10,
+    breadth: req.dimensions?.widthCm ?? 10,
+    height: req.dimensions?.heightCm ?? 5,
+    payment_type: 'prepaid',
+    content_description: `${req.shipmentType} shipment`,
   });
-
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    return { success: false, error: `NimbusPost error: ${res.status} ${err}` };
-  }
-
-  const data = await res.json();
-  if (data?.status === false || data?.status_code !== 200) {
-    return { success: false, error: data?.message || 'Nimbus shipment creation failed' };
-  }
-
-  return {
-    success: true,
-    awb: data?.data?.awb_number || data?.data?.awb,
-    label_url: data?.data?.label || data?.data?.label_url,
-  };
 }
 
 // ---------------------------------------------------------------------------
