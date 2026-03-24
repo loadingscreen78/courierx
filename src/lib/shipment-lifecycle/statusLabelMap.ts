@@ -8,7 +8,7 @@ export interface StatusDisplayInfo {
 
 export const STATUS_LABEL_MAP: Record<ShipmentStatus, StatusDisplayInfo> = {
   PENDING:                  { label: 'Pending',                          dotColor: 'bg-gray-500',   badgeVariant: 'secondary' },
-  BOOKING_CONFIRMED:        { label: 'Booking Confirmed',                dotColor: 'bg-blue-500',   badgeVariant: 'default' },
+  BOOKING_CONFIRMED:        { label: 'Booking Confirmed & AWB Generated',  dotColor: 'bg-blue-500',   badgeVariant: 'default' },
   PICKED_UP:                { label: 'Picked Up',                        dotColor: 'bg-blue-500',   badgeVariant: 'default' },
   IN_TRANSIT:               { label: 'In Transit',                       dotColor: 'bg-blue-500',   badgeVariant: 'default' },
   OUT_FOR_DELIVERY:         { label: 'Out for Delivery',                 dotColor: 'bg-blue-500',   badgeVariant: 'default' },

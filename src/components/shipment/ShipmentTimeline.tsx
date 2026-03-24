@@ -80,6 +80,17 @@ export function ShipmentTimeline({ entries, loading }: ShipmentTimelineProps) {
               <p className="text-sm font-medium leading-tight">
                 {statusInfo?.label ?? entry.status}
               </p>
+              {/* Show AWB number if present in metadata */}
+              {(entry.metadata?.domesticAwb || entry.metadata?.awb) && (
+                <p className="text-xs text-blue-400 mt-0.5 font-mono">
+                  AWB: {String(entry.metadata.domesticAwb ?? entry.metadata.awb)}
+                </p>
+              )}
+              {entry.metadata?.location && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  📍 {String(entry.metadata.location)}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-0.5">
                 {formatTimelineDate(entry.created_at)}
               </p>

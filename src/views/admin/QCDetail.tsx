@@ -108,7 +108,6 @@ export default function QCDetail() {
   const [rateLimitCountdown, setRateLimitCountdown] = useState<number>(0);
   const [documents, setDocuments] = useState<ShipmentDocument[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
-  const [rebookingDomestic, setRebookingDomestic] = useState(false);
 
   const fetchDocuments = useCallback(async () => {
     if (!shipmentId) return;
@@ -129,31 +128,6 @@ export default function QCDetail() {
       setDocsLoading(false);
     }
   }, [shipmentId]);
-
-  const handleRebookDomestic = async () => {
-    if (!shipment) return;
-    setRebookingDomestic(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      const res = await fetch('/api/admin/rebook-domestic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ shipmentId: shipment.id }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast({ title: 'Domestic AWB generated', description: `AWB: ${json.awb}` });
-        setShipment(prev => prev ? { ...prev, domestic_awb: json.awb } : prev);
-      } else {
-        toast({ title: 'Failed', description: json.error, variant: 'destructive' });
-      }
-    } catch (err) {
-      toast({ title: 'Error', description: 'Could not rebook domestic leg', variant: 'destructive' });
-    } finally {
-      setRebookingDomestic(false);
-    }
-  };
 
   const [checklist, setChecklist] = useState<QCChecklist>({    passport_name_match: false,
     prescription_patient_match: false,
@@ -403,17 +377,7 @@ export default function QCDetail() {
                 <div><p className="text-xs text-gray-500">Domestic AWB</p><p className="text-white font-medium font-mono">{shipment.domestic_awb}</p></div>
               )}
               {!shipment.domestic_awb && (
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Domestic AWB</p>
-                  <button
-                    onClick={handleRebookDomestic}
-                    disabled={rebookingDomestic}
-                    className="flex items-center gap-1.5 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
-                  >
-                    {rebookingDomestic ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                    {rebookingDomestic ? 'Booking...' : 'Generate Domestic AWB'}
-                  </button>
-                </div>
+                <div><p className="text-xs text-gray-500">Domestic AWB</p><p className="text-amber-400 text-sm">Pending — auto-assigned on booking</p></div>
               )}
               {shipment.international_awb && (shipment.current_leg === 'INTERNATIONAL' || shipment.current_leg === 'COMPLETED') && (
                 <div><p className="text-xs text-gray-500">International AWB</p><p className="text-white font-medium font-mono">{shipment.international_awb}</p></div>
