@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
 
     if (!result.success || !result.awb) {
       console.error('[rebook-domestic] NimbusPost result:', JSON.stringify(result));
-      return NextResponse.json({ success: false, error: result.error || 'Nimbus booking failed', debug: result }, { status: 502 });
+      return NextResponse.json({ success: false, error: result.error || 'Nimbus booking failed' }, { status: 502 });
     }
     // Save AWB to shipment
     await supabase

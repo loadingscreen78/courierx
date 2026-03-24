@@ -146,7 +146,7 @@ export default function QCDetail() {
         toast({ title: 'Domestic AWB generated', description: `AWB: ${json.awb}` });
         setShipment(prev => prev ? { ...prev, domestic_awb: json.awb } : prev);
       } else {
-        toast({ title: 'Failed', description: json.error + (json.debug ? ` | ${JSON.stringify(json.debug)}` : ''), variant: 'destructive' });
+        toast({ title: 'Failed', description: json.error, variant: 'destructive' });
       }
     } catch (err) {
       toast({ title: 'Error', description: 'Could not rebook domestic leg', variant: 'destructive' });

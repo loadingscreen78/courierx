@@ -270,7 +270,7 @@ export async function createDomesticShipment(
   if (!res.ok) {
     const errBody = await res.text().catch(() => '');
     console.error('[nimbusPostDomestic] Create shipment failed:', res.status, errBody);
-    return { success: false, error: `NimbusPost shipment creation failed: ${res.status}` };
+    return { success: false, error: `NimbusPost shipment creation failed: ${res.status} ${errBody}` };
   }
 
   const data = await res.json();
