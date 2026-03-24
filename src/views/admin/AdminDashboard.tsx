@@ -61,7 +61,8 @@ function AdminDashboard() {
         if (error) throw error;
 
         const pendingQC = shipments?.filter(s =>
-          s.current_status === 'ARRIVED_AT_WAREHOUSE'
+          s.current_leg === 'COUNTER' &&
+          ['BOOKING_CONFIRMED', 'ARRIVED_AT_WAREHOUSE'].includes(s.current_status)
         ).length || 0;
 
         const readyToDispatch = shipments?.filter(s =>
@@ -69,12 +70,13 @@ function AdminDashboard() {
         ).length || 0;
 
         const onHold = shipments?.filter(s =>
-          s.current_status === 'PACKAGED'
+          ['PACKAGED', 'QUALITY_CHECKED'].includes(s.current_status)
         ).length || 0;
 
         const today = new Date().toISOString().split('T')[0];
         const todayProcessed = shipments?.filter(s =>
-          s.qc_completed_at && s.qc_completed_at.startsWith(today)
+          s.updated_at && s.updated_at.startsWith(today) &&
+          ['QUALITY_CHECKED', 'PACKAGED', 'DISPATCH_APPROVED', 'DISPATCHED'].includes(s.current_status)
         ).length || 0;
 
         setStats({
