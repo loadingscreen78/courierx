@@ -6,12 +6,13 @@ import type { ShipmentStatus } from '@/lib/shipment-lifecycle/types';
 
 const bodySchema = z.object({
   shipmentId: z.string().uuid(),
-  action: z.enum(['quality_check', 'package', 'approve_dispatch']),
+  action: z.enum(['mark_arrived', 'quality_check', 'package', 'approve_dispatch']),
   expectedVersion: z.number().int().positive(),
   notes: z.string().optional(),
 });
 
 const ACTION_TO_STATUS: Record<string, ShipmentStatus> = {
+  mark_arrived: 'ARRIVED_AT_WAREHOUSE',
   quality_check: 'QUALITY_CHECKED',
   package: 'PACKAGED',
   approve_dispatch: 'DISPATCH_APPROVED',

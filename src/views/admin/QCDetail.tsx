@@ -642,6 +642,14 @@ export default function QCDetail() {
               {isCounterLeg && (
                 <>
                   <button
+                    onClick={() => handleLifecycleAction('mark_arrived')}
+                    disabled={shipment.current_status !== 'BOOKING_CONFIRMED' || actionLoading || isRateLimited}
+                    className="w-full py-3 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-[0_0_15px_rgba(37,99,235,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && shipment.current_status === 'BOOKING_CONFIRMED' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Mark as Arrived
+                  </button>
+                  <button
                     onClick={() => handleLifecycleAction('quality_check')}
                     disabled={shipment.current_status !== 'ARRIVED_AT_WAREHOUSE' || actionLoading || isRateLimited}
                     className="w-full py-3 rounded-xl font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-[0_0_15px_rgba(217,119,6,0.3)] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"

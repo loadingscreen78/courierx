@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-export type AdminActionType = 'quality_check' | 'package' | 'approve_dispatch';
+export type AdminActionType = 'mark_arrived' | 'quality_check' | 'package' | 'approve_dispatch';
 
 export interface ActionResult {
   success: boolean;
