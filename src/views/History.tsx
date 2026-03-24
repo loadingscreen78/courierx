@@ -153,6 +153,27 @@ const HistoryPage = () => {
   // Fetch completed shipments from database
   useEffect(() => {
     fetchCompletedShipments();
+
+    // Realtime: refresh when any shipment reaches delivered status
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(() => {});
+    const channel = supabase
+      .channel('history-shipments')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'shipments',
+      }, (payload) => {
+        const updated = payload.new as any;
+        if (updated?.current_status === 'INTL_DELIVERED' || updated?.current_status === 'DELIVERED') {
+          fetchCompletedShipments();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      authSub.unsubscribe();
+    };
   }, []);
 
   const fetchCompletedShipments = async () => {
@@ -172,7 +193,7 @@ const HistoryPage = () => {
         .from('shipments')
         .select('*')
         .eq('user_id', user.id)
-        .eq('status', 'delivered')
+        .in('current_status', ['INTL_DELIVERED', 'DELIVERED'])
         .order('updated_at', { ascending: false });
 
       if (error) {
