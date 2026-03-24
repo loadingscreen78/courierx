@@ -275,7 +275,7 @@ export async function createDomesticShipment(
 
   const data = await res.json();
 
-  if (data?.status === false || data?.status_code !== 200) {
+  if (data?.status === false) {
     console.error('[nimbusPostDomestic] createDomesticShipment failed response:', JSON.stringify(data));
     return { success: false, error: data?.message || 'Shipment creation failed' };
   }
