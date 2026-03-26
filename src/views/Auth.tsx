@@ -16,7 +16,6 @@ import { useSeo } from '@/hooks/useSeo';
 import { supabase } from '@/integrations/supabase/client';
 import logoMain from '@/assets/logo-main.jpeg';
 import { motion } from 'framer-motion';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useGoogleGsi } from '@/hooks/useGoogleGsi';
 
 const emailPasswordSchema = z.object({
@@ -795,7 +794,6 @@ const Auth = () => {
             </span>
           </a>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             {step !== 'panel-select' && (
               <button
                 onClick={() => { 
@@ -1051,7 +1049,7 @@ const Auth = () => {
                       <span className="text-sm text-muted-foreground">or continue with</span>
                       <div className="flex-1 h-px bg-border" />
                     </div>
-                    <div ref={googleButtonRef} />
+                    <div ref={googleButtonRef} className="w-full min-h-[44px]" />
                   </>
                 )}
 

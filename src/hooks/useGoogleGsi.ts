@@ -39,22 +39,33 @@ export function useGoogleGsi({
       callback: (response: google.accounts.id.CredentialResponse) => {
         onCredentialRef.current(response.credential);
       },
-      auto_select: true,
+      auto_select: false,
       cancel_on_tap_outside: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      use_fedcm_for_prompt: true,
     } as any);
 
     if (buttonDivRef.current) {
-      const buttonWidth = buttonDivRef.current.offsetWidth || 400;
-      google.accounts.id.renderButton(buttonDivRef.current, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'pill',
-        width: buttonWidth,
-      });
+      // Use a small delay to ensure the DOM has painted and offsetWidth is accurate
+      const renderButton = () => {
+        if (!buttonDivRef.current) return;
+        const buttonWidth = buttonDivRef.current.offsetWidth || window.innerWidth - 64;
+        google.accounts.id.renderButton(buttonDivRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'pill',
+          width: Math.min(buttonWidth, 400),
+        });
+      };
+
+      // Try immediately, then retry after paint if width is 0
+      if (buttonDivRef.current.offsetWidth > 0) {
+        renderButton();
+      } else {
+        requestAnimationFrame(() => {
+          setTimeout(renderButton, 100);
+        });
+      }
     }
 
     setIsGsiReady(true);
@@ -106,9 +117,11 @@ export function useGoogleGsi({
     document.head.appendChild(script);
   }, [enabled, initializeGsi]);
 
-  // One Tap prompt — only when ready and not loading
+  // One Tap prompt — only on desktop (mobile browsers block it via FedCM/iframe restrictions)
   useEffect(() => {
     if (!isGsiReady || isLoading || promptDismissedRef.current) return;
+    // Skip One Tap on mobile — the rendered button is sufficient and more reliable
+    if (window.innerWidth < 768) return;
 
     google.accounts.id.prompt((notification: google.accounts.id.PromptNotification) => {
       if (notification.isDismissedMoment()) {
