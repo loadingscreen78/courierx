@@ -167,7 +167,11 @@ const ShipmentDetailSheet = ({
   loadingDetails: boolean;
   onClose: () => void;
 }) => {
-  const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(shipment.id);
+  const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(
+    shipment.id,
+    shipment.current_status ?? shipment.status,
+    shipment.created_at,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
 

@@ -5,7 +5,11 @@ import { TimelineEntry } from '@/lib/shipment-lifecycle/types';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-export function useShipmentTimeline(shipmentId: string | undefined) {
+export function useShipmentTimeline(
+  shipmentId: string | undefined,
+  fallbackStatus?: string,
+  fallbackCreatedAt?: string,
+) {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -17,11 +21,26 @@ export function useShipmentTimeline(shipmentId: string | undefined) {
       .select('*')
       .eq('shipment_id', shipmentId)
       .order('created_at', { ascending: true });
-    const fetched = (data as unknown as TimelineEntry[]) ?? [];
+    let fetched = (data as unknown as TimelineEntry[]) ?? [];
+
+    // If no entries exist (old shipment pre-lifecycle migration), synthesise one
+    // from the shipment's current_status so the UI never shows "No timeline entries"
+    if (fetched.length === 0 && fallbackStatus) {
+      fetched = [{
+        id: `synthetic-${shipmentId}`,
+        shipment_id: shipmentId,
+        status: fallbackStatus,
+        leg: 'COUNTER',
+        source: 'SYSTEM',
+        metadata: {},
+        created_at: fallbackCreatedAt ?? new Date().toISOString(),
+      } as unknown as TimelineEntry];
+    }
+
     knownIdsRef.current = new Set(fetched.map(e => e.id));
     setEntries(fetched);
     setLoading(false);
-  }, [shipmentId]);
+  }, [shipmentId, fallbackStatus, fallbackCreatedAt]);
 
   useEffect(() => {
     if (!shipmentId) {
@@ -34,7 +53,6 @@ export function useShipmentTimeline(shipmentId: string | undefined) {
     setLoading(true);
     fetchTimeline();
 
-    // Realtime subscription for new timeline entries with reconnection handling
     const channel = db
       .channel(`timeline-${shipmentId}`)
       .on('postgres_changes', {
@@ -42,20 +60,18 @@ export function useShipmentTimeline(shipmentId: string | undefined) {
         schema: 'public',
         table: 'shipment_timeline',
         filter: `shipment_id=eq.${shipmentId}`,
-      }, (payload) => {
+      }, (payload: any) => {
         const newEntry = payload.new as unknown as TimelineEntry;
-        // Ignore duplicates that may arrive after reconnection
         if (knownIdsRef.current.has(newEntry.id)) return;
         knownIdsRef.current.add(newEntry.id);
-        setEntries(prev => [...prev, newEntry]);
+        // Remove any synthetic entry when a real one arrives
+        setEntries(prev => [
+          ...prev.filter(e => !e.id.startsWith('synthetic-')),
+          newEntry,
+        ]);
       })
-      .subscribe((status) => {
-        // On reconnection, perform a full refresh to catch any missed entries
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('[useShipmentTimeline] Channel error, will refresh on reconnect');
-        }
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
-          // Re-fetch to catch entries that may have been missed during disconnection
           fetchTimeline();
         }
       });

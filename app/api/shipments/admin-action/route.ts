@@ -51,13 +51,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Verify admin role
-    const { data: profile } = await supabase
-      .from('profiles')
+    const { data: roles } = await supabase
+      .from('user_roles')
       .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .eq('user_id', user.id);
 
-    if (!profile || !['admin', 'super_admin', 'staff'].includes(profile.role)) {
+    const isAdmin = (roles ?? []).some((r: any) => ['admin', 'super_admin', 'warehouse_operator'].includes(r.role));
+    if (!isAdmin) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

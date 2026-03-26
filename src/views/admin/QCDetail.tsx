@@ -104,7 +104,11 @@ export default function QCDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [rejectionReason, setRejectionReason] = useState('');
   const { performAction, performDispatch, loading: actionLoading, rateLimitedUntil } = useAdminAction();
-  const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(shipmentId);
+  const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(
+    shipmentId,
+    shipment?.current_status,
+    shipment?.created_at,
+  );
   const [rateLimitCountdown, setRateLimitCountdown] = useState<number>(0);
   const [documents, setDocuments] = useState<ShipmentDocument[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
