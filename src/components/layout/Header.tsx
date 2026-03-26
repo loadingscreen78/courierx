@@ -116,10 +116,6 @@ export const Header = () => {
             )}
           </button>
 
-          <ThemeToggle />
-
-          <ThemeToggle />
-
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="rounded-xl hover:bg-muted/80 relative h-9 w-9">
             <Bell className="h-4 w-4" weight="bold" />
