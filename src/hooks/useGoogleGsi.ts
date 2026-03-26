@@ -39,7 +39,7 @@ export function useGoogleGsi({
       callback: (response: google.accounts.id.CredentialResponse) => {
         onCredentialRef.current(response.credential);
       },
-      auto_select: false,
+      auto_select: true,
       cancel_on_tap_outside: true,
     } as any);
 
@@ -117,11 +117,9 @@ export function useGoogleGsi({
     document.head.appendChild(script);
   }, [enabled, initializeGsi]);
 
-  // One Tap prompt — only on desktop (mobile browsers block it via FedCM/iframe restrictions)
+  // One Tap prompt — show on all screen sizes including mobile
   useEffect(() => {
     if (!isGsiReady || isLoading || promptDismissedRef.current) return;
-    // Skip One Tap on mobile — the rendered button is sufficient and more reliable
-    if (window.innerWidth < 768) return;
 
     google.accounts.id.prompt((notification: google.accounts.id.PromptNotification) => {
       if (notification.isDismissedMoment()) {
