@@ -4,7 +4,7 @@ const GSI_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 
 interface UseGoogleGsiOptions {
   enabled: boolean;
-  onCredential: (idToken: string) => void;
+  onCredential: (idToken: string, nonce?: string) => void;
   buttonDivRef: React.RefObject<HTMLDivElement>;
   isLoading: boolean;
 }
@@ -12,6 +12,19 @@ interface UseGoogleGsiOptions {
 interface UseGoogleGsiReturn {
   isGsiReady: boolean;
   gsiError: string | null;
+}
+
+/** Generate a cryptographically random nonce and return both raw and SHA-256 hashed versions */
+async function generateNonce(): Promise<{ raw: string; hashed: string }> {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  const raw = btoa(String.fromCharCode(...array));
+  const encoder = new TextEncoder();
+  const data = encoder.encode(raw);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashed = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return { raw, hashed };
 }
 
 export function useGoogleGsi({
@@ -25,8 +38,10 @@ export function useGoogleGsi({
   const promptDismissedRef = useRef(false);
   const onCredentialRef = useRef(onCredential);
   onCredentialRef.current = onCredential;
+  // Store the raw nonce so we can pass it to Supabase alongside the id_token
+  const rawNonceRef = useRef<string | undefined>(undefined);
 
-  const initializeGsi = useCallback(() => {
+  const initializeGsi = useCallback(async () => {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
       console.error('NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set');
@@ -34,17 +49,23 @@ export function useGoogleGsi({
       return;
     }
 
+    // Generate nonce — required to avoid the "nonce mismatch" error on Android Chrome (FedCM)
+    const { raw, hashed } = await generateNonce();
+    rawNonceRef.current = raw;
+
     google.accounts.id.initialize({
       client_id: clientId,
       callback: (response: google.accounts.id.CredentialResponse) => {
-        onCredentialRef.current(response.credential);
+        // Pass both the id_token and the raw nonce to the caller
+        onCredentialRef.current(response.credential, rawNonceRef.current);
       },
+      nonce: hashed,
       auto_select: true,
       cancel_on_tap_outside: true,
+      use_fedcm_for_prompt: true,
     } as any);
 
     if (buttonDivRef.current) {
-      // Use a small delay to ensure the DOM has painted and offsetWidth is accurate
       const renderButton = () => {
         if (!buttonDivRef.current) return;
         const buttonWidth = buttonDivRef.current.offsetWidth || window.innerWidth - 64;
@@ -58,13 +79,10 @@ export function useGoogleGsi({
         });
       };
 
-      // Try immediately, then retry after paint if width is 0
       if (buttonDivRef.current.offsetWidth > 0) {
         renderButton();
       } else {
-        requestAnimationFrame(() => {
-          setTimeout(renderButton, 100);
-        });
+        requestAnimationFrame(() => setTimeout(renderButton, 100));
       }
     }
 
@@ -81,22 +99,18 @@ export function useGoogleGsi({
 
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
-      console.error('NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set');
       setGsiError('Google Client ID is not configured');
       return;
     }
 
-    // Check if script already exists in DOM
     const existingScript = document.querySelector<HTMLScriptElement>(
       `script[src="${GSI_SCRIPT_SRC}"]`
     );
 
     if (existingScript) {
-      // Script already in DOM — if GSI is ready, initialize directly
       if (typeof google !== 'undefined' && google.accounts?.id) {
         initializeGsi();
       } else {
-        // Script tag exists but hasn't finished loading yet
         existingScript.addEventListener('load', initializeGsi);
         existingScript.addEventListener('error', () => {
           setGsiError('Failed to load Google Sign-In library');
@@ -105,19 +119,16 @@ export function useGoogleGsi({
       return;
     }
 
-    // Create and append script
     const script = document.createElement('script');
     script.src = GSI_SCRIPT_SRC;
     script.async = true;
     script.defer = true;
     script.onload = () => initializeGsi();
-    script.onerror = () => {
-      setGsiError('Failed to load Google Sign-In library');
-    };
+    script.onerror = () => setGsiError('Failed to load Google Sign-In library');
     document.head.appendChild(script);
   }, [enabled, initializeGsi]);
 
-  // One Tap prompt — show on all screen sizes including mobile
+  // One Tap prompt — show on all devices
   useEffect(() => {
     if (!isGsiReady || isLoading || promptDismissedRef.current) return;
 

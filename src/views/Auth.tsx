@@ -385,10 +385,10 @@ const Auth = () => {
     }
   };
 
-  const handleGoogleCallback = async (idToken: string) => {
+  const handleGoogleCallback = async (idToken: string, nonce?: string) => {
     setIsLoading(true);
     console.log('[Auth Google] Starting Google sign-in...');
-    const { error } = await signInWithGoogle(idToken);
+    const { error } = await signInWithGoogle(idToken, nonce);
 
     if (error) {
       console.log('[Auth Google] Sign-in error:', error.message);

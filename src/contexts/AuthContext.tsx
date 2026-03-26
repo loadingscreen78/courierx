@@ -30,7 +30,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithOtp: (phone: string) => Promise<{ error: Error | null }>;
   verifyOtp: (phone: string, token: string) => Promise<{ error: Error | null }>;
-  signInWithGoogle: (idToken: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: (idToken: string, nonce?: string) => Promise<{ error: Error | null }>;
   sendWhatsAppOtp: (phone: string) => Promise<{ error: Error | null }>;
   verifyWhatsAppOtp: (phone: string, code: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -145,9 +145,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const signInWithGoogle = useCallback(async (idToken: string): Promise<{ error: Error | null }> => {
+  const signInWithGoogle = useCallback(async (idToken: string, nonce?: string): Promise<{ error: Error | null }> => {
     try {
-      const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: idToken,
+        ...(nonce ? { nonce } : {}),
+      });
       return { error: error as Error | null };
     } catch (err) {
       return { error: err as Error };
