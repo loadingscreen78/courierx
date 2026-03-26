@@ -95,7 +95,7 @@ const ShipmentHistoryCard = ({
           <div className="space-y-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-typewriter font-bold text-sm">{shipment.trackingNumber}</p>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 text-[10px] font-semibold">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 text-[10px] font-semibold">
                 <CheckCircle size={10} weight="bold" />
                 Delivered
               </span>

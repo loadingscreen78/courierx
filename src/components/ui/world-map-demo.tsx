@@ -5,9 +5,9 @@ import { motion } from "framer-motion";
 
 export function WorldMapDemo() {
   return (
-    <div className="py-40 dark:bg-black bg-white w-full">
+    <div className="py-40 bg-white w-full">
       <div className="max-w-7xl mx-auto text-center">
-        <p className="font-bold text-xl md:text-4xl dark:text-white text-black">
+        <p className="font-bold text-xl md:text-4xl text-black">
           Remote{" "}
           <span className="text-neutral-400">
             {"Connectivity".split("").map((word, idx) => (

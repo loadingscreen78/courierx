@@ -71,9 +71,9 @@ const TransactionIcon = ({ type }: { type: Transaction['type'] }) => {
 
 const TransactionBadge = ({ type }: { type: Transaction['type'] }) => {
   const styles = {
-    credit: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900',
-    debit: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900',
-    refund: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900',
+    credit: 'bg-green-500/10 text-green-700 border-green-200',
+    debit: 'bg-red-500/10 text-red-600 border-red-200',
+    refund: 'bg-blue-500/10 text-blue-600 border-blue-200',
   };
   const labels = { credit: 'Credit', debit: 'Debit', refund: 'Refund' };
   return (
@@ -85,9 +85,9 @@ const TransactionBadge = ({ type }: { type: Transaction['type'] }) => {
 
 const InvoiceStatusBadge = ({ status }: { status: InvoiceStatus }) => {
   const styles = {
-    paid: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900',
-    pending: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900',
-    refunded: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900',
+    paid: 'bg-green-500/10 text-green-700 border-green-200',
+    pending: 'bg-amber-500/10 text-amber-700 border-amber-200',
+    refunded: 'bg-blue-500/10 text-blue-600 border-blue-200',
   };
   const labels = { paid: 'Paid', pending: 'Pending', refunded: 'Refunded' };
   return (
@@ -640,7 +640,7 @@ const WalletPage = () => {
                     <Check size={14} weight="bold" className="text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-green-700 dark:text-green-400">{couponCode.toUpperCase()}</p>
+                    <p className="text-sm font-semibold text-green-700">{couponCode.toUpperCase()}</p>
                     {couponResult.bypassMinRecharge && !couponResult.bonusAmount ? (
                       <p className="text-xs text-green-600/80">Coupon applied — recharge any amount</p>
                     ) : (

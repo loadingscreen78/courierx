@@ -75,14 +75,14 @@ export function FileUpload({
   // Show uploaded state
   if (uploadedUrl) {
     return (
-      <div className={cn('relative rounded-xl border-2 border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4', className)}>
+      <div className={cn('relative rounded-xl border-2 border-green-500/50 bg-green-50 p-4', className)}>
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-            <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+          <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
+            <CheckCircle2 className="h-6 w-6 text-green-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm text-green-900 dark:text-green-100">File uploaded successfully</p>
-            <p className="text-xs text-green-700 dark:text-green-300 truncate">{fileName}</p>
+            <p className="font-medium text-sm text-green-900">File uploaded successfully</p>
+            <p className="text-xs text-green-700 truncate">{fileName}</p>
           </div>
           {onRemove && (
             <Button

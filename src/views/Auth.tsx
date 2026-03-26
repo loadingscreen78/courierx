@@ -998,7 +998,7 @@ const Auth = () => {
                             </>
                           ) : (
                             <>
-                              <p className="text-sm text-green-600 dark:text-green-400 font-medium">Reset link sent!</p>
+                              <p className="text-sm text-green-600 font-medium">Reset link sent!</p>
                               <p className="text-sm text-muted-foreground">
                                 Check your email{selectedPanel === 'customer' ? ' and WhatsApp' : ''} for the reset link. It expires in 1 hour.
                               </p>

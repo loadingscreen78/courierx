@@ -14,7 +14,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet, MIN_BALANCE_REQUIRED } from '@/contexts/WalletContext';
 import { useRouter } from 'next/navigation';
 import { VerificationBadge } from '@/components/ui/verification-badge';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import logoMain from '@/assets/logo-main.jpeg';
 import { cn } from '@/lib/utils';
 import { ShippingModeToggle } from '@/components/ui/ShippingModeToggle';
@@ -60,7 +59,7 @@ export const Header = () => {
             className={cn(
               "group flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all duration-200 border",
               isLowBalance 
-                ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 hover:bg-red-100 dark:hover:bg-red-950/50' 
+                ? 'bg-red-50 border-red-200 hover:bg-red-100' 
                 : 'bg-muted/60 border-border/50 hover:bg-muted hover:border-border'
             )}
           >
@@ -105,7 +104,7 @@ export const Header = () => {
             className={cn(
               "relative md:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all border text-xs font-bold font-typewriter",
               isLowBalance 
-                ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-destructive' 
+                ? 'bg-red-50 border-red-200 text-destructive' 
                 : 'bg-muted/60 border-border/50 text-foreground'
             )}
           >
@@ -116,6 +115,8 @@ export const Header = () => {
               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-destructive rounded-full animate-pulse" />
             )}
           </button>
+
+          <ThemeToggle />
 
           <ThemeToggle />
 

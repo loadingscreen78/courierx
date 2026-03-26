@@ -433,7 +433,7 @@ const TimelineWithRoad = ({ timelineData }: { timelineData: TimelineItem[] }) =>
               rx="50"
               ry="70"
               fill="url(#headlightBeam)"
-              className="opacity-0 dark:opacity-100"
+              className="opacity-0"
             />
 
             {/* Truck Group - Tilts with curve */}
@@ -497,12 +497,12 @@ const TimelineWithRoad = ({ timelineData }: { timelineData: TimelineItem[] }) =>
                 <rect x="-12" y="16" width="8" height="10" rx="1" fill="#ffffff" opacity="0.3" />
                 
                 {/* Headlights */}
-                <rect x="-16" y="36" width="8" height="5" rx="2" className="fill-gray-400 dark:fill-yellow-300" />
-                <rect x="8" y="36" width="8" height="5" rx="2" className="fill-gray-400 dark:fill-yellow-300" />
+                <rect x="-16" y="36" width="8" height="5" rx="2" className="fill-gray-400" />
+                <rect x="8" y="36" width="8" height="5" rx="2" className="fill-gray-400" />
                 
-                {/* Headlight Glow (dark mode) */}
-                <circle cx="-12" cy="38" r="8" className="fill-transparent dark:fill-yellow-300/40" filter="url(#headlightGlow)" />
-                <circle cx="12" cy="38" r="8" className="fill-transparent dark:fill-yellow-300/40" filter="url(#headlightGlow)" />
+                {/* Headlight Glow */}
+                <circle cx="-12" cy="38" r="8" className="fill-transparent" filter="url(#headlightGlow)" />
+                <circle cx="12" cy="38" r="8" className="fill-transparent" filter="url(#headlightGlow)" />
                 
                 {/* Wheels */}
                 <circle cx="-18" cy="40" r="7" fill="#1f2937" />
@@ -686,7 +686,7 @@ const About = () => {
         </div>
         
         {/* World Map Background */}
-        <div className="absolute inset-0 flex items-end justify-center opacity-20 dark:opacity-30 overflow-hidden">
+        <div className="absolute inset-0 flex items-end justify-center opacity-20 overflow-hidden">
           <div className="w-full max-w-7xl translate-y-[15%]">
             <WorldMap
               lineColor="#dc2626"
@@ -1119,7 +1119,7 @@ const About = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="relative rounded-3xl metallic-light dark:metallic-dark p-12 md:p-20 text-center overflow-hidden"
+            className="relative rounded-3xl metallic-light p-12 md:p-20 text-center overflow-hidden"
           >
             <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-r from-transparent via-white/50 to-transparent" />
             <div className="relative z-10">

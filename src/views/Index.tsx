@@ -81,7 +81,7 @@ const StatCard = ({
         }`}>
           {/* Metallic shine */}
           <div className={`absolute top-0 left-0 right-0 h-1/2 rounded-t-3xl ${
-            accent ? 'bg-gradient-to-b from-white/20 to-transparent' : 'bg-gradient-to-b from-white/5 to-transparent dark:from-white/[0.03]'
+            accent ? 'bg-gradient-to-b from-white/20 to-transparent' : 'bg-gradient-to-b from-white/5 to-transparent'
           }`} />
           
           <div className="relative flex items-center gap-4">

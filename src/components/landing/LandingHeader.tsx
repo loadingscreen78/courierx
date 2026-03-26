@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { List, X, Package, CaretRight } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -67,7 +66,6 @@ export const LandingHeader = () => {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-2">
-            <ThemeToggle />
             <Button
               variant="ghost"
               size="sm"
@@ -88,7 +86,6 @@ export const LandingHeader = () => {
 
           {/* Mobile Controls */}
           <div className="flex items-center gap-1.5 lg:hidden">
-            <ThemeToggle />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-xl hover:bg-muted/60 transition-colors"

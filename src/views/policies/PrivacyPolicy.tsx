@@ -26,7 +26,7 @@ const PrivacyPolicy = () => {
             <p className="text-muted-foreground">Effective Date: 23rd February 2026</p>
           </motion.div>
 
-          <div className="prose prose-gray dark:prose-invert max-w-none space-y-10">
+          <div className="prose prose-gray max-w-none space-y-10">
             {/* 1. Introduction */}
             <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={sectionClass}>
               <h2 className={h2Class}>
@@ -173,3 +173,4 @@ const PrivacyPolicy = () => {
 };
 
 export default PrivacyPolicy;
+

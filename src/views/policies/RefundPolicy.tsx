@@ -26,7 +26,7 @@ const RefundPolicy = () => {
             <p className="text-muted-foreground">Effective Date: 23rd February 2026</p>
           </motion.div>
 
-          <div className="prose prose-gray dark:prose-invert max-w-none space-y-10">
+          <div className="prose prose-gray max-w-none space-y-10">
             {/* Refund Eligibility */}
             <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={sectionClass}>
               <h2 className={h2Class}>
@@ -84,7 +84,7 @@ const RefundPolicy = () => {
                 If a user permanently deletes their account, any remaining wallet balance (excluding promotional credits) shall be refunded to the original payment method or verified bank account after identity verification.
               </p>
               <p className="text-muted-foreground leading-relaxed p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                <strong className="text-amber-600 dark:text-amber-400">Note:</strong> CourierX™ reserves the right to withhold withdrawals in cases of fraud, disputes, or regulatory investigation.
+                <strong className="text-amber-600">Note:</strong> CourierX™ reserves the right to withhold withdrawals in cases of fraud, disputes, or regulatory investigation.
               </p>
             </motion.section>
           </div>
@@ -96,3 +96,4 @@ const RefundPolicy = () => {
 };
 
 export default RefundPolicy;
+
