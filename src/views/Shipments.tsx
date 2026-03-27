@@ -170,7 +170,7 @@ const ShipmentDetailSheet = ({
   const { entries: timelineEntries, loading: timelineLoading } = useShipmentTimeline(
     shipment.id,
     shipment.currentStatus,
-    shipment.createdAt,
+    shipment.createdAt instanceof Date ? shipment.createdAt.toISOString() : shipment.createdAt,
   );
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
