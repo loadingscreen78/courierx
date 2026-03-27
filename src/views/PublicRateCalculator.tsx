@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import {
   Package, MapPin, Scales, Clock, Truck, Warning, Check, X, Star,
   ArrowRight, Sparkle, Lightning, Shield, Globe, CaretRight, Cube, Airplane,
-  House, Lock,
+  House, Lock, FileText, Gift, MagnifyingGlass, CaretDown, MapPinLine,
+  AirplaneTilt, Boat, ArrowsLeftRight,
 } from '@phosphor-icons/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ import { useRouter } from 'next/navigation';
 import type { CourierOption } from '@/lib/domestic/types';
 
 type ShippingMode = 'international' | 'domestic';
+type DomesticShipmentType = 'document' | 'gift';
 type DomesticFilterTab = 'all' | 'air' | 'surface';
 const COMING_SOON_CARRIERS = ['DHL', 'ShipGlobal'];
 
@@ -37,6 +39,20 @@ const carrierFeatures = [
   { id: 'temperature', label: 'Temperature controlled', dhl: true, fedex: false, aramex: false, shipglobal: false },
 ];
 
+const POPULAR_ROUTES = [
+  { label: 'Delhi \u2192 Mumbai', pickup: '110001', delivery: '400001' },
+  { label: 'Bangalore \u2192 Chennai', pickup: '560001', delivery: '600001' },
+  { label: 'Kolkata \u2192 Hyderabad', pickup: '700001', delivery: '500001' },
+  { label: 'Pune \u2192 Jaipur', pickup: '411001', delivery: '302001' },
+  { label: 'Ahmedabad \u2192 Lucknow', pickup: '380001', delivery: '226001' },
+  { label: 'Chennai \u2192 Delhi', pickup: '600001', delivery: '110001' },
+  { label: 'Mumbai \u2192 Kolkata', pickup: '400001', delivery: '700001' },
+  { label: 'Hyderabad \u2192 Bangalore', pickup: '500001', delivery: '560001' },
+  { label: 'Jaipur \u2192 Chandigarh', pickup: '302001', delivery: '160001' },
+  { label: 'Lucknow \u2192 Patna', pickup: '226001', delivery: '800001' },
+];
+
+// ─── Animated Background ──────────────────────────────────────────────
 const AnimatedBackground = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none">
     <motion.div className="absolute -top-40 -right-40 w-96 h-96 bg-coke-red/10 rounded-full blur-3xl"
@@ -48,10 +64,95 @@ const AnimatedBackground = () => (
   </div>
 );
 
+// ─── Pincode Input with India Post Lookup ─────────────────────────────
+const PincodeInput = ({ value, onChange, label }: {
+  value: string; onChange: (v: string) => void; label: string;
+}) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<{ name: string; pincode: string; district: string; state: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [locationInfo, setLocationInfo] = useState<{ state: string; district: string } | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Lookup pincode info when 6 digits entered
+  useEffect(() => {
+    if (/^\d{6}$/.test(value)) {
+      fetch(`/api/public/pincode-lookup?pincode=${value}`)
+        .then(r => r.json())
+        .then(d => { if (d.success) setLocationInfo({ state: d.state, district: d.district }); })
+        .catch(() => {});
+    } else {
+      setLocationInfo(null);
+    }
+  }, [value]);
+
+  // Search by name
+  const handleSearch = useCallback(async (q: string) => {
+    setQuery(q);
+    if (q.length < 3) { setResults([]); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/public/pincode-lookup?query=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setResults(data.results || []);
+      setShowDropdown(true);
+    } catch { setResults([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input type="text" maxLength={6} placeholder="e.g. 110001" value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        className="text-lg font-semibold h-12 font-typewriter" />
+      {locationInfo && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <MapPinLine size={12} weight="bold" className="text-coke-red" />
+          {locationInfo.district}, {locationInfo.state}
+        </p>
+      )}
+      {/* Search helper */}
+      <div className="relative">
+        <div className="flex items-center gap-1.5 border rounded-lg px-3 py-2 bg-muted/30">
+          <MagnifyingGlass size={14} className="text-muted-foreground shrink-0" />
+          <input type="text" placeholder="Search by area or post office name..."
+            value={query} onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => results.length > 0 && setShowDropdown(true)}
+            className="bg-transparent text-xs w-full outline-none placeholder:text-muted-foreground/60" />
+          {loading && <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            className="w-3 h-3 border border-muted-foreground/30 border-t-coke-red rounded-full shrink-0" />}
+        </div>
+        {showDropdown && results.length > 0 && (
+          <div className="absolute z-30 top-full mt-1 w-full bg-background border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+            {results.map((r, i) => (
+              <button key={i} onClick={() => { onChange(r.pincode); setShowDropdown(false); setQuery(''); }}
+                className="w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors border-b last:border-0 text-xs">
+                <span className="font-semibold">{r.name}</span>
+                <span className="text-muted-foreground ml-2">{r.pincode}</span>
+                <span className="text-muted-foreground/60 ml-1">({r.district}, {r.state})</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── Mode Selection Modal ─────────────────────────────────────────────
 const ModeSelectionModal = ({ open, onSelect }: {
-  open: boolean;
-  onSelect: (m: ShippingMode) => void;
+  open: boolean; onSelect: (m: ShippingMode) => void;
 }) => {
   if (!open) return null;
   return (
@@ -96,31 +197,25 @@ const ModeSelectionModal = ({ open, onSelect }: {
 
 // ─── Shipping Mode Toggle ─────────────────────────────────────────────
 const ShippingModeToggle = ({ mode, onChange }: {
-  mode: ShippingMode;
-  onChange: (m: ShippingMode) => void;
+  mode: ShippingMode; onChange: (m: ShippingMode) => void;
 }) => (
   <div className="flex items-center justify-center">
     <div className="relative inline-flex items-center bg-muted/60 rounded-full p-1.5 border shadow-inner">
       <motion.div className="absolute top-1.5 bottom-1.5 rounded-full bg-coke-red shadow-lg"
         initial={false}
-        animate={{
-          left: mode === 'domestic' ? '6px' : '50%',
-          right: mode === 'international' ? '6px' : '50%',
-        }}
+        animate={{ left: mode === 'domestic' ? '6px' : '50%', right: mode === 'international' ? '6px' : '50%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }} />
       <button onClick={() => onChange('domestic')}
         className={cn("relative z-10 flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors",
           mode === 'domestic' ? "text-white" : "text-muted-foreground hover:text-foreground")}>
         <House size={18} weight="bold" />
         <span className="hidden sm:inline">Domestic</span>
-        <span className="sm:hidden">🇮🇳</span>
       </button>
       <button onClick={() => onChange('international')}
         className={cn("relative z-10 flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors",
           mode === 'international' ? "text-white" : "text-muted-foreground hover:text-foreground")}>
         <Globe size={18} weight="bold" />
         <span className="hidden sm:inline">International</span>
-        <span className="sm:hidden">🌍</span>
       </button>
     </div>
   </div>
@@ -149,8 +244,8 @@ const WeightSelector = ({ value, onChange }: { value: number; onChange: (v: numb
             onClick={() => onChange(p.value)}
             className={cn("py-3 px-4 rounded-xl border-2 text-center transition-all",
               value === p.value ? "border-coke-red bg-coke-red/10 text-coke-red" : "border-border hover:border-coke-red/30")}>
-            <span className="text-lg">📦</span>
-            <p className="font-semibold text-sm mt-1">{p.label}</p>
+            <Package size={20} weight="bold" className="mx-auto mb-1" />
+            <p className="font-semibold text-sm">{p.label}</p>
           </motion.button>
         ))}
       </div>
@@ -160,10 +255,7 @@ const WeightSelector = ({ value, onChange }: { value: number; onChange: (v: numb
 
 // ─── International Carrier Card ───────────────────────────────────────
 const CarrierCard = ({ option, isSelected, onSelect, index }: {
-  option: ReturnType<typeof getCourierOptions>[0];
-  isSelected: boolean;
-  onSelect: () => void;
-  index: number;
+  option: ReturnType<typeof getCourierOptions>[0]; isSelected: boolean; onSelect: () => void; index: number;
 }) => {
   const info = getCarrierInfo(option.carrier);
   const isComingSoon = COMING_SOON_CARRIERS.includes(option.carrier);
@@ -275,9 +367,9 @@ const DomesticCourierCard = ({ courier, isSelected, onSelect, index }: {
               <p className={cn("font-semibold truncate", isSelected ? "text-coke-red" : "text-foreground")}>
                 {courier.courier_name}
               </p>
-              <Badge variant="outline" className={cn("text-[10px] shrink-0",
+              <Badge variant="outline" className={cn("text-[10px] shrink-0 gap-1",
                 isAir ? "bg-blue-500/10 text-blue-600 border-blue-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20")}>
-                {isAir ? '✈ Air' : '🚛 Surface'}
+                {isAir ? <><AirplaneTilt size={10} weight="bold" /> Air</> : <><Truck size={10} weight="bold" /> Surface</>}
               </Badge>
             </div>
             <div className="flex items-center gap-3 mt-1">
@@ -327,7 +419,7 @@ const DomesticCourierCard = ({ courier, isSelected, onSelect, index }: {
   );
 };
 
-// ─── Summary Card (shared) ────────────────────────────────────────────
+// ─── Summary Card ─────────────────────────────────────────────────────
 const SummaryCard = ({ title, price, transitLabel, onBook }: {
   title: string; price: number; transitLabel: string; onBook: () => void;
 }) => (
@@ -363,14 +455,11 @@ const SummaryCard = ({ title, price, transitLabel, onBook }: {
           <p className="font-semibold">Included</p>
         </div>
       </div>
-      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-        <Button size="lg" onClick={onBook}
-          className="w-full h-14 text-lg bg-coke-red hover:bg-coke-red/90 shadow-lg shadow-coke-red/30">
-          <Package size={20} weight="bold" className="mr-2" />
-          Book This Shipment
-          <ArrowRight size={20} weight="bold" className="ml-2" />
-        </Button>
-      </motion.div>
+      <Button size="lg" onClick={onBook}
+        className="w-full h-14 text-lg bg-coke-red hover:bg-coke-red/90 shadow-lg shadow-coke-red/30">
+        <Package size={20} weight="bold" className="mr-2" /> Book This Shipment
+        <ArrowRight size={20} weight="bold" className="ml-2" />
+      </Button>
       <p className="text-center text-white/40 text-xs">Sign up or log in to complete your booking</p>
     </div>
   </motion.div>
@@ -385,117 +474,130 @@ const PublicRateCalculator = () => {
 
   useSeo({
     title: 'Shipping Rate Calculator | CourierX - Compare Shipping Rates',
-    description: 'Calculate domestic and international shipping rates from India. Compare carriers, prices and delivery times.',
+    description: 'Calculate domestic and international shipping rates from India.',
     canonicalPath: '/public/rate-calculator',
   });
 
-  // ── Shared state ──
   const [showModal, setShowModal] = useState(true);
   const [shippingMode, setShippingMode] = useState<ShippingMode>('international');
 
-  // ── International state ──
+  // International state
   const [destinationCountry, setDestinationCountry] = useState('');
   const [weightGrams, setWeightGrams] = useState(500);
   const [selectedCarrier, setSelectedCarrier] = useState<Carrier | null>(null);
 
-  // ── Domestic state ──
+  // Domestic state
   const [pickupPincode, setPickupPincode] = useState('');
   const [deliveryPincode, setDeliveryPincode] = useState('');
   const [domesticWeightKg, setDomesticWeightKg] = useState(1);
   const [domesticLength, setDomesticLength] = useState(10);
   const [domesticWidth, setDomesticWidth] = useState(10);
   const [domesticHeight, setDomesticHeight] = useState(10);
+  const [domesticShipmentType, setDomesticShipmentType] = useState<DomesticShipmentType>('gift');
   const [domesticCouriers, setDomesticCouriers] = useState<CourierOption[]>([]);
   const [domesticLoading, setDomesticLoading] = useState(false);
   const [domesticError, setDomesticError] = useState<string | null>(null);
   const [selectedDomesticCourier, setSelectedDomesticCourier] = useState<CourierOption | null>(null);
   const [domesticFilterTab, setDomesticFilterTab] = useState<DomesticFilterTab>('all');
 
-  const handleModeSelect = (mode: ShippingMode) => {
-    setShippingMode(mode);
-    setShowModal(false);
-  };
+  const handleModeSelect = (mode: ShippingMode) => { setShippingMode(mode); setShowModal(false); };
 
-  // ── International computed ──
-  const selectedCountry = useMemo(() => {
-    if (!destinationCountry) return null;
-    return getCountry(destinationCountry);
-  }, [destinationCountry, getCountry]);
-
+  // International computed
+  const selectedCountry = useMemo(() => destinationCountry ? getCountry(destinationCountry) : null, [destinationCountry, getCountry]);
   const isCountryServed = selectedCountry?.isServed ?? false;
-
   const courierOptions = useMemo(() => {
     if (!destinationCountry || !isCountryServed || weightGrams <= 0) return [];
-    return getCourierOptions({
-      destinationCountryCode: destinationCountry,
-      shipmentType: 'gift',
-      weightGrams,
-      declaredValue: 10000,
-    });
+    return getCourierOptions({ destinationCountryCode: destinationCountry, shipmentType: 'gift', weightGrams, declaredValue: 10000 });
   }, [destinationCountry, isCountryServed, weightGrams]);
-
   const eta = useMemo(() => {
     if (!destinationCountry || !isCountryServed) return null;
     return calculateETA(destinationCountry, selectedCarrier || 'DHL');
   }, [destinationCountry, selectedCarrier, isCountryServed]);
-
   const selectedOption = useMemo(() => {
     if (!selectedCarrier) return courierOptions.find(o => o.isRecommended && !COMING_SOON_CARRIERS.includes(o.carrier)) || courierOptions.find(o => !COMING_SOON_CARRIERS.includes(o.carrier));
     return courierOptions.find(o => o.carrier === selectedCarrier) || courierOptions[0];
   }, [courierOptions, selectedCarrier]);
-
   const popularCountries = ['US', 'GB', 'AE', 'CA', 'AU', 'SG'];
 
-  // ── Domestic fetch ──
+  // Domestic fetch with document logic
   const fetchDomesticRates = async () => {
     if (!/^\d{6}$/.test(pickupPincode) || !/^\d{6}$/.test(deliveryPincode)) return;
     setDomesticLoading(true);
     setDomesticError(null);
     setSelectedDomesticCourier(null);
+    setDomesticCouriers([]);
     try {
+      const maxWeight = domesticShipmentType === 'document' ? 1 : 30;
+      const w = Math.min(domesticWeightKg, maxWeight);
       const res = await fetch('/api/public/domestic-rates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pickupPincode, deliveryPincode,
-          weightKg: domesticWeightKg,
+          pickupPincode, deliveryPincode, weightKg: w,
           lengthCm: domesticLength, widthCm: domesticWidth, heightCm: domesticHeight,
-          declaredValue: 5000, shipmentType: 'gift',
+          declaredValue: 5000, shipmentType: domesticShipmentType,
         }),
       });
       const result = await res.json();
       if (!result.success) { setDomesticError(result.error || 'Failed to fetch rates'); return; }
-      setDomesticCouriers(result.couriers || []);
+      const couriers: CourierOption[] = result.couriers || [];
+      setDomesticCouriers(couriers);
+
+      // For documents: auto-set filter to air, fallback to surface
+      if (domesticShipmentType === 'document') {
+        const hasAir = couriers.some(c => c.mode === 'air');
+        setDomesticFilterTab(hasAir ? 'air' : 'surface');
+      } else {
+        setDomesticFilterTab('all');
+      }
     } catch { setDomesticError('Network error. Please try again.'); }
     finally { setDomesticLoading(false); }
   };
 
-  // Domestic filtered couriers
+  // Document-specific filtering logic (same as customer panel)
   const filteredDomesticCouriers = useMemo(() => {
+    if (domesticShipmentType === 'document') {
+      const airCouriers = domesticCouriers.filter(c => c.mode === 'air');
+      if (airCouriers.length > 0) return airCouriers;
+      // Fallback: show Delhivery Surface if available
+      const delhiverySurface = domesticCouriers.filter(c =>
+        c.mode === 'surface' && c.courier_name.toLowerCase().includes('delhivery')
+      );
+      if (delhiverySurface.length > 0) return delhiverySurface;
+      // No air, no delhivery surface
+      return [];
+    }
     if (domesticFilterTab === 'all') return domesticCouriers;
     return domesticCouriers.filter(c => c.mode === domesticFilterTab);
-  }, [domesticCouriers, domesticFilterTab]);
+  }, [domesticCouriers, domesticFilterTab, domesticShipmentType]);
 
   const airCount = useMemo(() => domesticCouriers.filter(c => c.mode === 'air').length, [domesticCouriers]);
   const surfaceCount = useMemo(() => domesticCouriers.filter(c => c.mode === 'surface').length, [domesticCouriers]);
 
-  // ── JSX ──
+  // Document: determine fallback message
+  const documentFallbackMsg = useMemo(() => {
+    if (domesticShipmentType !== 'document' || domesticCouriers.length === 0) return null;
+    const hasAir = domesticCouriers.some(c => c.mode === 'air');
+    if (hasAir) return null;
+    const hasDelhivery = domesticCouriers.some(c => c.mode === 'surface' && c.courier_name.toLowerCase().includes('delhivery'));
+    if (hasDelhivery) return 'No air service available for this route. Showing Delhivery Surface as fallback.';
+    return null;
+  }, [domesticShipmentType, domesticCouriers]);
+
+  const noDocumentService = domesticShipmentType === 'document' && domesticCouriers.length > 0 && filteredDomesticCouriers.length === 0;
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <LandingHeader />
       <ModeSelectionModal open={showModal} onSelect={handleModeSelect} />
-
       <main className="flex-1 relative">
         <AnimatedBackground />
-
         {/* Hero */}
         <section ref={heroRef} className="relative py-16 md:py-24">
           <div className="container max-w-6xl relative z-10">
-            <motion.div initial={{ opacity: 0, y: 30 }}
-              animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6 }} className="text-center space-y-6">
-              <motion.div initial={{ scale: 0 }}
-                animate={isHeroInView ? { scale: 1 } : {}}
+              <motion.div initial={{ scale: 0 }} animate={isHeroInView ? { scale: 1 } : {}}
                 transition={{ type: 'spring', delay: 0.2 }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-coke-red/10 text-coke-red">
                 <Sparkle className="h-5 w-5" />
@@ -505,27 +607,21 @@ const PublicRateCalculator = () => {
                 Calculate Your{' '}<span className="text-coke-red">Shipping Cost</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Compare rates from top carriers and find the best deal for your{' '}
-                {shippingMode === 'domestic' ? 'domestic' : 'international'} shipment
+                Compare rates from top carriers for your {shippingMode === 'domestic' ? 'domestic' : 'international'} shipment
               </p>
-              {/* Toggle */}
               <ShippingModeToggle mode={shippingMode} onChange={setShippingMode} />
             </motion.div>
           </div>
         </section>
 
-        {/* Calculator Section */}
         <section className="pb-24">
           <div className="container max-w-6xl relative z-10">
-
-            {/* ═══════ INTERNATIONAL MODE ═══════ */}
+            {/* ═══ INTERNATIONAL ═══ */}
             {shippingMode === 'international' && (
-              <motion.div key="intl" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-                {/* Input Card */}
+              <motion.div key="intl" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}>
                 <Card className="border-2 shadow-xl overflow-hidden">
                   <CardContent className="p-8">
                     <div className="grid lg:grid-cols-2 gap-8">
-                      {/* Destination */}
                       <div className="space-y-4">
                         <Label className="flex items-center gap-2 text-base font-semibold">
                           <div className="w-8 h-8 rounded-lg bg-coke-red/10 flex items-center justify-center">
@@ -533,8 +629,7 @@ const PublicRateCalculator = () => {
                           </div>
                           Where are you shipping to?
                         </Label>
-                        <CountrySelector value={destinationCountry} onValueChange={setDestinationCountry}
-                          placeholder="Select destination country" />
+                        <CountrySelector value={destinationCountry} onValueChange={setDestinationCountry} placeholder="Select destination country" />
                         <div className="space-y-2">
                           <p className="text-xs text-muted-foreground">Popular destinations:</p>
                           <div className="flex flex-wrap gap-2">
@@ -554,7 +649,6 @@ const PublicRateCalculator = () => {
                           </div>
                         </div>
                       </div>
-                      {/* Weight */}
                       <div className="space-y-4">
                         <Label className="flex items-center gap-2 text-base font-semibold">
                           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -567,47 +661,36 @@ const PublicRateCalculator = () => {
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Country alerts */}
                 {destinationCountry && !isCountryServed && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
-                    <Alert variant="destructive">
-                      <Warning size={16} weight="bold" />
-                      <AlertDescription>
-                        {selectedCountry?.notServedReason || 'We do not currently ship to this destination.'}
-                      </AlertDescription>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
+                    <Alert variant="destructive"><Warning size={16} weight="bold" />
+                      <AlertDescription>{selectedCountry?.notServedReason || 'We do not currently ship to this destination.'}</AlertDescription>
                     </Alert>
                   </motion.div>
                 )}
                 {destinationCountry && isCountryServed && (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
                     <CountryRegulations countryCode={destinationCountry} />
                   </motion.div>
                 )}
-
-                {/* Carrier Results */}
                 {destinationCountry && isCountryServed && courierOptions.length > 0 && (
                   <div className="mt-12 space-y-8">
                     <div className="text-center">
-                      <h2 className="text-2xl md:text-3xl font-bold font-typewriter">
-                        Choose Your <span className="text-coke-red">Carrier</span>
-                      </h2>
+                      <h2 className="text-2xl md:text-3xl font-bold font-typewriter">Choose Your <span className="text-coke-red">Carrier</span></h2>
                       <p className="text-muted-foreground mt-2">Compare rates and select the best option</p>
                     </div>
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                      {courierOptions.map((option, index) => (
+                      {courierOptions.map((option, i) => (
                         <CarrierCard key={option.carrier} option={option}
                           isSelected={(selectedCarrier === option.carrier || (!selectedCarrier && option.isRecommended && !COMING_SOON_CARRIERS.includes(option.carrier))) && !COMING_SOON_CARRIERS.includes(option.carrier)}
                           onSelect={() => { if (!COMING_SOON_CARRIERS.includes(option.carrier)) setSelectedCarrier(option.carrier); }}
-                          index={index} />
+                          index={i} />
                       ))}
                     </div>
-                    {/* Summary + ETA */}
                     {selectedOption && !COMING_SOON_CARRIERS.includes(selectedOption.carrier) && (
                       <div className="grid lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2">
-                          <SummaryCard
-                            title={getCarrierInfo(selectedOption.carrier).fullName}
+                          <SummaryCard title={getCarrierInfo(selectedOption.carrier).fullName}
                             price={selectedOption.price}
                             transitLabel={`${selectedOption.transitDays.min}-${selectedOption.transitDays.max} days`}
                             onBook={() => router.push('/auth')} />
@@ -618,32 +701,22 @@ const PublicRateCalculator = () => {
                     <ProhibitedItemsAlert countryName={selectedCountry?.name} />
                   </div>
                 )}
-
-                {/* Empty state */}
                 {(!destinationCountry || courierOptions.length === 0) && isCountryServed !== false && (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-12">
                     <Card className="border-2 border-dashed">
                       <CardContent className="py-16 text-center space-y-6">
-                        <motion.div animate={{ y: [0, -10, 0] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                           className="w-24 h-24 mx-auto rounded-3xl bg-muted flex items-center justify-center">
                           <Cube size={48} weight="bold" className="text-muted-foreground" />
                         </motion.div>
                         <div>
                           <h3 className="font-bold text-xl font-typewriter">Ready to Calculate?</h3>
-                          <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                            Select a destination country and enter your package weight to see instant shipping rates.
-                          </p>
+                          <p className="text-muted-foreground mt-2 max-w-md mx-auto">Select a destination country and enter your package weight to see instant shipping rates.</p>
                         </div>
                         <div className="flex items-center justify-center gap-8 pt-4">
-                          {[
-                            { icon: Globe, label: '150+ Countries' },
-                            { icon: Truck, label: '4 Carriers' },
-                            { icon: Lightning, label: 'Instant Quotes' },
-                          ].map((item) => (
+                          {[{ icon: Globe, label: '150+ Countries' }, { icon: Truck, label: '4 Carriers' }, { icon: Lightning, label: 'Instant Quotes' }].map((item) => (
                             <div key={item.label} className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <item.icon size={16} weight="bold" className="text-coke-red" />
-                              <span>{item.label}</span>
+                              <item.icon size={16} weight="bold" className="text-coke-red" /><span>{item.label}</span>
                             </div>
                           ))}
                         </div>
@@ -654,57 +727,67 @@ const PublicRateCalculator = () => {
               </motion.div>
             )}
 
-            {/* ═══════ DOMESTIC MODE ═══════ */}
+            {/* ═══ DOMESTIC ═══ */}
             {shippingMode === 'domestic' && (
-              <motion.div key="dom" initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 30 }}>
-                {/* Input Card */}
+              <motion.div key="dom" initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }}>
                 <Card className="border-2 shadow-xl overflow-hidden">
                   <CardContent className="p-8">
                     <div className="grid lg:grid-cols-2 gap-8">
-                      {/* Pincodes */}
-                      <div className="space-y-4">
+                      {/* Left: Pincodes + Shipment Type */}
+                      <div className="space-y-5">
                         <Label className="flex items-center gap-2 text-base font-semibold">
                           <div className="w-8 h-8 rounded-lg bg-coke-red/10 flex items-center justify-center">
                             <MapPin size={16} weight="bold" className="text-coke-red" />
                           </div>
-                          Pickup & Delivery Pincodes
+                          Pickup & Delivery
                         </Label>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Pickup Pincode</Label>
-                            <Input type="text" maxLength={6} placeholder="e.g. 110001" value={pickupPincode}
-                              onChange={(e) => setPickupPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                              className="text-lg font-semibold h-12 font-typewriter" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground">Delivery Pincode</Label>
-                            <Input type="text" maxLength={6} placeholder="e.g. 400001" value={deliveryPincode}
-                              onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                              className="text-lg font-semibold h-12 font-typewriter" />
-                          </div>
+                          <PincodeInput value={pickupPincode} onChange={setPickupPincode} label="Pickup Pincode" />
+                          <PincodeInput value={deliveryPincode} onChange={setDeliveryPincode} label="Delivery Pincode" />
                         </div>
-                        {/* Quick pincode presets */}
+                        {/* Popular routes */}
                         <div className="space-y-2">
                           <p className="text-xs text-muted-foreground">Popular routes:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              { label: 'Delhi → Mumbai', pickup: '110001', delivery: '400001' },
-                              { label: 'Bangalore → Chennai', pickup: '560001', delivery: '600001' },
-                              { label: 'Kolkata → Hyderabad', pickup: '700001', delivery: '500001' },
-                            ].map((route) => (
-                              <motion.button key={route.label} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                          <div className="flex flex-wrap gap-1.5">
+                            {POPULAR_ROUTES.map((route) => (
+                              <motion.button key={route.label} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                                 onClick={() => { setPickupPincode(route.pickup); setDeliveryPincode(route.delivery); }}
-                                className={cn("px-3 py-2 rounded-xl border-2 text-xs font-medium transition-all",
+                                className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all",
                                   pickupPincode === route.pickup && deliveryPincode === route.delivery
                                     ? "border-coke-red bg-coke-red/10 text-coke-red" : "border-border hover:border-coke-red/30")}>
+                                <ArrowsLeftRight size={10} weight="bold" />
                                 {route.label}
                               </motion.button>
                             ))}
                           </div>
                         </div>
+                        {/* Shipment Type */}
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Shipment Type</Label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <button onClick={() => { setDomesticShipmentType('document'); setDomesticWeightKg(Math.min(domesticWeightKg, 1)); }}
+                              className={cn("flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left",
+                                domesticShipmentType === 'document' ? "border-coke-red bg-coke-red/5 shadow-sm" : "border-border hover:border-coke-red/30")}>
+                              <FileText size={24} weight="bold" className={domesticShipmentType === 'document' ? "text-coke-red" : "text-muted-foreground"} />
+                              <div>
+                                <p className={cn("font-semibold text-sm", domesticShipmentType === 'document' ? "text-coke-red" : "text-foreground")}>Documents</p>
+                                <p className="text-[10px] text-muted-foreground">Up to 1 kg</p>
+                              </div>
+                            </button>
+                            <button onClick={() => setDomesticShipmentType('gift')}
+                              className={cn("flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left",
+                                domesticShipmentType === 'gift' ? "border-coke-red bg-coke-red/5 shadow-sm" : "border-border hover:border-coke-red/30")}>
+                              <Gift size={24} weight="bold" className={domesticShipmentType === 'gift' ? "text-coke-red" : "text-muted-foreground"} />
+                              <div>
+                                <p className={cn("font-semibold text-sm", domesticShipmentType === 'gift' ? "text-coke-red" : "text-foreground")}>Gift / Parcel</p>
+                                <p className="text-[10px] text-muted-foreground">Up to 30 kg</p>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Weight & Dimensions */}
+                      {/* Right: Weight & Dimensions */}
                       <div className="space-y-4">
                         <Label className="flex items-center gap-2 text-base font-semibold">
                           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -712,29 +795,39 @@ const PublicRateCalculator = () => {
                           </div>
                           Package Details
                         </Label>
-                        {/* Weight */}
                         <div className="space-y-2">
                           <div className="text-center py-3 bg-muted/30 rounded-lg">
                             <span className="text-4xl font-bold font-typewriter text-coke-red">{domesticWeightKg}</span>
                             <span className="text-sm text-muted-foreground ml-1">kg</span>
                           </div>
-                          <input type="range" min={0.5} max={30} step={0.5} value={domesticWeightKg}
-                            onChange={(e) => setDomesticWeightKg(Number(e.target.value))}
+                          <input type="range" min={0.5} max={domesticShipmentType === 'document' ? 1 : 30} step={domesticShipmentType === 'document' ? 0.25 : 0.5}
+                            value={domesticWeightKg} onChange={(e) => setDomesticWeightKg(Number(e.target.value))}
                             className="w-full accent-coke-red" />
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>0.5 kg</span><span>30 kg</span>
+                            <span>0.5 kg</span><span>{domesticShipmentType === 'document' ? '1' : '30'} kg</span>
                           </div>
-                          <div className="grid grid-cols-4 gap-2">
-                            {[1, 2, 5, 10].map(w => (
-                              <button key={w} onClick={() => setDomesticWeightKg(w)}
-                                className={cn("py-2 rounded-lg border text-sm font-medium transition-all",
-                                  domesticWeightKg === w ? "border-coke-red bg-coke-red/5 text-coke-red" : "border-border hover:border-coke-red/30")}>
-                                {w} kg
-                              </button>
-                            ))}
-                          </div>
+                          {domesticShipmentType === 'document' ? (
+                            <div className="grid grid-cols-4 gap-2">
+                              {[0.25, 0.5, 0.75, 1].map(w => (
+                                <button key={w} onClick={() => setDomesticWeightKg(w)}
+                                  className={cn("py-2 rounded-lg border text-sm font-medium transition-all",
+                                    domesticWeightKg === w ? "border-coke-red bg-coke-red/5 text-coke-red" : "border-border hover:border-coke-red/30")}>
+                                  {w < 1 ? `${w * 1000}g` : '1 kg'}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-4 gap-2">
+                              {[1, 2, 5, 10].map(w => (
+                                <button key={w} onClick={() => setDomesticWeightKg(w)}
+                                  className={cn("py-2 rounded-lg border text-sm font-medium transition-all",
+                                    domesticWeightKg === w ? "border-coke-red bg-coke-red/5 text-coke-red" : "border-border hover:border-coke-red/30")}>
+                                  {w} kg
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        {/* Dimensions */}
                         <div className="grid grid-cols-3 gap-2">
                           {[
                             { label: 'L (cm)', val: domesticLength, set: setDomesticLength },
@@ -751,7 +844,6 @@ const PublicRateCalculator = () => {
                         </div>
                       </div>
                     </div>
-
                     {/* Check Rates Button */}
                     <div className="mt-6 flex justify-center">
                       <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -772,48 +864,68 @@ const PublicRateCalculator = () => {
 
                 {/* Domestic Error */}
                 {domesticError && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
+                    <Alert variant="destructive"><Warning size={16} weight="bold" />
+                      <AlertDescription>{domesticError}</AlertDescription></Alert>
+                  </motion.div>
+                )}
+
+                {/* No service for documents */}
+                {noDocumentService && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
                     <Alert variant="destructive">
                       <Warning size={16} weight="bold" />
-                      <AlertDescription>{domesticError}</AlertDescription>
+                      <AlertDescription>
+                        No air or Delhivery Surface service available for documents on this route. Please try a different pincode or switch to Gift/Parcel.
+                      </AlertDescription>
                     </Alert>
                   </motion.div>
                 )}
 
+                {/* Document fallback message */}
+                {documentFallbackMsg && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4">
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600">
+                      <Boat size={14} weight="bold" className="shrink-0" />
+                      {documentFallbackMsg}
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* Domestic Results */}
-                {domesticCouriers.length > 0 && (
+                {filteredDomesticCouriers.length > 0 && (
                   <div className="mt-12 space-y-6">
                     <div className="text-center">
                       <h2 className="text-2xl md:text-3xl font-bold font-typewriter">
                         Choose Your <span className="text-coke-red">Courier</span>
                       </h2>
                       <p className="text-muted-foreground mt-2">
-                        {domesticCouriers.length} option{domesticCouriers.length !== 1 ? 's' : ''} for {pickupPincode} → {deliveryPincode}
+                        {filteredDomesticCouriers.length} option{filteredDomesticCouriers.length !== 1 ? 's' : ''} for {pickupPincode} → {deliveryPincode}
                       </p>
                     </div>
 
-                    {/* Filter Tabs */}
-                    <div className="flex justify-center">
-                      <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
-                        {([
-                          { key: 'all' as const, label: 'All', count: domesticCouriers.length, icon: '📦' },
-                          { key: 'air' as const, label: 'Air', count: airCount, icon: '✈️' },
-                          { key: 'surface' as const, label: 'Surface', count: surfaceCount, icon: '🚛' },
-                        ]).map(tab => (
-                          <button key={tab.key} onClick={() => setDomesticFilterTab(tab.key)}
-                            className={cn("flex items-center gap-1.5 py-2 px-4 rounded-md text-sm font-medium transition-all",
-                              domesticFilterTab === tab.key
-                                ? "bg-background text-coke-red shadow-sm"
-                                : "text-muted-foreground hover:text-foreground")}>
-                            <span>{tab.icon}</span> {tab.label}
-                            <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full",
-                              domesticFilterTab === tab.key ? "bg-coke-red/10 text-coke-red" : "bg-muted text-muted-foreground")}>
-                              {tab.count}
-                            </span>
-                          </button>
-                        ))}
+                    {/* Filter Tabs (hidden for documents) */}
+                    {domesticShipmentType !== 'document' && (
+                      <div className="flex justify-center">
+                        <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
+                          {([
+                            { key: 'all' as const, label: 'All', count: domesticCouriers.length, Icon: Package },
+                            { key: 'air' as const, label: 'Air', count: airCount, Icon: AirplaneTilt },
+                            { key: 'surface' as const, label: 'Surface', count: surfaceCount, Icon: Truck },
+                          ]).map(tab => (
+                            <button key={tab.key} onClick={() => setDomesticFilterTab(tab.key)}
+                              className={cn("flex items-center gap-1.5 py-2 px-4 rounded-md text-sm font-medium transition-all",
+                                domesticFilterTab === tab.key ? "bg-background text-coke-red shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                              <tab.Icon size={14} weight="bold" /> {tab.label}
+                              <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full",
+                                domesticFilterTab === tab.key ? "bg-coke-red/10 text-coke-red" : "bg-muted text-muted-foreground")}>
+                                {tab.count}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Courier Cards */}
                     <div className="space-y-3 max-w-3xl mx-auto">
@@ -822,24 +934,17 @@ const PublicRateCalculator = () => {
                           isSelected={selectedDomesticCourier?.courier_company_id === courier.courier_company_id}
                           onSelect={() => setSelectedDomesticCourier(courier)} index={index} />
                       ))}
-                      {filteredDomesticCouriers.length === 0 && (
-                        <p className="text-center text-sm text-muted-foreground py-8">
-                          No {domesticFilterTab} couriers available for this route
-                        </p>
-                      )}
                     </div>
 
                     {/* Domestic Summary */}
                     {selectedDomesticCourier && (
                       <div className="max-w-3xl mx-auto">
-                        <SummaryCard
-                          title={selectedDomesticCourier.courier_name}
+                        <SummaryCard title={selectedDomesticCourier.courier_name}
                           price={selectedDomesticCourier.customer_price}
                           transitLabel={`${selectedDomesticCourier.estimated_delivery_days} day${selectedDomesticCourier.estimated_delivery_days !== 1 ? 's' : ''}`}
                           onBook={() => router.push('/auth')} />
                       </div>
                     )}
-
                     <p className="text-xs text-center text-muted-foreground">
                       Prices include pickup charges. Pickup will be raised automatically after booking.
                     </p>
@@ -851,26 +956,20 @@ const PublicRateCalculator = () => {
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-12">
                     <Card className="border-2 border-dashed">
                       <CardContent className="py-16 text-center space-y-6">
-                        <motion.div animate={{ y: [0, -10, 0] }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                           className="w-24 h-24 mx-auto rounded-3xl bg-muted flex items-center justify-center">
                           <House size={48} weight="bold" className="text-muted-foreground" />
                         </motion.div>
                         <div>
                           <h3 className="font-bold text-xl font-typewriter">Ready to Calculate?</h3>
                           <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                            Enter pickup and delivery pincodes, set your package weight, and hit "Check Domestic Rates" to see instant quotes.
+                            Enter pickup and delivery pincodes, choose shipment type, and hit Check Domestic Rates.
                           </p>
                         </div>
                         <div className="flex items-center justify-center gap-8 pt-4">
-                          {[
-                            { icon: House, label: 'Pan-India' },
-                            { icon: Truck, label: 'Multiple Carriers' },
-                            { icon: Lightning, label: 'Instant Quotes' },
-                          ].map((item) => (
+                          {[{ icon: House, label: 'Pan-India' }, { icon: Truck, label: 'Multiple Carriers' }, { icon: Lightning, label: 'Instant Quotes' }].map((item) => (
                             <div key={item.label} className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <item.icon size={16} weight="bold" className="text-coke-red" />
-                              <span>{item.label}</span>
+                              <item.icon size={16} weight="bold" className="text-coke-red" /><span>{item.label}</span>
                             </div>
                           ))}
                         </div>
@@ -880,11 +979,9 @@ const PublicRateCalculator = () => {
                 )}
               </motion.div>
             )}
-
           </div>
         </section>
       </main>
-
       <LandingFooter />
     </div>
   );
