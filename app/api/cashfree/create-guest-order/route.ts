@@ -5,24 +5,12 @@ import { CASHFREE_API_BASE, CASHFREE_API_VERSION } from '@/lib/wallet/cashfreeCo
 /**
  * Create a Cashfree payment order for guest (non-account) bookings.
  * No auth required — uses sender details for customer info.
+ * Stores full booking payload so verify-guest-payment can create the NimbusPost shipment.
  */
 export async function POST(request: NextRequest) {
   try {
     const appId = process.env.CASHFREE_APP_ID?.trim();
     const secretKey = process.env.CASHFREE_SECRET_KEY?.trim();
-
-    if (!appId || !secretKey) {
-      // Dev mode — return mock response
-      const body = await request.json();
-      const trackingNumber = `CRX-${Date.now().toString(36).toUpperCase()}`;
-      return NextResponse.json({
-        orderId: `guest_${Date.now()}`,
-        trackingNumber,
-        awbUrl: '',
-        paymentSessionId: null,
-        amount: body.amount,
-      });
-    }
 
     const body = await request.json();
     const { amount, senderReceiver, rateFormData, selectedCourier, aadhaarNumber, couponCode } = body;
@@ -34,7 +22,7 @@ export async function POST(request: NextRequest) {
     const orderId = `cxg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const trackingNumber = `CRX-${Date.now().toString(36).toUpperCase()}`;
 
-    // Store guest booking in DB (best-effort — table may not exist yet)
+    // Store guest booking in DB with full payload for NimbusPost
     const supabase = getServiceRoleClient();
     try {
       await supabase.from('guest_bookings').insert({
@@ -54,9 +42,22 @@ export async function POST(request: NextRequest) {
         aadhaar_last4: aadhaarNumber?.slice(-4) || '',
         coupon_code: couponCode || null,
         status: 'pending_payment',
+        // Full payload for NimbusPost shipment creation after payment
+        booking_payload: JSON.stringify({ senderReceiver, rateFormData, selectedCourier }),
       });
     } catch (err: any) {
-      console.warn('[create-guest-order] guest_bookings insert failed (table may not exist):', err?.message);
+      console.warn('[create-guest-order] guest_bookings insert failed:', err?.message);
+    }
+
+    if (!appId || !secretKey) {
+      // Dev mode — return mock response
+      return NextResponse.json({
+        orderId: orderId,
+        trackingNumber,
+        awbUrl: '',
+        paymentSessionId: null,
+        amount,
+      });
     }
 
     // Create Cashfree order
