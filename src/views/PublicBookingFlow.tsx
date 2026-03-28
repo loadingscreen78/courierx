@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, ArrowRight, CircleNotch, UserPlus, Pill, FileText, Gift, Truck, Globe, User, Envelope, Phone, MapPin, Info } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, CircleNotch, UserPlus, Pill, FileText, Gift, Truck, Globe, User, Envelope, Phone, MapPin, Info, AirplaneTilt, Warning } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -33,6 +33,11 @@ const internationalRateSchema = z.object({
   widthCm: z.coerce.number().min(1, 'Required').max(150),
   heightCm: z.coerce.number().min(1, 'Required').max(150),
   declaredValue: z.coerce.number().min(1, 'Required').max(50000, 'Max ₹50,000'),
+}).superRefine((data, ctx) => {
+  if (data.shipmentType === 'document') {
+    if (data.weightGrams > 1000) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Documents max 1 kg', path: ['weightGrams'] });
+    if (data.declaredValue > 100) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Documents max ₹100 declared value', path: ['declaredValue'] });
+  }
 });
 
 const domesticRateSchema = z.object({
@@ -44,6 +49,11 @@ const domesticRateSchema = z.object({
   widthCm: z.coerce.number().min(1, 'Required').max(150),
   heightCm: z.coerce.number().min(1, 'Required').max(150),
   declaredValue: z.coerce.number().min(0).max(49000, 'Max ₹49,000'),
+}).superRefine((data, ctx) => {
+  if (data.shipmentType === 'document') {
+    if (data.weightKg > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Documents max 1 kg', path: ['weightKg'] });
+    if (data.declaredValue > 100) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Documents max ₹100 declared value', path: ['declaredValue'] });
+  }
 });
 
 const senderReceiverSchema = z.object({
@@ -117,6 +127,14 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
       contentDescription: '',
     },
   });
+
+  // Watch shipment type to conditionally render document-specific fields
+  const watchedIntlType = intlForm.watch('shipmentType');
+  const isDocumentIntl = watchedIntlType === 'document';
+
+  // Watch domestic shipment type
+  const watchedDomType = domForm.watch('shipmentType');
+  const isDocumentDom = watchedDomType === 'document';
 
   // ── Handle international rate calculation ──
   const handleIntlRateSubmit = (values: InternationalRateValues) => {
@@ -304,19 +322,34 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                       </FormItem>
                     )} />
 
-                    {/* Weight + Value */}
+                    {/* Weight + Value — document-specific */}
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={intlForm.control} name="weightGrams" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Weight (grams)</FormLabel>
-                          <FormControl><Input {...field} type="number" placeholder="500" /></FormControl>
+                          <FormLabel>Weight</FormLabel>
+                          {isDocumentIntl ? (
+                            <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Select weight" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="500">Up to 500g</SelectItem>
+                                <SelectItem value="1000">Up to 1 kg</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <FormControl><Input {...field} type="number" placeholder="Weight in grams" /></FormControl>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={intlForm.control} name="declaredValue" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Declared Value (₹)</FormLabel>
-                          <FormControl><Input {...field} type="number" placeholder="1000" /></FormControl>
+                          <FormControl>
+                            <Input {...field} type="number" placeholder={isDocumentIntl ? 'Max ₹100' : '1000'} max={isDocumentIntl ? 100 : 50000} />
+                          </FormControl>
+                          {isDocumentIntl && <p className="text-xs text-muted-foreground">Documents cannot exceed ₹100 declared value</p>}
                           <FormMessage />
                         </FormItem>
                       )} />
@@ -400,19 +433,34 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                       )} />
                     </div>
 
-                    {/* Weight + Value */}
+                    {/* Weight + Value — document-specific */}
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={domForm.control} name="weightKg" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Weight (kg)</FormLabel>
-                          <FormControl><Input {...field} type="number" step="0.1" placeholder="1" /></FormControl>
+                          <FormLabel>Weight</FormLabel>
+                          {isDocumentDom ? (
+                            <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Select weight" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="0.5">Up to 500g</SelectItem>
+                                <SelectItem value="1">Up to 1 kg</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <FormControl><Input {...field} type="number" step="0.1" placeholder="Weight in kg" /></FormControl>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )} />
                       <FormField control={domForm.control} name="declaredValue" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Declared Value (₹)</FormLabel>
-                          <FormControl><Input {...field} type="number" placeholder="500" /></FormControl>
+                          <FormControl>
+                            <Input {...field} type="number" placeholder={isDocumentDom ? 'Max ₹100' : '500'} max={isDocumentDom ? 100 : 49000} />
+                          </FormControl>
+                          {isDocumentDom && <p className="text-xs text-muted-foreground">Documents cannot exceed ₹100 declared value</p>}
                           <FormMessage />
                         </FormItem>
                       )} />
@@ -460,9 +508,35 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
 
             {isInternational ? (
               guestCouriers.length === 0 ? (
-                <div className="bg-card rounded-xl border border-border p-6 text-center text-muted-foreground">
-                  No courier options available for this route. Try a different destination or weight.
-                </div>
+                /* ── Animated no-service for international ── */
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5, type: 'spring' }}
+                  className="bg-card rounded-2xl border border-border p-8 text-center space-y-4"
+                >
+                  <motion.div
+                    animate={{ y: [0, -8, 0] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center mx-auto"
+                  >
+                    <AirplaneTilt className="h-8 w-8 text-amber-500" weight="duotone" />
+                  </motion.div>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                    <h3 className="font-semibold text-lg">No Service Available</h3>
+                    <p className="text-muted-foreground text-sm mt-1 max-w-sm mx-auto">
+                      No courier options available for this route. Try a different destination or weight.
+                    </p>
+                  </motion.div>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+                    <Button variant="outline" size="sm" onClick={() => setStep(1)}>
+                      <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Try Different Route
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => router.push('/contact')}>
+                      Contact Support
+                    </Button>
+                  </motion.div>
+                </motion.div>
               ) : (
                 <div className="space-y-3">
                   {guestCouriers.map((option, idx) => {
@@ -533,13 +607,73 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
               )
             ) : (
               /* ── Domestic rate results ── */
-              domesticCouriers.length === 0 ? (
-                <div className="bg-card rounded-xl border border-border p-6 text-center text-muted-foreground">
-                  No couriers available for this route. Try different pincodes.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {domesticCouriers.map((c: any) => (
+              (() => {
+                // For documents: show only air services, fallback to Delhivery Surface
+                const isDocType = rateFormData && 'shipmentType' in rateFormData && rateFormData.shipmentType === 'document';
+                let filteredDomestic = domesticCouriers;
+                if (isDocType) {
+                  const airOnly = domesticCouriers.filter((c: any) => c.mode === 'air');
+                  if (airOnly.length > 0) {
+                    filteredDomestic = airOnly;
+                  } else {
+                    // Fallback: Delhivery Surface
+                    const delhiverySurface = domesticCouriers.filter((c: any) =>
+                      c.courier_name?.toLowerCase().includes('delhivery') && c.mode === 'surface'
+                    );
+                    filteredDomestic = delhiverySurface;
+                  }
+                }
+
+                return filteredDomestic.length === 0 ? (
+                  /* ── Animated no-service component ── */
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, type: 'spring' }}
+                    className="bg-card rounded-2xl border border-border p-8 text-center space-y-4"
+                  >
+                    <motion.div
+                      animate={{ y: [0, -8, 0] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                      className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center mx-auto"
+                    >
+                      <AirplaneTilt className="h-8 w-8 text-amber-500" weight="duotone" />
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <h3 className="font-semibold text-lg">No Service Available</h3>
+                      <p className="text-muted-foreground text-sm mt-1 max-w-sm mx-auto">
+                        {isDocType
+                          ? 'No air courier services are available for document shipments on this route right now.'
+                          : 'No couriers available for this route.'}
+                      </p>
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.4 }}
+                      className="flex flex-col sm:flex-row gap-2 justify-center pt-2"
+                    >
+                      <Button variant="outline" size="sm" onClick={() => setStep(1)}>
+                        <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Try Different Route
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => router.push('/contact')}>
+                        Contact Support
+                      </Button>
+                    </motion.div>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-3">
+                    {isDocType && (
+                      <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2">
+                        <AirplaneTilt className="h-4 w-4 shrink-0" weight="fill" />
+                        <span>Showing air service rates for document shipments</span>
+                      </div>
+                    )}
+                    {filteredDomestic.map((c: any) => (
                     <div key={c.courier_company_id} className="bg-card rounded-xl border border-border p-4 hover:border-coke-red/30 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -565,7 +699,8 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                     </div>
                   ))}
                 </div>
-              )
+                );
+              })()
             )}
           </motion.div>
         )}
