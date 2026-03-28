@@ -202,6 +202,8 @@ export interface CreateDomesticShipmentParams {
   height: number;
   payment_type: 'prepaid';
   content_description: string;
+  /** Optional custom order number (e.g. CRX tracking number). Auto-generated if omitted. */
+  order_number?: string;
 }
 
 export interface CreateDomesticShipmentResponse {
@@ -217,26 +219,28 @@ export async function createDomesticShipment(
 ): Promise<CreateDomesticShipmentResponse> {
   const token = await getToken();
 
+  const orderNumber = params.order_number || `CXD-${Date.now()}`;
+  const weightGrams = Math.max(1, Math.round(params.weight * 1000));
+
   const payload = {
-    order_number: `CXD-${Date.now()}`,
+    order_number: orderNumber,
     shipping_charges: 0,
     discount: 0,
     cod_charges: 0,
     payment_type: params.payment_type,
     order_amount: params.order_amount,
-    // NimbusPost expects weight in grams (integer)
-    package_weight: Math.round(params.weight * 1000),
-    package_length: params.length,
-    package_breadth: params.breadth,
-    package_height: params.height,
+    package_weight: weightGrams,
+    package_length: Math.max(1, Math.round(params.length)),
+    package_breadth: Math.max(1, Math.round(params.breadth)),
+    package_height: Math.max(1, Math.round(params.height)),
     consignee: {
       name: params.delivery.name,
       address: params.delivery.address,
       address_2: '',
       city: params.delivery.city,
       state: params.delivery.state,
-      pincode: params.delivery.pincode,
-      phone: params.delivery.phone,
+      pincode: String(params.delivery.pincode),
+      phone: String(params.delivery.phone),
     },
     pickup: {
       warehouse_name: process.env.NIMBUS_WAREHOUSE_NAME || 'default',
@@ -245,8 +249,8 @@ export async function createDomesticShipment(
       address_2: '',
       city: params.pickup.city,
       state: params.pickup.state,
-      pincode: params.pickup.pincode,
-      phone: params.pickup.phone,
+      pincode: String(params.pickup.pincode),
+      phone: String(params.pickup.phone),
     },
     order_items: [
       {
@@ -257,6 +261,16 @@ export async function createDomesticShipment(
     ],
     courier_id: params.courier_id,
   };
+
+  console.log('[nimbusPostDomestic] Creating shipment:', JSON.stringify({
+    order_number: orderNumber,
+    courier_id: params.courier_id,
+    weight_g: weightGrams,
+    pickup_pin: params.pickup.pincode,
+    delivery_pin: params.delivery.pincode,
+    pickup_state: params.pickup.state,
+    delivery_state: params.delivery.state,
+  }));
 
   const res = await fetch(`${NIMBUS_API_BASE}/shipments`, {
     method: 'POST',

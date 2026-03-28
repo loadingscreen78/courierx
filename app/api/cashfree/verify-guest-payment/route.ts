@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceRoleClient } from '@/lib/shipment-lifecycle/supabaseAdmin';
 import { CASHFREE_API_BASE, CASHFREE_API_VERSION } from '@/lib/wallet/cashfreeConfig';
 import { createDomesticShipment } from '@/lib/domestic/nimbusPostDomestic';
+import { lookupPincode } from '@/lib/pincode-lookup';
 
 /**
  * Verify a guest booking payment with Cashfree.
- * After payment is confirmed, creates the actual shipment via NimbusPost.
+ * After payment is confirmed, creates the actual shipment via NimbusPost
+ * and returns the AWB + label URL.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Payment not completed' });
     }
 
-    // Payment confirmed — fetch guest booking data
+    // Fetch guest booking data
     const { data: booking, error: bookingErr } = await supabase
       .from('guest_bookings')
       .select('*')
@@ -68,7 +70,7 @@ export async function POST(request: NextRequest) {
       .update({ status: 'paid', paid_at: new Date().toISOString() })
       .eq('order_id', orderId);
 
-    // Parse the stored booking payload for NimbusPost
+    // Parse stored booking payload
     let bookingPayload: any = null;
     try {
       bookingPayload = typeof booking.booking_payload === 'string'
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     const { senderReceiver, rateFormData, selectedCourier } = bookingPayload;
 
-    // Create shipment via NimbusPost
+    // ── Create NimbusPost shipment ──
     const skipNimbus = !process.env.NIMBUS_EMAIL || !process.env.NIMBUS_PASSWORD;
 
     let awb = '';
@@ -96,39 +98,83 @@ export async function POST(request: NextRequest) {
 
     if (skipNimbus) {
       awb = `CXD-MOCK-${Date.now()}`;
-      console.warn('[verify-guest-payment] NimbusPost credentials missing — using mock AWB');
+      console.warn('[verify-guest-payment] NimbusPost credentials missing — mock AWB');
     } else {
       try {
-        const courierId = selectedCourier?.courier_company_id
+        // Resolve courier_id — NimbusPost returns this in rate check
+        const courierId = Number(
+          selectedCourier?.courier_company_id
           || selectedCourier?.courier_id
-          || selectedCourier?.id;
+          || selectedCourier?.id
+          || 0
+        );
 
-        const weightKg = rateFormData?.weightKg
-          || rateFormData?.weightGrams ? (rateFormData.weightGrams / 1000) : 0.5;
+        if (!courierId) {
+          throw new Error('No courier_company_id in selectedCourier');
+        }
+
+        // Get weight — domestic form uses weightKg
+        const weightKg = Number(rateFormData?.weightKg) || 0.5;
+
+        // Clean phone numbers — NimbusPost expects 10-digit Indian numbers
+        const cleanPhone = (phone: string) => {
+          const digits = (phone || '').replace(/\D/g, '');
+          // Remove leading 91 country code if present
+          return digits.length > 10 ? digits.slice(-10) : digits || '9999999999';
+        };
+
+        // Get sender/receiver pincodes
+        const senderPincode = senderReceiver.senderPincode
+          || rateFormData?.pickupPincode || '';
+        const receiverPincode = senderReceiver.receiverZipcode
+          || senderReceiver.receiverPincode
+          || rateFormData?.deliveryPincode || '';
+
+        // Lookup states from pincodes (NimbusPost requires state)
+        const [senderLookup, receiverLookup] = await Promise.all([
+          lookupPincode(senderPincode),
+          lookupPincode(receiverPincode),
+        ]);
+
+        const senderState = senderLookup?.state || 'Unknown';
+        const receiverState = receiverLookup?.state || 'Unknown';
+        const senderCity = senderReceiver.senderCity || senderLookup?.city || 'Unknown';
+        const receiverCity = senderReceiver.receiverCity || receiverLookup?.city || 'Unknown';
+
+        console.log('[verify-guest-payment] NimbusPost payload:', JSON.stringify({
+          courier_id: courierId,
+          tracking: booking.tracking_number,
+          weight: weightKg,
+          senderPincode,
+          receiverPincode,
+          senderState,
+          receiverState,
+        }));
 
         const nimbusResult = await createDomesticShipment({
-          courier_id: Number(courierId),
+          courier_id: courierId,
+          order_number: booking.tracking_number || `CXG-${Date.now()}`,
           pickup: {
-            name: senderReceiver.senderName,
-            phone: senderReceiver.senderPhone,
-            address: senderReceiver.senderAddress,
-            city: senderReceiver.senderCity,
-            state: rateFormData?.senderState || senderReceiver.senderCity,
-            pincode: senderReceiver.senderPincode,
+            name: senderReceiver.senderName || 'Sender',
+            phone: cleanPhone(senderReceiver.senderPhone),
+            address: senderReceiver.senderAddress || 'Address',
+            city: senderCity,
+            state: senderState,
+            pincode: senderPincode,
           },
           delivery: {
-            name: senderReceiver.receiverName,
-            phone: senderReceiver.receiverPhone,
-            address: senderReceiver.receiverAddress,
-            city: senderReceiver.receiverCity,
-            state: rateFormData?.receiverState || senderReceiver.receiverCity,
-            pincode: senderReceiver.receiverZipcode || senderReceiver.receiverPincode,
+            name: senderReceiver.receiverName || 'Receiver',
+            phone: cleanPhone(senderReceiver.receiverPhone),
+            address: senderReceiver.receiverAddress || 'Address',
+            city: receiverCity,
+            state: receiverState,
+            pincode: receiverPincode,
           },
-          order_amount: booking.amount,
+          order_amount: Number(rateFormData?.declaredValue) || Number(booking.amount) || 100,
           weight: weightKg,
-          length: rateFormData?.lengthCm || 20,
-          breadth: rateFormData?.widthCm || 15,
-          height: rateFormData?.heightCm || 10,
+          length: Number(rateFormData?.lengthCm) || 20,
+          breadth: Number(rateFormData?.widthCm) || 15,
+          height: Number(rateFormData?.heightCm) || 10,
           payment_type: 'prepaid',
           content_description: senderReceiver.contentDescription
             || rateFormData?.shipmentType
@@ -138,19 +184,19 @@ export async function POST(request: NextRequest) {
         if (nimbusResult.success && nimbusResult.awb) {
           awb = nimbusResult.awb;
           labelUrl = nimbusResult.label_url || '';
-          console.log('[verify-guest-payment] NimbusPost shipment created:', awb);
+          console.log('[verify-guest-payment] NimbusPost shipment created. AWB:', awb);
         } else {
           console.error('[verify-guest-payment] NimbusPost failed:', nimbusResult.error);
-          // Still return success for payment — shipment can be retried
           await supabase
             .from('guest_bookings')
-            .update({ status: 'paid_nimbus_failed', nimbus_error: nimbusResult.error || 'Unknown error' })
+            .update({ status: 'paid_nimbus_failed', nimbus_error: nimbusResult.error || 'Unknown' })
             .eq('order_id', orderId);
 
           return NextResponse.json({
             success: true,
             awbUrl: '',
-            error: nimbusResult.error || 'Shipment creation failed — our team will process it manually',
+            trackingNumber: booking.tracking_number,
+            error: nimbusResult.error || 'Shipment creation failed — our team will process manually',
           });
         }
       } catch (err: any) {
@@ -163,7 +209,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           awbUrl: '',
-          error: 'Shipment creation failed — our team will process it manually',
+          trackingNumber: booking.tracking_number,
+          error: 'Shipment creation failed — our team will process manually',
         });
       }
     }
