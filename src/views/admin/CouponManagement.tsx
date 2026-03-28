@@ -65,6 +65,7 @@ const emptyCoupon = {
   valid_until: '',
   bypass_min_recharge: false,
   is_min_recharge_type: false,
+  guest_eligible: false,
 };
 
 export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
@@ -142,6 +143,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
       valid_until: coupon.valid_until ? coupon.valid_until.slice(0, 16) : '',
       bypass_min_recharge: coupon.bypass_min_recharge || false,
       is_min_recharge_type: isMinRechargeType,
+      guest_eligible: (coupon as any).guest_eligible || false,
     });
     setShowDialog(true);
   };
@@ -170,6 +172,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
             valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
             bypass_min_recharge: true,
+            guest_eligible: form.guest_eligible,
           }
         : {
             code: form.code,
@@ -182,6 +185,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
             valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
             bypass_min_recharge: form.bypass_min_recharge,
+            guest_eligible: form.guest_eligible,
           };
       const url = editingCoupon ? `/api/coupons/${editingCoupon.id}` : '/api/coupons';
       const method = editingCoupon ? 'PATCH' : 'POST';
@@ -367,6 +371,11 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                       {(coupon.assigned_count ?? 0) > 0 && (
                         <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
                           <Users className="h-2.5 w-2.5 mr-1" />{coupon.assigned_count} assigned
+                        </Badge>
+                      )}
+                      {(coupon as any).guest_eligible && (
+                        <Badge className="text-[10px] bg-green-500/20 text-green-400 border-green-500/30">
+                          Guest
                         </Badge>
                       )}
                       {coupon.valid_until && new Date(coupon.valid_until) < new Date() && (
@@ -584,6 +593,37 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
                 onChange={(e) => setForm({ ...form, valid_until: e.target.value })}
                 className="mt-1 bg-white/5 border-white/10 text-white"
               />
+            </div>
+
+            {/* Guest Eligible toggle */}
+            <div
+              className={cn(
+                "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
+                form.guest_eligible
+                  ? "bg-green-500/15 border-green-500/40"
+                  : "bg-white/[0.03] border-white/10 hover:border-white/20"
+              )}
+              onClick={() => setForm({ ...form, guest_eligible: !form.guest_eligible })}
+            >
+              <div>
+                <p className={cn("text-sm font-semibold", form.guest_eligible ? "text-green-300" : "text-gray-300")}>
+                  Guest Eligible
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {form.guest_eligible
+                    ? 'This coupon can be used by guest (non-account) users during Ship Now booking'
+                    : 'Enable to allow guest users to apply this coupon at checkout'}
+                </p>
+              </div>
+              <div className={cn(
+                "w-10 h-6 rounded-full transition-colors flex items-center px-1 shrink-0",
+                form.guest_eligible ? "bg-green-500" : "bg-white/10"
+              )}>
+                <div className={cn(
+                  "w-4 h-4 rounded-full bg-white transition-transform",
+                  form.guest_eligible ? "translate-x-4" : "translate-x-0"
+                )} />
+              </div>
             </div>
 
             {/* Bypass min recharge — only shown for normal coupons */}

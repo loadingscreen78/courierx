@@ -45,6 +45,7 @@ export async function PATCH(
   if (body.valid_until !== undefined) updateFields.valid_until = body.valid_until || null;
   if (body.is_active !== undefined) updateFields.is_active = body.is_active;
   if (body.bypass_min_recharge !== undefined) updateFields.bypass_min_recharge = Boolean(body.bypass_min_recharge);
+  if (body.guest_eligible !== undefined) updateFields.guest_eligible = Boolean(body.guest_eligible);
 
   const { data, error } = await supabase
     .from('promo_coupons')

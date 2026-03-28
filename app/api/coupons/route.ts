@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
     valid_from,
     valid_until,
     bypass_min_recharge = false,
+    guest_eligible = false,
   } = body;
 
   if (!code || (!bypass_min_recharge && (discount_value === undefined || discount_value === null || discount_value === ''))) {
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest) {
       valid_from: valid_from || new Date().toISOString(),
       valid_until: valid_until || null,
       bypass_min_recharge: Boolean(bypass_min_recharge),
+      guest_eligible: Boolean(guest_eligible),
     })
     .select()
     .single();
