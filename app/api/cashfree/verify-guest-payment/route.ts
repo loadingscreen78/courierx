@@ -64,11 +64,51 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Mark as paid
-    await supabase
+    // Already failed NimbusPost — don't retry automatically
+    if (booking.status === 'paid_nimbus_failed') {
+      return NextResponse.json({
+        success: true,
+        awbUrl: '',
+        trackingNumber: booking.tracking_number,
+        error: 'Shipment creation previously failed — our team will process manually',
+      });
+    }
+
+    // Idempotency: use atomic update to claim this booking for processing.
+    // Only one request can transition from pending_payment → paid.
+    const { data: claimed, error: claimErr } = await supabase
       .from('guest_bookings')
       .update({ status: 'paid', paid_at: new Date().toISOString() })
-      .eq('order_id', orderId);
+      .eq('order_id', orderId)
+      .eq('status', 'pending_payment')
+      .select('order_id')
+      .maybeSingle();
+
+    // If we didn't claim it, another request is already processing
+    if (!claimed && !claimErr) {
+      // Wait briefly and re-fetch to return the result from the other request
+      await new Promise(r => setTimeout(r, 3000));
+      const { data: updated } = await supabase
+        .from('guest_bookings')
+        .select('status, awb_number, label_url, tracking_number')
+        .eq('order_id', orderId)
+        .maybeSingle();
+
+      if (updated?.status === 'shipped' && updated.awb_number) {
+        return NextResponse.json({
+          success: true,
+          awbUrl: updated.label_url || '',
+          awb: updated.awb_number,
+          trackingNumber: updated.tracking_number,
+        });
+      }
+      return NextResponse.json({
+        success: true,
+        awbUrl: '',
+        trackingNumber: booking.tracking_number,
+        error: 'Payment confirmed — shipment is being processed',
+      });
+    }
 
     // Parse stored booking payload
     let bookingPayload: any = null;
@@ -189,7 +229,14 @@ export async function POST(request: NextRequest) {
           console.error('[verify-guest-payment] NimbusPost failed:', nimbusResult.error);
           await supabase
             .from('guest_bookings')
-            .update({ status: 'paid_nimbus_failed', nimbus_error: nimbusResult.error || 'Unknown' })
+            .update({
+              status: 'paid_nimbus_failed',
+              booking_payload: {
+                ...bookingPayload,
+                _nimbus_error: nimbusResult.error || 'Unknown',
+                _failed_at: new Date().toISOString(),
+              },
+            })
             .eq('order_id', orderId);
 
           return NextResponse.json({
@@ -203,7 +250,14 @@ export async function POST(request: NextRequest) {
         console.error('[verify-guest-payment] NimbusPost exception:', err);
         await supabase
           .from('guest_bookings')
-          .update({ status: 'paid_nimbus_failed', nimbus_error: err?.message || 'Exception' })
+          .update({
+            status: 'paid_nimbus_failed',
+            booking_payload: {
+              ...bookingPayload,
+              _nimbus_error: err?.message || 'Exception',
+              _failed_at: new Date().toISOString(),
+            },
+          })
           .eq('order_id', orderId);
 
         return NextResponse.json({

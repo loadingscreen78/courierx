@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getStateFromPincode } from '@/lib/pincode-lookup';
 
 /**
  * Public pincode lookup — proxies India Post API to avoid CORS.
+ * Falls back to local prefix-based state mapping if India Post is down.
  * GET /api/public/pincode-lookup?pincode=110001
  * GET /api/public/pincode-lookup?query=Connaught
  */
@@ -12,31 +14,56 @@ export async function GET(request: NextRequest) {
 
   try {
     if (pincode && /^\d{6}$/.test(pincode)) {
-      const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`, {
-        next: { revalidate: 86400 }, // cache 24h
-      });
-      const data = await res.json();
-      const result = data?.[0];
-      if (result?.Status !== 'Success' || !result?.PostOffice?.length) {
-        return NextResponse.json({ success: false, error: 'Pincode not found' });
+      // Try India Post API with timeout
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+
+        const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`, {
+          signal: controller.signal,
+          next: { revalidate: 86400 }, // cache 24h
+        });
+        clearTimeout(timeout);
+
+        const data = await res.json();
+        const result = data?.[0];
+        if (result?.Status === 'Success' && result?.PostOffice?.length) {
+          const first = result.PostOffice[0];
+          const allAreas = result.PostOffice.map((po: any) => po.Name);
+          const allDistricts = [...new Set(result.PostOffice.map((po: any) => po.District))] as string[];
+          return NextResponse.json({
+            success: true,
+            state: first.State,
+            district: first.District,
+            areas: allAreas,
+            districts: allDistricts,
+            postOffices: result.PostOffice.map((po: any) => ({
+              name: po.Name,
+              pincode: po.Pincode,
+              district: po.District,
+              state: po.State,
+            })),
+          });
+        }
+      } catch (apiErr) {
+        console.warn('[pincode-lookup] India Post API failed, using local fallback:', (apiErr as Error).message);
       }
-      const first = result.PostOffice[0];
-      const allAreas = result.PostOffice.map((po: any) => po.Name);
-      // Unique districts (some pincodes span multiple)
-      const allDistricts = [...new Set(result.PostOffice.map((po: any) => po.District))] as string[];
-      return NextResponse.json({
-        success: true,
-        state: first.State,
-        district: first.District,
-        areas: allAreas,
-        districts: allDistricts,
-        postOffices: result.PostOffice.map((po: any) => ({
-          name: po.Name,
-          pincode: po.Pincode,
-          district: po.District,
-          state: po.State,
-        })),
-      });
+
+      // Fallback: local prefix-based state resolution
+      const state = getStateFromPincode(pincode);
+      if (state) {
+        return NextResponse.json({
+          success: true,
+          state,
+          district: state,
+          areas: [state],
+          districts: [state],
+          postOffices: [],
+          _fallback: true,
+        });
+      }
+
+      return NextResponse.json({ success: false, error: 'Pincode not found' });
     }
 
     if (query && query.length >= 3) {

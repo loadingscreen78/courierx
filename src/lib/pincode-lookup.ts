@@ -1,4 +1,4 @@
-// Indian PIN Code lookup using India Post API
+// Indian PIN Code lookup — India Post API with local fallback
 export interface PincodeData {
   city: string;
   state: string;
@@ -20,13 +20,75 @@ export interface PincodeResponse {
   }> | null;
 }
 
+// ---------------------------------------------------------------------------
+// Local pincode-to-state mapping (first 2 digits → state)
+// Based on India Post's official pincode allocation.
+// Used as a reliable fallback when the India Post API is down.
+// ---------------------------------------------------------------------------
+const PINCODE_PREFIX_TO_STATE: Record<string, string> = {
+  '11': 'Delhi', '12': 'Haryana', '13': 'Haryana',
+  '14': 'Punjab', '15': 'Punjab', '16': 'Punjab',
+  '17': 'Himachal Pradesh', '18': 'Jammu and Kashmir', '19': 'Jammu and Kashmir',
+  '20': 'Uttar Pradesh', '21': 'Uttar Pradesh', '22': 'Uttar Pradesh',
+  '23': 'Uttar Pradesh', '24': 'Uttar Pradesh', '25': 'Uttar Pradesh',
+  '26': 'Uttarakhand', '27': 'Uttar Pradesh', '28': 'Uttar Pradesh',
+  '30': 'Rajasthan', '31': 'Rajasthan', '32': 'Rajasthan',
+  '33': 'Rajasthan', '34': 'Rajasthan',
+  '36': 'Gujarat', '37': 'Gujarat', '38': 'Gujarat', '39': 'Gujarat',
+  '40': 'Maharashtra', '41': 'Maharashtra', '42': 'Maharashtra',
+  '43': 'Maharashtra', '44': 'Maharashtra', '45': 'Madhya Pradesh',
+  '46': 'Madhya Pradesh', '47': 'Madhya Pradesh', '48': 'Madhya Pradesh',
+  '49': 'Chhattisgarh',
+  '50': 'Telangana', '51': 'Andhra Pradesh', '52': 'Andhra Pradesh',
+  '53': 'Andhra Pradesh', '54': 'Andhra Pradesh', '55': 'Andhra Pradesh',
+  '56': 'Karnataka', '57': 'Karnataka', '58': 'Karnataka', '59': 'Karnataka',
+  '60': 'Tamil Nadu', '61': 'Tamil Nadu', '62': 'Tamil Nadu',
+  '63': 'Tamil Nadu', '64': 'Tamil Nadu',
+  '67': 'Kerala', '68': 'Kerala', '69': 'Kerala',
+  '70': 'West Bengal', '71': 'West Bengal', '72': 'West Bengal',
+  '73': 'West Bengal', '74': 'West Bengal',
+  '75': 'Odisha', '76': 'Odisha', '77': 'Odisha',
+  '78': 'Assam', '79': 'Arunachal Pradesh',
+  '80': 'Bihar', '81': 'Bihar', '82': 'Bihar', '83': 'Bihar', '84': 'Bihar',
+  '85': 'Jharkhand',
+  '86': 'Jharkhand',
+  '90': 'Manipur', '91': 'Mizoram', '92': 'Nagaland',
+  '93': 'Tripura', '94': 'Meghalaya', '95': 'Sikkim',
+  '10': 'Delhi',
+  '35': 'Gujarat',
+  '65': 'Tamil Nadu', '66': 'Kerala',
+};
+
+/**
+ * Resolve state from pincode using the local prefix map.
+ * Returns null only if the prefix is truly unknown.
+ */
+export function getStateFromPincode(pincode: string): string | null {
+  if (!pincode || pincode.length < 2) return null;
+  const prefix = pincode.slice(0, 2);
+  return PINCODE_PREFIX_TO_STATE[prefix] || null;
+}
+
+/**
+ * Lookup pincode via India Post API with a 4-second timeout.
+ * Falls back to local prefix mapping if the API is unavailable.
+ */
 export async function lookupPincode(pincode: string): Promise<PincodeData | null> {
   if (!pincode || pincode.length !== 6 || !/^\d{6}$/.test(pincode)) {
     return null;
   }
 
+  // Try India Post API first (with timeout)
   try {
-    const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    const response = await fetch(
+      `https://api.postalpincode.in/pincode/${pincode}`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timeout);
+
     const data: PincodeResponse[] = await response.json();
 
     if (data[0]?.Status === 'Success' && data[0]?.PostOffice?.length) {
@@ -38,11 +100,22 @@ export async function lookupPincode(pincode: string): Promise<PincodeData | null
         area: postOffice.Name,
       };
     }
-    return null;
   } catch (error) {
-    console.error('PIN code lookup failed:', error);
-    return null;
+    console.warn('[pincode-lookup] India Post API failed, using local fallback:', (error as Error).message);
   }
+
+  // Fallback: local prefix-based state resolution
+  const state = getStateFromPincode(pincode);
+  if (state) {
+    return {
+      city: state, // best we can do without the API
+      state,
+      district: state,
+      area: '',
+    };
+  }
+
+  return null;
 }
 
 // Indian states list
