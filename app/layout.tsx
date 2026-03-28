@@ -92,6 +92,10 @@ export const metadata: Metadata = {
     'geo.placename': 'India',
     'ICBM': '20.5937, 78.9629',
   },
+  icons: {
+    icon: '/favicon.jpg',
+    apple: '/favicon.jpg',
+  },
 };
 
 export default function RootLayout({
@@ -123,7 +127,8 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+        <link rel="apple-touch-icon" href="/favicon.jpg" />
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="bg-background text-foreground" suppressHydrationWarning>
