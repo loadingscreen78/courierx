@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Plus, Tag, Loader2, Pencil, Trash2, ToggleLeft, ToggleRight,
   Copy, Users, IndianRupee, Calendar, Percent, UserPlus, X, Search,
-  ShieldCheck,
+  ShieldCheck, Gift,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -35,6 +35,7 @@ interface Coupon {
   valid_until: string | null;
   is_active: boolean;
   bypass_min_recharge: boolean;
+  guest_eligible: boolean;
   created_at: string;
   total_uses: number;
   assigned_count?: number;
@@ -53,6 +54,8 @@ interface UserSearchResult {
   phone: string | null;
 }
 
+type CouponTab = 'promo' | 'guest';
+
 const emptyCoupon = {
   code: '',
   description: '',
@@ -68,13 +71,33 @@ const emptyCoupon = {
   guest_eligible: false,
 };
 
+const emptyGuestCoupon = {
+  code: '',
+  description: '',
+  discount_type: 'fixed' as 'percentage' | 'fixed',
+  discount_value: '',
+  min_order_amount: '0',
+  max_discount: '',
+  max_uses: '',
+  valid_until: '',
+};
+
 export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<CouponTab>('promo');
+
+  // Promo coupon dialog
   const [showDialog, setShowDialog] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
   const [form, setForm] = useState(emptyCoupon);
   const [saving, setSaving] = useState(false);
+
+  // Guest coupon dialog
+  const [showGuestDialog, setShowGuestDialog] = useState(false);
+  const [editingGuestCoupon, setEditingGuestCoupon] = useState<Coupon | null>(null);
+  const [guestForm, setGuestForm] = useState(emptyGuestCoupon);
+  const [guestSaving, setGuestSaving] = useState(false);
 
   // Assign sheet state
   const [assignCoupon, setAssignCoupon] = useState<Coupon | null>(null);
@@ -100,7 +123,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
       const res = await fetch('/api/coupons', { headers });
       if (res.ok) {
         const data = await res.json();
-        // Fetch assignment counts
         const { data: assignCounts } = await supabase
           .from('coupon_user_assignments')
           .select('coupon_id');
@@ -121,6 +143,12 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
   }, [getAuthHeaders]);
 
   useEffect(() => { fetchCoupons(); }, [fetchCoupons]);
+
+  // Filtered lists
+  const promoCoupons = coupons.filter(c => !c.guest_eligible);
+  const guestCoupons = coupons.filter(c => c.guest_eligible);
+
+  // ── Promo coupon handlers ──
 
   const handleCreate = () => {
     setEditingCoupon(null);
@@ -143,7 +171,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
       valid_until: coupon.valid_until ? coupon.valid_until.slice(0, 16) : '',
       bypass_min_recharge: coupon.bypass_min_recharge || false,
       is_min_recharge_type: isMinRechargeType,
-      guest_eligible: (coupon as any).guest_eligible || false,
+      guest_eligible: false,
     });
     setShowDialog(true);
   };
@@ -172,7 +200,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
             valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
             bypass_min_recharge: true,
-            guest_eligible: form.guest_eligible,
+            guest_eligible: false,
           }
         : {
             code: form.code,
@@ -185,7 +213,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : null,
             valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
             bypass_min_recharge: form.bypass_min_recharge,
-            guest_eligible: form.guest_eligible,
+            guest_eligible: false,
           };
       const url = editingCoupon ? `/api/coupons/${editingCoupon.id}` : '/api/coupons';
       const method = editingCoupon ? 'PATCH' : 'POST';
@@ -204,6 +232,74 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
       setSaving(false);
     }
   };
+
+  // ── Guest coupon handlers ──
+
+  const handleCreateGuest = () => {
+    setEditingGuestCoupon(null);
+    setGuestForm(emptyGuestCoupon);
+    setShowGuestDialog(true);
+  };
+
+  const handleEditGuest = (coupon: Coupon) => {
+    setEditingGuestCoupon(coupon);
+    setGuestForm({
+      code: coupon.code,
+      description: coupon.description || '',
+      discount_type: coupon.discount_type,
+      discount_value: coupon.discount_value.toString(),
+      min_order_amount: coupon.min_recharge_amount.toString(),
+      max_discount: coupon.max_discount?.toString() || '',
+      max_uses: coupon.max_uses?.toString() || '',
+      valid_until: coupon.valid_until ? coupon.valid_until.slice(0, 16) : '',
+    });
+    setShowGuestDialog(true);
+  };
+
+  const handleSaveGuest = async () => {
+    if (!guestForm.code.trim()) {
+      toast.error('Coupon code is required');
+      return;
+    }
+    if (!guestForm.discount_value) {
+      toast.error('Discount value is required');
+      return;
+    }
+    setGuestSaving(true);
+    try {
+      const headers = await getAuthHeaders();
+      const payload = {
+        code: guestForm.code,
+        description: guestForm.description || null,
+        discount_type: guestForm.discount_type,
+        discount_value: Number(guestForm.discount_value),
+        min_recharge_amount: Number(guestForm.min_order_amount) || 0,
+        max_discount: guestForm.max_discount ? Number(guestForm.max_discount) : null,
+        max_uses: guestForm.max_uses ? Number(guestForm.max_uses) : null,
+        max_uses_per_user: null,
+        valid_until: guestForm.valid_until ? new Date(guestForm.valid_until).toISOString() : null,
+        bypass_min_recharge: false,
+        guest_eligible: true,
+      };
+      const url = editingGuestCoupon ? `/api/coupons/${editingGuestCoupon.id}` : '/api/coupons';
+      const method = editingGuestCoupon ? 'PATCH' : 'POST';
+      const res = await fetch(url, { method, headers, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(editingGuestCoupon ? 'Guest coupon updated' : 'Guest coupon created');
+        setShowGuestDialog(false);
+        fetchCoupons();
+      } else {
+        toast.error(data.error || 'Failed to save guest coupon');
+      }
+    } catch {
+      toast.error('Failed to save guest coupon');
+    } finally {
+      setGuestSaving(false);
+    }
+  };
+
+  // ── Shared handlers ──
 
   const handleToggle = async (coupon: Coupon) => {
     try {
@@ -308,6 +404,118 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
     } catch { toast.error('Failed to remove'); }
   };
 
+  // ── Render a coupon card ──
+  const renderCouponCard = (coupon: Coupon, isGuest: boolean) => (
+    <div
+      key={coupon.id}
+      className={cn(
+        "p-4 rounded-2xl border transition-all",
+        coupon.is_active
+          ? "bg-white/[0.03] border-white/10 hover:border-white/20"
+          : "bg-white/[0.01] border-white/5 opacity-60"
+      )}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <button
+              onClick={() => copyCode(coupon.code)}
+              className="font-mono font-bold text-base text-white hover:text-red-400 transition-colors flex items-center gap-1.5"
+            >
+              {coupon.code}
+              <Copy className="h-3 w-3 opacity-50" />
+            </button>
+            <Badge variant={coupon.is_active ? 'default' : 'secondary'} className="text-[10px]">
+              {coupon.is_active ? 'Active' : 'Inactive'}
+            </Badge>
+            {!isGuest && coupon.bypass_min_recharge && (
+              <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                <ShieldCheck className="h-2.5 w-2.5 mr-1" />Bypass Min
+              </Badge>
+            )}
+            {!isGuest && (coupon.assigned_count ?? 0) > 0 && (
+              <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                <Users className="h-2.5 w-2.5 mr-1" />{coupon.assigned_count} assigned
+              </Badge>
+            )}
+            {isGuest && (
+              <Badge className="text-[10px] bg-green-500/20 text-green-400 border-green-500/30">
+                <Gift className="h-2.5 w-2.5 mr-1" />Guest
+              </Badge>
+            )}
+            {coupon.valid_until && new Date(coupon.valid_until) < new Date() && (
+              <Badge variant="destructive" className="text-[10px]">Expired</Badge>
+            )}
+          </div>
+          {coupon.description && (
+            <p className="text-sm text-gray-400 mb-2">{coupon.description}</p>
+          )}
+          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+              {!isGuest && coupon.bypass_min_recharge && coupon.discount_value === 0 ? (
+                <><ShieldCheck className="h-3 w-3 text-blue-400" /><span className="text-blue-400">Min Recharge Coupon</span></>
+              ) : coupon.discount_type === 'percentage' ? (
+                <><Percent className="h-3 w-3" />{coupon.discount_value}% off</>
+              ) : (
+                <><IndianRupee className="h-3 w-3" />₹{coupon.discount_value} flat</>
+              )}
+              {coupon.max_discount && coupon.discount_value !== 0 && ` (max ₹${coupon.max_discount})`}
+            </span>
+            {isGuest && coupon.min_recharge_amount > 0 && (
+              <span className="flex items-center gap-1">
+                <IndianRupee className="h-3 w-3" />Min order ₹{coupon.min_recharge_amount}
+              </span>
+            )}
+            {!isGuest && !(coupon.bypass_min_recharge && coupon.discount_value === 0) && (
+              <span className="flex items-center gap-1">
+                <IndianRupee className="h-3 w-3" />Min ₹{coupon.min_recharge_amount}
+              </span>
+            )}
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" />{coupon.total_uses}{coupon.max_uses ? `/${coupon.max_uses}` : ''} used
+            </span>
+            {coupon.valid_until && (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />Until {format(new Date(coupon.valid_until), 'dd MMM yyyy')}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {!isGuest && (
+            <button
+              onClick={() => openAssignSheet(coupon)}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              title="Assign to users"
+            >
+              <UserPlus className="h-4 w-4 text-blue-400" />
+            </button>
+          )}
+          <button
+            onClick={() => handleToggle(coupon)}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            title={coupon.is_active ? 'Deactivate' : 'Activate'}
+          >
+            {coupon.is_active
+              ? <ToggleRight className="h-4 w-4 text-green-400" />
+              : <ToggleLeft className="h-4 w-4 text-gray-500" />}
+          </button>
+          <button
+            onClick={() => isGuest ? handleEditGuest(coupon) : handleEdit(coupon)}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+          >
+            <Pencil className="h-4 w-4 text-gray-400" />
+          </button>
+          <button onClick={() => handleDelete(coupon)} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+            <Trash2 className="h-4 w-4 text-red-400" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const activeCoupons = activeTab === 'promo' ? promoCoupons : guestCoupons;
+
   const content = (
     <div>
       <div className="space-y-6">
@@ -318,131 +526,99 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               <Tag className="h-5 w-5 text-red-400" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Promo Coupons</h2>
-              <p className="text-sm text-gray-400">{coupons.length} coupon{coupons.length !== 1 ? 's' : ''}</p>
+              <h2 className="text-lg font-bold text-white">Coupons</h2>
+              <p className="text-sm text-gray-400">{coupons.length} total coupon{coupons.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
-          <Button onClick={handleCreate} className="gap-2 bg-red-600 hover:bg-red-700 text-white">
-            <Plus className="h-4 w-4" />New Coupon
+          <Button
+            onClick={activeTab === 'promo' ? handleCreate : handleCreateGuest}
+            className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+          >
+            <Plus className="h-4 w-4" />
+            {activeTab === 'promo' ? 'New Coupon' : 'New Guest Coupon'}
           </Button>
         </div>
+
+        {/* Tab Toggle */}
+        <div className="flex gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/10 w-fit">
+          <button
+            onClick={() => setActiveTab('promo')}
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+              activeTab === 'promo'
+                ? "bg-red-600 text-white shadow-lg"
+                : "text-gray-400 hover:text-white hover:bg-white/5"
+            )}
+          >
+            <Tag className="h-3.5 w-3.5" />
+            Promo Coupons
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full",
+              activeTab === 'promo' ? "bg-white/20" : "bg-white/10"
+            )}>
+              {promoCoupons.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('guest')}
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+              activeTab === 'guest'
+                ? "bg-green-600 text-white shadow-lg"
+                : "text-gray-400 hover:text-white hover:bg-white/5"
+            )}
+          >
+            <Gift className="h-3.5 w-3.5" />
+            Guest Coupons
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full",
+              activeTab === 'guest' ? "bg-white/20" : "bg-white/10"
+            )}>
+              {guestCoupons.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Tab description */}
+        {activeTab === 'guest' && (
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-green-500/5 border border-green-500/20">
+            <Gift className="h-4 w-4 text-green-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-green-300/80">
+              Guest coupons give a direct discount (flat ₹ or %) on the shipping cost during guest Ship Now bookings. 
+              These are applied at checkout before payment.
+            </p>
+          </div>
+        )}
 
         {/* Coupon List */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
           </div>
-        ) : coupons.length === 0 ? (
+        ) : activeCoupons.length === 0 ? (
           <div className="text-center py-20">
-            <Tag className="h-10 w-10 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400 font-medium">No coupons yet</p>
-            <p className="text-sm text-gray-500 mt-1">Create your first promo coupon</p>
+            {activeTab === 'guest' ? (
+              <Gift className="h-10 w-10 text-gray-600 mx-auto mb-3" />
+            ) : (
+              <Tag className="h-10 w-10 text-gray-600 mx-auto mb-3" />
+            )}
+            <p className="text-gray-400 font-medium">
+              No {activeTab === 'guest' ? 'guest' : 'promo'} coupons yet
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {activeTab === 'guest'
+                ? 'Create a guest coupon to offer discounts on Ship Now bookings'
+                : 'Create your first promo coupon'}
+            </p>
           </div>
         ) : (
           <div className="grid gap-3">
-            {coupons.map((coupon) => (
-              <div
-                key={coupon.id}
-                className={cn(
-                  "p-4 rounded-2xl border transition-all",
-                  coupon.is_active
-                    ? "bg-white/[0.03] border-white/10 hover:border-white/20"
-                    : "bg-white/[0.01] border-white/5 opacity-60"
-                )}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <button
-                        onClick={() => copyCode(coupon.code)}
-                        className="font-mono font-bold text-base text-white hover:text-red-400 transition-colors flex items-center gap-1.5"
-                      >
-                        {coupon.code}
-                        <Copy className="h-3 w-3 opacity-50" />
-                      </button>
-                      <Badge variant={coupon.is_active ? 'default' : 'secondary'} className="text-[10px]">
-                        {coupon.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                      {coupon.bypass_min_recharge && (
-                        <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
-                          <ShieldCheck className="h-2.5 w-2.5 mr-1" />Bypass Min
-                        </Badge>
-                      )}
-                      {(coupon.assigned_count ?? 0) > 0 && (
-                        <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
-                          <Users className="h-2.5 w-2.5 mr-1" />{coupon.assigned_count} assigned
-                        </Badge>
-                      )}
-                      {(coupon as any).guest_eligible && (
-                        <Badge className="text-[10px] bg-green-500/20 text-green-400 border-green-500/30">
-                          Guest
-                        </Badge>
-                      )}
-                      {coupon.valid_until && new Date(coupon.valid_until) < new Date() && (
-                        <Badge variant="destructive" className="text-[10px]">Expired</Badge>
-                      )}
-                    </div>
-                    {coupon.description && (
-                      <p className="text-sm text-gray-400 mb-2">{coupon.description}</p>
-                    )}
-                    <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        {coupon.bypass_min_recharge && coupon.discount_value === 0 ? (
-                          <><ShieldCheck className="h-3 w-3 text-blue-400" /><span className="text-blue-400">Min Recharge Coupon</span></>
-                        ) : coupon.discount_type === 'percentage' ? (
-                          <><Percent className="h-3 w-3" />{coupon.discount_value}% off</>
-                        ) : (
-                          <><IndianRupee className="h-3 w-3" />₹{coupon.discount_value} flat</>
-                        )}
-                        {coupon.max_discount && coupon.discount_value !== 0 && ` (max ₹${coupon.max_discount})`}
-                      </span>
-                      {!(coupon.bypass_min_recharge && coupon.discount_value === 0) && (
-                        <span className="flex items-center gap-1">
-                          <IndianRupee className="h-3 w-3" />Min ₹{coupon.min_recharge_amount}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />{coupon.total_uses}{coupon.max_uses ? `/${coupon.max_uses}` : ''} used
-                      </span>
-                      {coupon.valid_until && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />Until {format(new Date(coupon.valid_until), 'dd MMM yyyy')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => openAssignSheet(coupon)}
-                      className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                      title="Assign to users"
-                    >
-                      <UserPlus className="h-4 w-4 text-blue-400" />
-                    </button>
-                    <button
-                      onClick={() => handleToggle(coupon)}
-                      className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                      title={coupon.is_active ? 'Deactivate' : 'Activate'}
-                    >
-                      {coupon.is_active
-                        ? <ToggleRight className="h-4 w-4 text-green-400" />
-                        : <ToggleLeft className="h-4 w-4 text-gray-500" />}
-                    </button>
-                    <button onClick={() => handleEdit(coupon)} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
-                      <Pencil className="h-4 w-4 text-gray-400" />
-                    </button>
-                    <button onClick={() => handleDelete(coupon)} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
-                      <Trash2 className="h-4 w-4 text-red-400" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {activeCoupons.map((coupon) => renderCouponCard(coupon, activeTab === 'guest'))}
           </div>
         )}
       </div>
 
-      {/* Create/Edit Dialog — fixed centering with dark theme */}
+      {/* ── Promo Create/Edit Dialog ── */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="bg-[#16161a] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -451,7 +627,7 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Min Recharge Type toggle — at the top so it collapses the form */}
+            {/* Min Recharge Type toggle */}
             <div
               className={cn(
                 "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
@@ -486,7 +662,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               </div>
             </div>
 
-            {/* Code — always visible */}
             <div>
               <label className="text-xs font-medium text-gray-400">Code</label>
               <Input
@@ -497,7 +672,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
 
-            {/* Description — always visible */}
             <div>
               <label className="text-xs font-medium text-gray-400">Description</label>
               <Input
@@ -508,7 +682,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
 
-            {/* Discount fields — hidden when min recharge type */}
             {!form.is_min_recharge_type && (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -560,7 +733,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               </>
             )}
 
-            {/* Usage limits — always visible */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-400">Max Total Uses</label>
@@ -584,7 +756,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               </div>
             </div>
 
-            {/* Valid Until — always visible */}
             <div>
               <label className="text-xs font-medium text-gray-400">Valid Until</label>
               <Input
@@ -595,38 +766,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
 
-            {/* Guest Eligible toggle */}
-            <div
-              className={cn(
-                "flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all",
-                form.guest_eligible
-                  ? "bg-green-500/15 border-green-500/40"
-                  : "bg-white/[0.03] border-white/10 hover:border-white/20"
-              )}
-              onClick={() => setForm({ ...form, guest_eligible: !form.guest_eligible })}
-            >
-              <div>
-                <p className={cn("text-sm font-semibold", form.guest_eligible ? "text-green-300" : "text-gray-300")}>
-                  Guest Eligible
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {form.guest_eligible
-                    ? 'This coupon can be used by guest (non-account) users during Ship Now booking'
-                    : 'Enable to allow guest users to apply this coupon at checkout'}
-                </p>
-              </div>
-              <div className={cn(
-                "w-10 h-6 rounded-full transition-colors flex items-center px-1 shrink-0",
-                form.guest_eligible ? "bg-green-500" : "bg-white/10"
-              )}>
-                <div className={cn(
-                  "w-4 h-4 rounded-full bg-white transition-transform",
-                  form.guest_eligible ? "translate-x-4" : "translate-x-0"
-                )} />
-              </div>
-            </div>
-
-            {/* Bypass min recharge — only shown for normal coupons */}
             {!form.is_min_recharge_type && (
               <div
                 className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer"
@@ -656,6 +795,157 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
         </DialogContent>
       </Dialog>
 
+      {/* ── Guest Coupon Create/Edit Dialog ── */}
+      <Dialog open={showGuestDialog} onOpenChange={setShowGuestDialog}>
+        <DialogContent className="bg-[#16161a] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-white flex items-center gap-2">
+              <Gift className="h-4 w-4 text-green-400" />
+              {editingGuestCoupon ? 'Edit Guest Coupon' : 'Create Guest Coupon'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Info banner */}
+            <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+              <p className="text-xs text-green-300/80">
+                This coupon will be available to guest users during Ship Now checkout. 
+                The discount is applied directly to the shipping cost before payment.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400">Coupon Code</label>
+              <Input
+                value={guestForm.code}
+                onChange={(e) => setGuestForm({ ...guestForm, code: e.target.value.toUpperCase() })}
+                placeholder="e.g. GUEST100"
+                className="font-mono uppercase mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400">Description</label>
+              <Input
+                value={guestForm.description}
+                onChange={(e) => setGuestForm({ ...guestForm, description: e.target.value })}
+                placeholder="e.g. ₹100 off for new guest users"
+                className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+              />
+            </div>
+
+            {/* Discount type toggle */}
+            <div>
+              <label className="text-xs font-medium text-gray-400 mb-2 block">Discount Type</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGuestForm({ ...guestForm, discount_type: 'fixed' })}
+                  className={cn(
+                    "flex-1 p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2",
+                    guestForm.discount_type === 'fixed'
+                      ? "bg-green-500/15 border-green-500/40 text-green-300"
+                      : "bg-white/[0.03] border-white/10 text-gray-400 hover:border-white/20"
+                  )}
+                >
+                  <IndianRupee className="h-4 w-4" />
+                  Flat ₹ Off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuestForm({ ...guestForm, discount_type: 'percentage' })}
+                  className={cn(
+                    "flex-1 p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2",
+                    guestForm.discount_type === 'percentage'
+                      ? "bg-green-500/15 border-green-500/40 text-green-300"
+                      : "bg-white/[0.03] border-white/10 text-gray-400 hover:border-white/20"
+                  )}
+                >
+                  <Percent className="h-4 w-4" />
+                  Percentage %
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400">
+                {guestForm.discount_type === 'fixed' ? 'Discount Amount (₹)' : 'Discount Percentage (%)'}
+              </label>
+              <Input
+                type="number"
+                value={guestForm.discount_value}
+                onChange={(e) => setGuestForm({ ...guestForm, discount_value: e.target.value })}
+                placeholder={guestForm.discount_type === 'fixed' ? 'e.g. 100' : 'e.g. 10'}
+                className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+              />
+              {guestForm.discount_type === 'fixed' && guestForm.discount_value && (
+                <p className="text-xs text-green-400/70 mt-1">
+                  Guest pays ₹{guestForm.discount_value} less on shipping
+                </p>
+              )}
+              {guestForm.discount_type === 'percentage' && guestForm.discount_value && (
+                <p className="text-xs text-green-400/70 mt-1">
+                  Guest gets {guestForm.discount_value}% off on shipping cost
+                </p>
+              )}
+            </div>
+
+            {guestForm.discount_type === 'percentage' && (
+              <div>
+                <label className="text-xs font-medium text-gray-400">Max Discount ₹ (cap)</label>
+                <Input
+                  type="number"
+                  value={guestForm.max_discount}
+                  onChange={(e) => setGuestForm({ ...guestForm, max_discount: e.target.value })}
+                  placeholder="No limit"
+                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Maximum discount amount when using percentage
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-400">Min Order ₹</label>
+                <Input
+                  type="number"
+                  value={guestForm.min_order_amount}
+                  onChange={(e) => setGuestForm({ ...guestForm, min_order_amount: e.target.value })}
+                  placeholder="0"
+                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400">Max Total Uses</label>
+                <Input
+                  type="number"
+                  value={guestForm.max_uses}
+                  onChange={(e) => setGuestForm({ ...guestForm, max_uses: e.target.value })}
+                  placeholder="Unlimited"
+                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400">Valid Until</label>
+              <Input
+                type="datetime-local"
+                value={guestForm.valid_until}
+                onChange={(e) => setGuestForm({ ...guestForm, valid_until: e.target.value })}
+                className="mt-1 bg-white/5 border-white/10 text-white"
+              />
+            </div>
+
+            <Button onClick={handleSaveGuest} disabled={guestSaving} className="w-full bg-green-600 hover:bg-green-700 text-white">
+              {guestSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {editingGuestCoupon ? 'Update Guest Coupon' : 'Create Guest Coupon'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Assign Users Sheet */}
       <Sheet open={!!assignCoupon} onOpenChange={(open) => { if (!open) setAssignCoupon(null); }}>
         <SheetContent className="bg-[#16161a] border-white/10 text-white w-full sm:max-w-md overflow-y-auto">
@@ -665,7 +955,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-4">
-            {/* User search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
               <Input
@@ -676,7 +965,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               />
             </div>
 
-            {/* Search results */}
             {searching && (
               <div className="flex justify-center py-4">
                 <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
@@ -711,7 +999,6 @@ export function CouponManagement({ embedded = false }: { embedded?: boolean }) {
               </div>
             )}
 
-            {/* Current assignments */}
             <div>
               <p className="text-xs text-gray-500 mb-2">
                 Assigned users ({assignments.length})
