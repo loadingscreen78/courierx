@@ -16,7 +16,7 @@ import { getCourierOptions, calculateRate, type CourierOption } from '@/lib/ship
 import { getServedCountries } from '@/lib/shipping/countries';
 import GuestSummaryStep from '@/components/guest-booking/GuestSummaryStep';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type FlowMode = 'international' | 'domestic';
 
@@ -107,6 +107,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
   const [isDomesticLoading, setIsDomesticLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [senderReceiverData, setSenderReceiverData] = useState<any>(null);
+  const [addressSubStep, setAddressSubStep] = useState<'sender' | 'receiver' | 'content'>('sender');
 
   // ── International rate form ──
   const intlForm = useForm<InternationalRateValues>({
@@ -206,6 +207,20 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
   const handleFinalSubmit = (values: SenderReceiverValues) => {
     setSenderReceiverData(values);
     setStep(4);
+  };
+
+  // ── Validate sender fields before sliding to receiver ──
+  const handleSenderNext = async () => {
+    const senderFields = ['senderName', 'senderPhone', 'senderEmail', 'senderAddress', 'senderCity', 'senderPincode'] as const;
+    const result = await detailsForm.trigger(senderFields);
+    if (result) setAddressSubStep('receiver');
+  };
+
+  // ── Validate receiver fields before sliding to content ──
+  const handleReceiverNext = async () => {
+    const receiverFields = ['receiverName', 'receiverPhone', 'receiverEmail', 'receiverAddress', 'receiverCity', 'receiverZipcode'] as const;
+    const result = await detailsForm.trigger(receiverFields);
+    if (result) setAddressSubStep('content');
   };
 
   const handleBack = () => {
@@ -692,7 +707,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
           </motion.div>
         )}
 
-        {/* ═══════════════ STEP 3: Sender & Receiver Details ═══════════════ */}
+        {/* ═══════════════ STEP 3: Sender & Receiver Details (Slider) ═══════════════ */}
         {step === 3 && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
             {/* Selected courier summary */}
@@ -706,86 +721,173 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
               </div>
             )}
 
-            <div className="bg-card rounded-xl border border-border p-6 space-y-6">
-              <Form {...detailsForm}>
-                <form onSubmit={detailsForm.handleSubmit(handleFinalSubmit)} className="space-y-6">
-                  {/* Sender */}
-                  <div>
-                    <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-coke-red" /> Sender Details (India)
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField control={detailsForm.control} name="senderName" render={({ field }) => (
-                          <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Sender name" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={detailsForm.control} name="senderPhone" render={({ field }) => (
-                          <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="+91 98765 43210" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                      </div>
-                      <FormField control={detailsForm.control} name="senderEmail" render={({ field }) => (
-                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="sender@email.com" /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={detailsForm.control} name="senderAddress" render={({ field }) => (
-                        <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField control={detailsForm.control} name="senderCity" render={({ field }) => (
-                          <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} placeholder="City" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={detailsForm.control} name="senderPincode" render={({ field }) => (
-                          <FormItem><FormLabel>Pincode</FormLabel><FormControl><Input {...field} placeholder="110001" maxLength={6} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                      </div>
-                    </div>
+            {/* Sub-step indicator */}
+            <div className="flex items-center gap-2">
+              {(['sender', 'receiver', 'content'] as const).map((s, i) => (
+                <div key={s} className="flex items-center gap-2 flex-1">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    s === addressSubStep ? 'bg-coke-red text-white' :
+                    (['sender', 'receiver', 'content'].indexOf(addressSubStep) > i) ? 'bg-candlestick-green text-white' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    {(['sender', 'receiver', 'content'].indexOf(addressSubStep) > i) ? '✓' : i + 1}
                   </div>
-
-                  {/* Receiver */}
-                  <div>
-                    <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-blue-600" /> Receiver Details
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField control={detailsForm.control} name="receiverName" render={({ field }) => (
-                          <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Receiver name" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={detailsForm.control} name="receiverPhone" render={({ field }) => (
-                          <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="Phone number" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                      </div>
-                      <FormField control={detailsForm.control} name="receiverEmail" render={({ field }) => (
-                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="receiver@email.com" /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={detailsForm.control} name="receiverAddress" render={({ field }) => (
-                        <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField control={detailsForm.control} name="receiverCity" render={({ field }) => (
-                          <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} placeholder="City" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={detailsForm.control} name="receiverZipcode" render={({ field }) => (
-                          <FormItem><FormLabel>Zip / Postal Code</FormLabel><FormControl><Input {...field} placeholder="Zipcode" /></FormControl><FormMessage /></FormItem>
-                        )} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content description */}
-                  <FormField control={detailsForm.control} name="contentDescription" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Content Description</FormLabel>
-                      <FormControl><Textarea {...field} placeholder="Describe the contents of your shipment for customs" rows={2} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-
-                  <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5">
-                    Continue to Summary <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </form>
-              </Form>
+                  <span className={`text-xs hidden sm:inline ${s === addressSubStep ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
+                    {s === 'sender' ? 'Sender' : s === 'receiver' ? 'Receiver' : 'Contents'}
+                  </span>
+                  {i < 2 && <div className="flex-1 h-px bg-border" />}
+                </div>
+              ))}
             </div>
+
+            <Form {...detailsForm}>
+              <form onSubmit={detailsForm.handleSubmit(handleFinalSubmit)}>
+                {/* Slider container */}
+                <div className="overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    {/* ── Sender Slide ── */}
+                    {addressSubStep === 'sender' && (
+                      <motion.div
+                        key="sender"
+                        initial={{ x: 300, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: -300, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        className="bg-card rounded-xl border border-border p-6 space-y-4"
+                      >
+                        <div className="flex items-center gap-3 mb-1">
+                          <div className="w-10 h-10 rounded-full bg-coke-red/10 flex items-center justify-center">
+                            <MapPin className="h-5 w-5 text-coke-red" weight="duotone" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-base">Sender Details</h3>
+                            <p className="text-xs text-muted-foreground">Pickup address in India</p>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField control={detailsForm.control} name="senderName" render={({ field }) => (
+                              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Sender name" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={detailsForm.control} name="senderPhone" render={({ field }) => (
+                              <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="+91 98765 43210" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                          </div>
+                          <FormField control={detailsForm.control} name="senderEmail" render={({ field }) => (
+                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="sender@email.com" /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={detailsForm.control} name="senderAddress" render={({ field }) => (
+                            <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField control={detailsForm.control} name="senderCity" render={({ field }) => (
+                              <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} placeholder="City" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={detailsForm.control} name="senderPincode" render={({ field }) => (
+                              <FormItem><FormLabel>Pincode</FormLabel><FormControl><Input {...field} placeholder="110001" maxLength={6} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                          </div>
+                        </div>
+                        <Button type="button" onClick={handleSenderNext} className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5">
+                          Next: Receiver Details <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    {/* ── Receiver Slide ── */}
+                    {addressSubStep === 'receiver' && (
+                      <motion.div
+                        key="receiver"
+                        initial={{ x: 300, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: -300, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        className="bg-card rounded-xl border border-border p-6 space-y-4"
+                      >
+                        <div className="flex items-center gap-3 mb-1">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center">
+                            <MapPin className="h-5 w-5 text-blue-600" weight="duotone" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-base">Receiver Details</h3>
+                            <p className="text-xs text-muted-foreground">{isInternational ? 'Delivery address abroad' : 'Delivery address in India'}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField control={detailsForm.control} name="receiverName" render={({ field }) => (
+                              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Receiver name" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={detailsForm.control} name="receiverPhone" render={({ field }) => (
+                              <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="Phone number" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                          </div>
+                          <FormField control={detailsForm.control} name="receiverEmail" render={({ field }) => (
+                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="receiver@email.com" /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={detailsForm.control} name="receiverAddress" render={({ field }) => (
+                            <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField control={detailsForm.control} name="receiverCity" render={({ field }) => (
+                              <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} placeholder="City" /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={detailsForm.control} name="receiverZipcode" render={({ field }) => (
+                              <FormItem><FormLabel>{isInternational ? 'Zip / Postal Code' : 'Pincode'}</FormLabel><FormControl><Input {...field} placeholder={isInternational ? 'Zipcode' : '400001'} maxLength={isInternational ? 10 : 6} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <Button type="button" variant="outline" onClick={() => setAddressSubStep('sender')} className="flex-1 gap-1.5">
+                            <ArrowLeft className="h-4 w-4" /> Sender
+                          </Button>
+                          <Button type="button" onClick={handleReceiverNext} className="flex-1 bg-coke-red hover:bg-red-600 text-white gap-2">
+                            Next: Contents <ArrowRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* ── Content Description Slide ── */}
+                    {addressSubStep === 'content' && (
+                      <motion.div
+                        key="content"
+                        initial={{ x: 300, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{ x: -300, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        className="bg-card rounded-xl border border-border p-6 space-y-4"
+                      >
+                        <div className="flex items-center gap-3 mb-1">
+                          <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-950/40 flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-purple-600" weight="duotone" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-base">Shipment Contents</h3>
+                            <p className="text-xs text-muted-foreground">{isInternational ? 'Required for customs declaration' : 'Describe what you are shipping'}</p>
+                          </div>
+                        </div>
+                        <FormField control={detailsForm.control} name="contentDescription" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Content Description</FormLabel>
+                            <FormControl><Textarea {...field} placeholder={isInternational ? 'Describe contents for customs declaration' : 'Describe the contents of your shipment'} rows={3} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <div className="flex gap-3">
+                          <Button type="button" variant="outline" onClick={() => setAddressSubStep('receiver')} className="flex-1 gap-1.5">
+                            <ArrowLeft className="h-4 w-4" /> Receiver
+                          </Button>
+                          <Button type="submit" className="flex-1 bg-coke-red hover:bg-red-600 text-white gap-2">
+                            Continue to Summary <ArrowRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </form>
+            </Form>
           </motion.div>
         )}
 
