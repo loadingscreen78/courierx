@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { getCourierOptions, calculateRate, type CourierOption } from '@/lib/shipping/rateCalculator';
 import { getServedCountries } from '@/lib/shipping/countries';
+import GuestSummaryStep from '@/components/guest-booking/GuestSummaryStep';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
@@ -105,6 +106,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
   const [domesticCouriers, setDomesticCouriers] = useState<any[]>([]);
   const [isDomesticLoading, setIsDomesticLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [senderReceiverData, setSenderReceiverData] = useState<any>(null);
 
   // ── International rate form ──
   const intlForm = useForm<InternationalRateValues>({
@@ -200,25 +202,10 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
     setStep(3);
   };
 
-  // ── Submit final booking ──
+  // ── Submit sender/receiver and go to summary ──
   const handleFinalSubmit = (values: SenderReceiverValues) => {
-    setIsSubmitting(true);
-    try {
-      const bookingData = {
-        mode,
-        rateFormData,
-        selectedCourier,
-        senderReceiver: values,
-        createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem('guestBooking', JSON.stringify(bookingData));
-      toast({ title: 'Booking Submitted', description: 'Redirecting to confirmation...' });
-      router.push('/public/book/confirm');
-    } catch {
-      toast({ title: 'Error', description: 'Something went wrong.', variant: 'destructive' });
-    } finally {
-      setIsSubmitting(false);
-    }
+    setSenderReceiverData(values);
+    setStep(4);
   };
 
   const handleBack = () => {
@@ -226,7 +213,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
     else setStep(step - 1);
   };
 
-  const stepLabels = ['Shipment Details', 'Select Rate', 'Sender & Receiver'];
+  const stepLabels = ['Shipment Details', 'Select Rate', 'Sender & Receiver', 'Summary & Pay'];
 
   return (
     <div className="min-h-screen bg-background">
@@ -793,13 +780,24 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                     </FormItem>
                   )} />
 
-                  <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5" disabled={isSubmitting}>
-                    {isSubmitting ? <><CircleNotch className="h-4 w-4 animate-spin" /> Submitting...</> : <>Confirm Booking <ArrowRight className="h-4 w-4" /></>}
+                  <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5">
+                    Continue to Summary <ArrowRight className="h-4 w-4" />
                   </Button>
                 </form>
               </Form>
             </div>
           </motion.div>
+        )}
+
+        {/* ═══════════════ STEP 4: Summary & Pay ═══════════════ */}
+        {step === 4 && senderReceiverData && (
+          <GuestSummaryStep
+            mode={mode}
+            rateFormData={rateFormData}
+            selectedCourier={selectedCourier}
+            senderReceiver={senderReceiverData}
+            onBack={() => setStep(3)}
+          />
         )}
       </main>
     </div>
