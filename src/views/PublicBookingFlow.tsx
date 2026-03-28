@@ -294,7 +294,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
         </div>
       </header>
 
-      <main className="container max-w-2xl py-8 space-y-6">
+      <main className="container max-w-3xl py-8 space-y-6">
         {/* Back + Title */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={handleBack}>
@@ -799,7 +799,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: -300, opacity: 0 }}
                         transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="bg-card rounded-xl border border-border p-6 space-y-4"
+                        className="bg-card rounded-2xl border border-border p-8 lg:p-10 space-y-5"
                       >
                         <div className="flex items-center gap-3 mb-1">
                           <div className="w-10 h-10 rounded-full bg-coke-red/10 flex items-center justify-center">
@@ -810,22 +810,22 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                             <p className="text-xs text-muted-foreground">Pickup address in India</p>
                           </div>
                         </div>
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
                             <FormField control={detailsForm.control} name="senderName" render={({ field }) => (
-                              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Sender name" /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Sender name" className="h-11" /></FormControl><FormMessage /></FormItem>
                             )} />
                             <FormField control={detailsForm.control} name="senderPhone" render={({ field }) => (
-                              <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="+91 98765 43210" /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="+91 98765 43210" className="h-11" /></FormControl><FormMessage /></FormItem>
                             )} />
                           </div>
                           <FormField control={detailsForm.control} name="senderEmail" render={({ field }) => (
-                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="sender@email.com" /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="sender@email.com" className="h-11" /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormField control={detailsForm.control} name="senderAddress" render={({ field }) => (
-                            <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" className="h-11" /></FormControl><FormMessage /></FormItem>
                           )} />
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 gap-4">
                             <FormField control={detailsForm.control} name="senderPincode" render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Pincode</FormLabel>
@@ -875,7 +875,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: -300, opacity: 0 }}
                         transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="bg-card rounded-xl border border-border p-6 space-y-4"
+                        className="bg-card rounded-2xl border border-border p-8 lg:p-10 space-y-5"
                       >
                         <div className="flex items-center gap-3 mb-1">
                           <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center">
@@ -886,27 +886,27 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                             <p className="text-xs text-muted-foreground">{isInternational ? 'Delivery address abroad' : 'Delivery address in India'}</p>
                           </div>
                         </div>
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
                             <FormField control={detailsForm.control} name="receiverName" render={({ field }) => (
-                              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Receiver name" /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Receiver name" className="h-11" /></FormControl><FormMessage /></FormItem>
                             )} />
                             <FormField control={detailsForm.control} name="receiverPhone" render={({ field }) => (
-                              <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="Phone number" /></FormControl><FormMessage /></FormItem>
+                              <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="Phone number" className="h-11" /></FormControl><FormMessage /></FormItem>
                             )} />
                           </div>
                           <FormField control={detailsForm.control} name="receiverEmail" render={({ field }) => (
-                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="receiver@email.com" /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="receiver@email.com" className="h-11" /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormField control={detailsForm.control} name="receiverAddress" render={({ field }) => (
-                            <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" className="h-11" /></FormControl><FormMessage /></FormItem>
                           )} />
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 gap-4">
                             <FormField control={detailsForm.control} name="receiverZipcode" render={({ field }) => (
                               <FormItem>
                                 <FormLabel>{isInternational ? 'Zip / Postal Code' : 'Pincode'}</FormLabel>
                                 <FormControl>
-                                  <Input {...field} placeholder={isInternational ? 'Zipcode' : '400001'} maxLength={isInternational ? 10 : 6} readOnly={!isInternational && !!domesticDeliveryPincode} className={!isInternational && domesticDeliveryPincode ? 'bg-muted' : ''} />
+                                  <Input {...field} placeholder={isInternational ? 'Zipcode' : '400001'} maxLength={isInternational ? 10 : 6} readOnly={!isInternational && !!domesticDeliveryPincode} className={`h-11 ${!isInternational && domesticDeliveryPincode ? 'bg-muted' : ''}`} />
                                 </FormControl>
                                 {!isInternational && receiverLookup.loading && <p className="text-xs text-muted-foreground flex items-center gap-1"><CircleNotch className="h-3 w-3 animate-spin" /> Looking up...</p>}
                                 {!isInternational && receiverLookup.state && <p className="text-xs text-candlestick-green">{receiverLookup.district}, {receiverLookup.state}</p>}
@@ -956,7 +956,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: -300, opacity: 0 }}
                         transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="bg-card rounded-xl border border-border p-6 space-y-4"
+                        className="bg-card rounded-2xl border border-border p-8 lg:p-10 space-y-5"
                       >
                         <div className="flex items-center gap-3 mb-1">
                           <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-950/40 flex items-center justify-center">
