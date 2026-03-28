@@ -24,29 +24,29 @@ export async function POST(request: NextRequest) {
 
     // Store guest booking in DB with full payload for NimbusPost
     const supabase = getServiceRoleClient();
-    try {
-      await supabase.from('guest_bookings').insert({
-        order_id: orderId,
-        tracking_number: trackingNumber,
-        amount,
-        sender_name: senderReceiver.senderName,
-        sender_email: senderReceiver.senderEmail,
-        sender_phone: senderReceiver.senderPhone,
-        sender_address: `${senderReceiver.senderAddress}, ${senderReceiver.senderCity} - ${senderReceiver.senderPincode}`,
-        receiver_name: senderReceiver.receiverName,
-        receiver_email: senderReceiver.receiverEmail,
-        receiver_phone: senderReceiver.receiverPhone,
-        receiver_address: `${senderReceiver.receiverAddress}, ${senderReceiver.receiverCity} - ${senderReceiver.receiverZipcode}`,
-        shipment_type: rateFormData?.shipmentType || 'gift',
-        courier_name: selectedCourier?.carrier || selectedCourier?.courier_name || 'Unknown',
-        aadhaar_last4: aadhaarNumber?.slice(-4) || '',
-        coupon_code: couponCode || null,
-        status: 'pending_payment',
-        // Full payload for NimbusPost shipment creation after payment
-        booking_payload: JSON.stringify({ senderReceiver, rateFormData, selectedCourier }),
-      });
-    } catch (err: any) {
-      console.warn('[create-guest-order] guest_bookings insert failed:', err?.message);
+    const { error: insertError } = await supabase.from('guest_bookings').insert({
+      order_id: orderId,
+      tracking_number: trackingNumber,
+      amount,
+      sender_name: senderReceiver.senderName,
+      sender_email: senderReceiver.senderEmail,
+      sender_phone: senderReceiver.senderPhone,
+      sender_address: `${senderReceiver.senderAddress}, ${senderReceiver.senderCity} - ${senderReceiver.senderPincode}`,
+      receiver_name: senderReceiver.receiverName,
+      receiver_email: senderReceiver.receiverEmail,
+      receiver_phone: senderReceiver.receiverPhone,
+      receiver_address: `${senderReceiver.receiverAddress}, ${senderReceiver.receiverCity} - ${senderReceiver.receiverZipcode}`,
+      shipment_type: rateFormData?.shipmentType || 'gift',
+      courier_name: selectedCourier?.carrier || selectedCourier?.courier_name || 'Unknown',
+      aadhaar_last4: aadhaarNumber?.slice(-4) || '',
+      coupon_code: couponCode || null,
+      status: 'pending_payment',
+      booking_payload: { senderReceiver, rateFormData, selectedCourier },
+    });
+
+    if (insertError) {
+      console.error('[create-guest-order] DB insert failed:', insertError.message, insertError.code);
+      return NextResponse.json({ error: `Booking failed: ${insertError.message}` }, { status: 500 });
     }
 
     if (!appId || !secretKey) {
