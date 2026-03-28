@@ -105,8 +105,8 @@ export const CTASection = () => {
                   transition={{ duration: 0.6, delay: 0.1 }}
                   className="text-muted-foreground text-lg leading-relaxed"
                 >
-                  Join thousands of Indians who trust CourierX for their international shipping needs. 
-                  Sign up now and get your first shipment quote in minutes.
+                  Ship instantly without an account, or open a free account with Aadhaar KYC to unlock 
+                  <span className="font-semibold text-foreground"> 52% lower rates</span> on every shipment.
                 </motion.p>
                 
                 <motion.div
@@ -119,18 +119,18 @@ export const CTASection = () => {
                   <Button 
                     size="lg" 
                     className="group gap-2 bg-coke-red hover:bg-coke-red/90 text-white shadow-lg shadow-coke-red/30 transition-all duration-300 hover:shadow-xl hover:shadow-coke-red/40"
-                    onClick={() => router.push('/auth?panel=customer')}
+                    onClick={() => router.push('/public/book')}
                   >
-                    Create Account
+                    Ship Now
                     <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
                   </Button>
                   <Button 
                     variant="outline" 
                     size="lg" 
                     className="border-border text-foreground hover:bg-accent transition-all duration-300"
-                    onClick={() => router.push('/public/rate-calculator')}
+                    onClick={() => router.push('/open-account')}
                   >
-                    Calculate Rates
+                    Open Account — Save 52%
                   </Button>
                 </motion.div>
               </div>

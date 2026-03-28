@@ -129,7 +129,7 @@ export const calculateVolumetricWeight = (
   return (length * width * height) / divisor;
 };
 
-export const calculateRate = (params: CalculateRateParams): RateCalculationResult | null => {
+export const calculateRate = (params: CalculateRateParams, isGuest: boolean = false): RateCalculationResult | null => {
   const country = getCountryByCode(params.destinationCountryCode);
   if (!country || !country.isServed) {
     return null;
@@ -169,7 +169,10 @@ export const calculateRate = (params: CalculateRateParams): RateCalculationResul
 
   const subtotal = subtotalBeforeFees + fuelSurcharge + insurance + handlingFee + customsFee;
   const gst = Math.round(subtotal * 0.18); // 18% GST
-  const total = subtotal + gst;
+  const accountTotal = subtotal + gst;
+  // Apply 52% guest markup on the full total if guest
+  const total = isGuest ? Math.round(accountTotal * GUEST_MARKUP) : accountTotal;
+  const guestPremium = isGuest ? total - accountTotal : 0;
 
   return {
     baseRate,
@@ -189,19 +192,25 @@ export const calculateRate = (params: CalculateRateParams): RateCalculationResul
       { label: 'Handling fee', amount: handlingFee },
       ...(customsFee > 0 ? [{ label: 'Customs clearance', amount: customsFee }] : []),
       { label: 'GST (18%)', amount: gst },
+      ...(isGuest && guestPremium > 0 ? [{ label: 'Standard rate (non-account)', amount: guestPremium }] : []),
     ],
   };
 };
 
+/** Guest (non-account) markup multiplier — guests pay 52% more than account holders */
+export const GUEST_MARKUP = 1.52;
+
 export const getCourierOptions = (
-  params: CalculateRateParams
+  params: CalculateRateParams,
+  /** Pass true for non-account (guest) bookings to apply 52% markup */
+  isGuest: boolean = false,
 ): CourierOption[] => {
   const country = getCountryByCode(params.destinationCountryCode);
   if (!country || !country.isServed) {
     return [];
   }
 
-  const baseResult = calculateRate(params);
+  const baseResult = calculateRate(params, isGuest);
   if (!baseResult) {
     return [];
   }
@@ -212,7 +221,8 @@ export const getCourierOptions = (
     const isPreferred = config.preferredZones.includes(country.zone) || 
                        config.preferredRegions.includes(country.region);
 
-    const price = Math.round(baseResult.total * config.multiplier);
+    const basePrice = Math.round(baseResult.total * config.multiplier);
+    const price = isGuest ? Math.round(basePrice * GUEST_MARKUP) : basePrice;
     const transitMin = Math.max(2, baseTransitDays.min - config.speedBonus);
     const transitMax = Math.max(3, baseTransitDays.max - config.speedBonus);
 

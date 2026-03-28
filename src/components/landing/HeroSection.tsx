@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ArrowRight as ArrowRightLucide } from 'lucide-react';
-import { Package, ShieldCheck, Clock, Globe, Sparkle, ArrowRight } from '@phosphor-icons/react';
+import { Package, ShieldCheck, Clock, Globe, Sparkle, ArrowRight, UserPlus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -155,20 +155,34 @@ export const HeroSection = () => {
               <Button 
                 size="lg" 
                 className="group gap-2 text-lg px-8 py-6 bg-coke-red hover:bg-coke-red/90 shadow-lg shadow-coke-red/25 transition-all duration-300 hover:shadow-xl hover:shadow-coke-red/30 hover:-translate-y-0.5"
-                onClick={() => router.push('/auth?panel=customer')}
+                onClick={() => router.push('/public/book')}
               >
-                Start Shipping
+                Ship Now
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" weight="bold" />
               </Button>
               <Button 
                 variant="outline" 
                 size="lg" 
-                className="text-lg px-8 py-6 border-2 hover:bg-primary/5 transition-all duration-300 hover:-translate-y-0.5"
-                onClick={() => router.push('/public/rate-calculator')}
+                className="group gap-2 text-lg px-8 py-6 border-2 hover:bg-primary/5 transition-all duration-300 hover:-translate-y-0.5"
+                onClick={() => router.push('/open-account')}
               >
-                Rate Calculator
+                <UserPlus className="h-5 w-5" />
+                Open Account
               </Button>
             </motion.div>
+
+            {/* Account Benefit Note */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.9 }}
+              className="text-sm text-muted-foreground"
+            >
+              Account holders save up to <span className="font-semibold text-candlestick-green">52%</span> on every shipment.{' '}
+              <button onClick={() => router.push('/open-account')} className="text-coke-red hover:underline font-medium">
+                Open a free account →
+              </button>
+            </motion.p>
 
             {/* Carrier Logos */}
             <motion.div

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { List, X, Package, CaretRight } from '@phosphor-icons/react';
+import { List, X, Package, CaretRight, UserPlus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -75,12 +75,21 @@ export const LandingHeader = () => {
               Sign In
             </Button>
             <Button
+              variant="outline"
               size="sm"
-              onClick={() => router.push('/auth?panel=customer')}
+              onClick={() => router.push('/open-account')}
+              className="gap-1.5 rounded-xl text-sm"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Open Account
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => router.push('/public/book')}
               className="gap-1.5 bg-coke-red hover:bg-red-600 text-white rounded-xl shadow-md shadow-coke-red/20 hover:shadow-coke-red/30 transition-all duration-200 text-sm"
             >
               <Package className="h-3.5 w-3.5" />
-              Start Shipping
+              Ship Now
             </Button>
           </div>
 
@@ -149,11 +158,19 @@ export const LandingHeader = () => {
                   Sign In
                 </Button>
                 <Button
+                  variant="outline"
+                  className="flex-1 rounded-xl gap-1.5"
+                  onClick={() => { router.push('/open-account'); setMobileMenuOpen(false); }}
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Open Account
+                </Button>
+                <Button
                   className="flex-1 bg-coke-red hover:bg-red-600 text-white rounded-xl gap-1.5"
-                  onClick={() => { router.push('/auth?panel=customer'); setMobileMenuOpen(false); }}
+                  onClick={() => { router.push('/public/book'); setMobileMenuOpen(false); }}
                 >
                   <Package className="h-3.5 w-3.5" />
-                  Sign Up
+                  Ship Now
                 </Button>
               </motion.div>
             </motion.div>
