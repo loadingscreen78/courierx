@@ -5,7 +5,7 @@ export function OrganizationJsonLd() {
     '@type': 'Organization',
     name: 'CourierX',
     url: 'https://courierx.in',
-    logo: 'https://courierx.in/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png',
+    logo: 'https://courierx.in/logo.svg',
     description:
       'India\'s trusted international courier aggregator for medicines, documents, and gifts. CSB-IV compliant shipping to 150+ countries.',
     foundingDate: '2024',

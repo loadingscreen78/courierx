@@ -108,7 +108,7 @@ export default function OpenAccount() {
             <Link href="/">
               <img
                 alt="CourierX"
-                src="/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png"
+                src="/logo.svg"
                 className="h-10 w-auto object-contain mb-8"
               />
             </Link>
@@ -166,7 +166,7 @@ export default function OpenAccount() {
             <Link href="/">
               <img
                 alt="CourierX"
-                src="/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png"
+                src="/logo.svg"
                 className="h-9 w-auto object-contain"
               />
             </Link>

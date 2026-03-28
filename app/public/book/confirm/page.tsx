@@ -91,7 +91,7 @@ function ConfirmContent() {
         <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
           <div className="container flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2.5">
-              <img alt="CourierX" src="/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png" className="h-9 w-auto object-contain" />
+              <img alt="CourierX" src="/logo.svg" className="h-9 w-auto object-contain" />
             </Link>
           </div>
         </header>
@@ -113,7 +113,7 @@ function ConfirmContent() {
         <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
           <div className="container flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2.5">
-              <img alt="CourierX" src="/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png" className="h-9 w-auto object-contain" />
+              <img alt="CourierX" src="/logo.svg" className="h-9 w-auto object-contain" />
             </Link>
           </div>
         </header>
@@ -160,7 +160,7 @@ function ConfirmContent() {
       <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
         <div className="container flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2.5">
-            <img alt="CourierX" src="/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png" className="h-9 w-auto object-contain" />
+            <img alt="CourierX" src="/logo.svg" className="h-9 w-auto object-contain" />
           </Link>
         </div>
       </header>
