@@ -466,7 +466,10 @@ export default function GuestSummaryStep({ mode, rateFormData, selectedCourier, 
             </motion.div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Enter your 12-digit Aadhaar number for identity verification (required for customs).</p>
+              <p className="text-sm text-muted-foreground">
+                Enter your 12-digit Aadhaar number for identity verification
+                {mode === 'international' ? ' (required for customs clearance).' : ' (mandatory under Indian courier regulations).'}
+              </p>
               <div className="flex gap-2">
                 <Input
                   type="text"
