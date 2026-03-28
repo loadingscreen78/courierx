@@ -95,9 +95,9 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
-      { url: '/favicon.jpg', type: 'image/jpeg', sizes: '192x192' },
+      { url: '/favicon.png', type: 'image/png', sizes: '192x192' },
     ],
-    apple: '/favicon.jpg',
+    apple: '/favicon.png',
   },
 };
 
@@ -131,8 +131,8 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" type="image/jpeg" href="/favicon.jpg" sizes="192x192" />
-        <link rel="apple-touch-icon" href="/favicon.jpg" />
+        <link rel="icon" type="image/png" href="/favicon.png" sizes="192x192" />
+        <link rel="apple-touch-icon" href="/favicon.png" />
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="bg-background text-foreground" suppressHydrationWarning>
