@@ -47,7 +47,7 @@ const domesticRateSchema = z.object({
   shipmentType: z.enum(['document', 'gift'], { required_error: 'Select shipment type' }),
   pickupPincode: z.string().regex(/^\d{6}$/, 'Enter valid 6-digit pincode'),
   deliveryPincode: z.string().regex(/^\d{6}$/, 'Enter valid 6-digit pincode'),
-  weightKg: z.coerce.number().min(0.1, 'Min 0.1 kg').max(60, 'Max 60 kg'),
+  weightKg: z.coerce.number().min(0.1, 'Min 0.1 kg').max(30, 'Max 30 kg'),
   lengthCm: z.coerce.number().min(1, 'Required').max(150),
   widthCm: z.coerce.number().min(1, 'Required').max(150),
   heightCm: z.coerce.number().min(1, 'Required').max(150),
@@ -56,6 +56,10 @@ const domesticRateSchema = z.object({
   if (data.shipmentType === 'document') {
     if (data.weightKg > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Documents max 1 kg', path: ['weightKg'] });
     if (data.declaredValue > 100) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Documents max ₹100 declared value', path: ['declaredValue'] });
+  }
+  if (data.shipmentType === 'gift') {
+    if (data.weightKg > 30) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Gift/Parcel max 30 kg', path: ['weightKg'] });
+    if (data.declaredValue > 49000) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Max declared value ₹49,000', path: ['declaredValue'] });
   }
 });
 
@@ -120,7 +124,7 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
   // ── Domestic rate form ──
   const domForm = useForm<DomesticRateValues>({
     resolver: zodResolver(domesticRateSchema),
-    defaultValues: { shipmentType: undefined, pickupPincode: '', deliveryPincode: '', weightKg: 1, lengthCm: 20, widthCm: 15, heightCm: 10, declaredValue: 500 },
+    defaultValues: { shipmentType: undefined, pickupPincode: '', deliveryPincode: '', weightKg: undefined as any, lengthCm: undefined as any, widthCm: undefined as any, heightCm: undefined as any, declaredValue: undefined as any },
   });
 
   // ── Sender/Receiver form ──
@@ -140,6 +144,22 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
   // Watch domestic shipment type
   const watchedDomType = domForm.watch('shipmentType');
   const isDocumentDom = watchedDomType === 'document';
+
+  // ── Pincode lookups for domestic rate form (step 1) ──
+  const ratePickupPin = domForm.watch('pickupPincode');
+  const rateDeliveryPin = domForm.watch('deliveryPincode');
+  const pickupLookup = usePincodeLookup(!isInternational ? ratePickupPin : '');
+  const deliveryLookup = usePincodeLookup(!isInternational ? rateDeliveryPin : '');
+
+  // ── Volumetric weight calculation (NimbusPost formula: L×W×H / 5000) ──
+  const watchedLength = domForm.watch('lengthCm');
+  const watchedWidth = domForm.watch('widthCm');
+  const watchedHeight = domForm.watch('heightCm');
+  const watchedWeight = domForm.watch('weightKg');
+  const volumetricWeight = (watchedLength && watchedWidth && watchedHeight)
+    ? Number(((watchedLength * watchedWidth * watchedHeight) / 5000).toFixed(2))
+    : 0;
+  const chargeableWeight = Math.max(Number(watchedWeight) || 0, volumetricWeight);
 
   // ── Pincode auto-fill for domestic ──
   // For domestic: pre-fill sender pincode from pickupPincode, receiver from deliveryPincode
@@ -463,12 +483,15 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                       </FormItem>
                     )} />
 
-                    {/* Pincodes */}
+                    {/* Pincodes with city/state display */}
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={domForm.control} name="pickupPincode" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Pickup Pincode</FormLabel>
                           <FormControl><Input {...field} placeholder="110001" maxLength={6} /></FormControl>
+                          {pickupLookup.loading && <p className="text-xs text-muted-foreground flex items-center gap-1"><CircleNotch className="h-3 w-3 animate-spin" /> Looking up...</p>}
+                          {pickupLookup.state && <p className="text-xs text-candlestick-green">📍 {pickupLookup.district}, {pickupLookup.state}</p>}
+                          {pickupLookup.error && <p className="text-xs text-destructive">{pickupLookup.error}</p>}
                           <FormMessage />
                         </FormItem>
                       )} />
@@ -476,18 +499,21 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                         <FormItem>
                           <FormLabel>Delivery Pincode</FormLabel>
                           <FormControl><Input {...field} placeholder="400001" maxLength={6} /></FormControl>
+                          {deliveryLookup.loading && <p className="text-xs text-muted-foreground flex items-center gap-1"><CircleNotch className="h-3 w-3 animate-spin" /> Looking up...</p>}
+                          {deliveryLookup.state && <p className="text-xs text-candlestick-green">📍 {deliveryLookup.district}, {deliveryLookup.state}</p>}
+                          {deliveryLookup.error && <p className="text-xs text-destructive">{deliveryLookup.error}</p>}
                           <FormMessage />
                         </FormItem>
                       )} />
                     </div>
 
-                    {/* Weight + Value — document-specific */}
+                    {/* Weight + Value */}
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={domForm.control} name="weightKg" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Weight</FormLabel>
                           {isDocumentDom ? (
-                            <Select onValueChange={(v) => field.onChange(Number(v))} value={String(field.value)}>
+                            <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value ? String(field.value) : ''}>
                               <FormControl>
                                 <SelectTrigger><SelectValue placeholder="Select weight" /></SelectTrigger>
                               </FormControl>
@@ -497,7 +523,22 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <FormControl><Input {...field} type="number" step="0.1" placeholder="Weight in kg" /></FormControl>
+                            <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value ? String(field.value) : ''}>
+                              <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Select weight" /></SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="0.5">Up to 500g</SelectItem>
+                                <SelectItem value="1">Up to 1 kg</SelectItem>
+                                <SelectItem value="2">Up to 2 kg</SelectItem>
+                                <SelectItem value="5">Up to 5 kg</SelectItem>
+                                <SelectItem value="10">Up to 10 kg</SelectItem>
+                                <SelectItem value="15">Up to 15 kg</SelectItem>
+                                <SelectItem value="20">Up to 20 kg</SelectItem>
+                                <SelectItem value="25">Up to 25 kg</SelectItem>
+                                <SelectItem value="30">Up to 30 kg</SelectItem>
+                              </SelectContent>
+                            </Select>
                           )}
                           <FormMessage />
                         </FormItem>
@@ -506,28 +547,46 @@ export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
                         <FormItem>
                           <FormLabel>Declared Value (₹)</FormLabel>
                           <FormControl>
-                            <Input {...field} type="number" placeholder={isDocumentDom ? 'Max ₹100' : '500'} max={isDocumentDom ? 100 : 49000} />
+                            <Input {...field} type="number" placeholder={isDocumentDom ? 'Max ₹100' : 'Max ₹49,000'} max={isDocumentDom ? 100 : 49000} />
                           </FormControl>
                           {isDocumentDom && <p className="text-xs text-muted-foreground">Documents cannot exceed ₹100 declared value</p>}
+                          {!isDocumentDom && <p className="text-xs text-muted-foreground">Maximum ₹49,000 for gift/parcel shipments</p>}
                           <FormMessage />
                         </FormItem>
                       )} />
                     </div>
 
-                    {/* Dimensions */}
+                    {/* Dimensions with measurement instructions */}
                     <div>
-                      <p className="text-sm font-medium mb-2">Package Dimensions (cm)</p>
+                      <p className="text-sm font-medium mb-1">Package Dimensions (cm)</p>
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 p-3 mb-3">
+                        <p className="text-xs text-blue-800 dark:text-blue-300 flex items-start gap-1.5">
+                          <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" weight="fill" />
+                          <span>Measure the outer dimensions of your packed box using a measuring tape. Enter the longest side as Length, the next as Width, and the shortest as Height. Courier charges are based on the higher of actual weight or volumetric weight (L×W×H ÷ 5000).</span>
+                        </p>
+                      </div>
                       <div className="grid grid-cols-3 gap-3">
                         <FormField control={domForm.control} name="lengthCm" render={({ field }) => (
-                          <FormItem><FormControl><Input {...field} type="number" placeholder="Length" /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel className="text-xs">Length</FormLabel><FormControl><Input {...field} type="number" placeholder="cm" /></FormControl><FormMessage /></FormItem>
                         )} />
                         <FormField control={domForm.control} name="widthCm" render={({ field }) => (
-                          <FormItem><FormControl><Input {...field} type="number" placeholder="Width" /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel className="text-xs">Width</FormLabel><FormControl><Input {...field} type="number" placeholder="cm" /></FormControl><FormMessage /></FormItem>
                         )} />
                         <FormField control={domForm.control} name="heightCm" render={({ field }) => (
-                          <FormItem><FormControl><Input {...field} type="number" placeholder="Height" /></FormControl><FormMessage /></FormItem>
+                          <FormItem><FormLabel className="text-xs">Height</FormLabel><FormControl><Input {...field} type="number" placeholder="cm" /></FormControl><FormMessage /></FormItem>
                         )} />
                       </div>
+                      {volumetricWeight > 0 && (
+                        <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
+                          <p>Volumetric weight: <span className="font-medium">{volumetricWeight} kg</span> ({watchedLength}×{watchedWidth}×{watchedHeight} ÷ 5000)</p>
+                          {chargeableWeight > (Number(watchedWeight) || 0) && (
+                            <p className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                              <Warning className="h-3 w-3" weight="fill" />
+                              Volumetric weight exceeds actual weight — courier will charge for <span className="font-semibold">{chargeableWeight} kg</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5" disabled={isDomesticLoading}>
