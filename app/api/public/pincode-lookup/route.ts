@@ -21,10 +21,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Pincode not found' });
       }
       const first = result.PostOffice[0];
+      const allAreas = result.PostOffice.map((po: any) => po.Name);
+      // Unique districts (some pincodes span multiple)
+      const allDistricts = [...new Set(result.PostOffice.map((po: any) => po.District))] as string[];
       return NextResponse.json({
         success: true,
         state: first.State,
         district: first.District,
+        areas: allAreas,
+        districts: allDistricts,
         postOffices: result.PostOffice.map((po: any) => ({
           name: po.Name,
           pincode: po.Pincode,
