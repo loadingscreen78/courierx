@@ -3,5 +3,5 @@
 import PublicBookingFlow from '@/views/PublicBookingFlow';
 
 export default function PublicDomesticBookingPage() {
-  return <PublicBookingFlow category="domestic" />;
+  return <PublicBookingFlow mode="domestic" />;
 }

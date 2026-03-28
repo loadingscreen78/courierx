@@ -5,142 +5,210 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, ArrowRight, CircleNotch, UserPlus, Package, Pill, FileText, Gift, Truck, User, Envelope, Phone } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, CircleNotch, UserPlus, Pill, FileText, Gift, Truck, Globe, User, Envelope, Phone, MapPin, Info } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { getCourierOptions } from '@/lib/shipping/rateCalculator';
+import { getCourierOptions, calculateRate, type CourierOption } from '@/lib/shipping/rateCalculator';
 import { getServedCountries } from '@/lib/shipping/countries';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
-type ShipmentCategory = 'medicine' | 'document' | 'gift' | 'domestic';
+type FlowMode = 'international' | 'domestic';
 
 interface PublicBookingFlowProps {
-  category: ShipmentCategory;
+  mode: FlowMode;
 }
 
-const categoryConfig: Record<ShipmentCategory, { title: string; description: string; icon: typeof Pill }> = {
-  medicine: { title: 'Ship Medicine', description: 'Prescription medicines — CSB-IV compliant', icon: Pill },
-  document: { title: 'Ship Document', description: 'Important documents and paperwork', icon: FileText },
-  gift: { title: 'Ship Gift / Personal', description: 'Personal gifts, clothing, food items', icon: Gift },
-  domestic: { title: 'Ship Domestic', description: 'Ship within India', icon: Truck },
+// ── Schemas ──────────────────────────────────────────────────────────────────
+
+const internationalRateSchema = z.object({
+  shipmentType: z.enum(['medicine', 'document', 'gift'], { required_error: 'Select shipment type' }),
+  destinationCountry: z.string().min(2, 'Select destination country'),
+  weightGrams: z.coerce.number().min(100, 'Min 100g').max(30000, 'Max 30kg'),
+  lengthCm: z.coerce.number().min(1, 'Required').max(150),
+  widthCm: z.coerce.number().min(1, 'Required').max(150),
+  heightCm: z.coerce.number().min(1, 'Required').max(150),
+  declaredValue: z.coerce.number().min(1, 'Required').max(50000, 'Max ₹50,000'),
+});
+
+const domesticRateSchema = z.object({
+  shipmentType: z.enum(['document', 'gift'], { required_error: 'Select shipment type' }),
+  pickupPincode: z.string().regex(/^\d{6}$/, 'Enter valid 6-digit pincode'),
+  deliveryPincode: z.string().regex(/^\d{6}$/, 'Enter valid 6-digit pincode'),
+  weightKg: z.coerce.number().min(0.1, 'Min 0.1 kg').max(60, 'Max 60 kg'),
+  lengthCm: z.coerce.number().min(1, 'Required').max(150),
+  widthCm: z.coerce.number().min(1, 'Required').max(150),
+  heightCm: z.coerce.number().min(1, 'Required').max(150),
+  declaredValue: z.coerce.number().min(0).max(49000, 'Max ₹49,000'),
+});
+
+const senderReceiverSchema = z.object({
+  senderName: z.string().min(2, 'Required'),
+  senderPhone: z.string().regex(/^(\+91[\s-]?)?[6-9]\d{9}$/, 'Valid Indian phone required'),
+  senderEmail: z.string().email('Valid email required'),
+  senderAddress: z.string().min(5, 'Required'),
+  senderCity: z.string().min(2, 'Required'),
+  senderPincode: z.string().regex(/^\d{6}$/, 'Valid 6-digit pincode'),
+  receiverName: z.string().min(2, 'Required'),
+  receiverPhone: z.string().min(5, 'Required'),
+  receiverEmail: z.string().email('Valid email required'),
+  receiverAddress: z.string().min(5, 'Required'),
+  receiverCity: z.string().min(2, 'Required'),
+  receiverZipcode: z.string().min(3, 'Required'),
+  contentDescription: z.string().min(3, 'Describe contents'),
+});
+
+type InternationalRateValues = z.infer<typeof internationalRateSchema>;
+type DomesticRateValues = z.infer<typeof domesticRateSchema>;
+type SenderReceiverValues = z.infer<typeof senderReceiverSchema>;
+
+const shipmentTypeOptions = {
+  international: [
+    { value: 'medicine' as const, label: 'Medicine', icon: Pill, desc: 'Prescription medicines (CSB-IV)' },
+    { value: 'document' as const, label: 'Document', icon: FileText, desc: 'Documents & certificates' },
+    { value: 'gift' as const, label: 'Gift / Personal', icon: Gift, desc: 'Gifts, clothing, food' },
+  ],
+  domestic: [
+    { value: 'document' as const, label: 'Document', icon: FileText, desc: 'Documents & paperwork' },
+    { value: 'gift' as const, label: 'Gift / Parcel', icon: Gift, desc: 'Gifts, clothing, items' },
+  ],
 };
 
-const guestInfoSchema = z.object({
-  fullName: z.string().min(2, 'Full name is required'),
-  email: z.string().email('Valid email required'),
-  phone: z.string().regex(/^(\+91[\s-]?)?[6-9]\d{9}$/, 'Valid Indian phone number required'),
-});
+// ── Component ────────────────────────────────────────────────────────────────
 
-const packageSchema = z.object({
-  weightGrams: z.coerce.number().min(100, 'Min 100g').max(30000, 'Max 30kg'),
-  lengthCm: z.coerce.number().min(1).max(150),
-  widthCm: z.coerce.number().min(1).max(150),
-  heightCm: z.coerce.number().min(1).max(150),
-  declaredValue: z.coerce.number().min(1, 'Required').max(50000),
-  contentDescription: z.string().min(3, 'Describe contents'),
-  destinationCountry: z.string().min(2, 'Select destination'),
-});
-
-type GuestInfo = z.infer<typeof guestInfoSchema>;
-type PackageInfo = z.infer<typeof packageSchema>;
-
-export default function PublicBookingFlow({ category }: PublicBookingFlowProps) {
+export default function PublicBookingFlow({ mode }: PublicBookingFlowProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const config = categoryConfig[category];
-  const [step, setStep] = useState(1); // 1=guest info, 2=package, 3=rates
-  const [guestInfo, setGuestInfo] = useState<GuestInfo | null>(null);
-  const [packageInfo, setPackageInfo] = useState<PackageInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const isDomestic = category === 'domestic';
+  const isInternational = mode === 'international';
   const countries = getServedCountries();
 
-  const guestForm = useForm<GuestInfo>({
-    resolver: zodResolver(guestInfoSchema),
-    defaultValues: { fullName: '', email: '', phone: '' },
+  // Steps: 1=rate form, 2=rate results, 3=sender/receiver details
+  const [step, setStep] = useState(1);
+  const [selectedCourier, setSelectedCourier] = useState<CourierOption | null>(null);
+  const [rateFormData, setRateFormData] = useState<InternationalRateValues | DomesticRateValues | null>(null);
+  const [guestCouriers, setGuestCouriers] = useState<CourierOption[]>([]);
+  const [accountCouriers, setAccountCouriers] = useState<CourierOption[]>([]);
+  const [domesticCouriers, setDomesticCouriers] = useState<any[]>([]);
+  const [isDomesticLoading, setIsDomesticLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ── International rate form ──
+  const intlForm = useForm<InternationalRateValues>({
+    resolver: zodResolver(internationalRateSchema),
+    defaultValues: { shipmentType: undefined, destinationCountry: '', weightGrams: 500, lengthCm: 20, widthCm: 15, heightCm: 10, declaredValue: 1000 },
   });
 
-  const packageForm = useForm<PackageInfo>({
-    resolver: zodResolver(packageSchema),
+  // ── Domestic rate form ──
+  const domForm = useForm<DomesticRateValues>({
+    resolver: zodResolver(domesticRateSchema),
+    defaultValues: { shipmentType: undefined, pickupPincode: '', deliveryPincode: '', weightKg: 1, lengthCm: 20, widthCm: 15, heightCm: 10, declaredValue: 500 },
+  });
+
+  // ── Sender/Receiver form ──
+  const detailsForm = useForm<SenderReceiverValues>({
+    resolver: zodResolver(senderReceiverSchema),
     defaultValues: {
-      weightGrams: 500,
-      lengthCm: 20,
-      widthCm: 15,
-      heightCm: 10,
-      declaredValue: 1000,
+      senderName: '', senderPhone: '', senderEmail: '', senderAddress: '', senderCity: '', senderPincode: '',
+      receiverName: '', receiverPhone: '', receiverEmail: '', receiverAddress: '', receiverCity: '', receiverZipcode: '',
       contentDescription: '',
-      destinationCountry: '',
     },
   });
 
-  const handleGuestSubmit = (values: GuestInfo) => {
-    setGuestInfo(values);
+  // ── Handle international rate calculation ──
+  const handleIntlRateSubmit = (values: InternationalRateValues) => {
+    const guest = getCourierOptions({
+      destinationCountryCode: values.destinationCountry,
+      shipmentType: values.shipmentType,
+      weightGrams: values.weightGrams,
+      dimensions: { length: values.lengthCm, width: values.widthCm, height: values.heightCm },
+      declaredValue: values.declaredValue,
+    }, true);
+
+    const account = getCourierOptions({
+      destinationCountryCode: values.destinationCountry,
+      shipmentType: values.shipmentType,
+      weightGrams: values.weightGrams,
+      dimensions: { length: values.lengthCm, width: values.widthCm, height: values.heightCm },
+      declaredValue: values.declaredValue,
+    }, false);
+
+    setGuestCouriers(guest);
+    setAccountCouriers(account);
+    setRateFormData(values);
     setStep(2);
   };
 
-  const handlePackageSubmit = (values: PackageInfo) => {
-    setPackageInfo(values);
+  // ── Handle domestic rate calculation ──
+  const handleDomRateSubmit = async (values: DomesticRateValues) => {
+    setIsDomesticLoading(true);
+    setRateFormData(values);
+    try {
+      const res = await fetch('/api/domestic/rates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pickupPincode: values.pickupPincode,
+          deliveryPincode: values.deliveryPincode,
+          weightKg: values.weightKg,
+          lengthCm: values.lengthCm,
+          widthCm: values.widthCm,
+          heightCm: values.heightCm,
+          declaredValue: values.declaredValue,
+          shipmentType: values.shipmentType,
+          isGuest: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDomesticCouriers(data.couriers || []);
+        setStep(2);
+      } else {
+        toast({ title: 'Error', description: data.error || 'Failed to fetch rates', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Network error. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsDomesticLoading(false);
+    }
+  };
+
+  // ── Select a courier and go to details ──
+  const handleSelectCourier = (courier: any) => {
+    setSelectedCourier(courier);
     setStep(3);
   };
 
-  // Get courier options with guest markup
-  const courierOptions = packageInfo && !isDomestic
-    ? getCourierOptions({
-        destinationCountryCode: packageInfo.destinationCountry,
-        shipmentType: category as 'medicine' | 'document' | 'gift',
-        weightGrams: packageInfo.weightGrams,
-        dimensions: { length: packageInfo.lengthCm, width: packageInfo.widthCm, height: packageInfo.heightCm },
-        declaredValue: packageInfo.declaredValue,
-      }, true) // isGuest = true → 52% markup
-    : [];
-
-  // Calculate what account holders would pay (for comparison)
-  const accountOptions = packageInfo && !isDomestic
-    ? getCourierOptions({
-        destinationCountryCode: packageInfo.destinationCountry,
-        shipmentType: category as 'medicine' | 'document' | 'gift',
-        weightGrams: packageInfo.weightGrams,
-        dimensions: { length: packageInfo.lengthCm, width: packageInfo.widthCm, height: packageInfo.heightCm },
-        declaredValue: packageInfo.declaredValue,
-      }, false) // isGuest = false → account holder price
-    : [];
-
-  const handleSelectCourier = async (carrierIndex: number) => {
-    if (!guestInfo || !packageInfo) return;
-    setIsLoading(true);
-
+  // ── Submit final booking ──
+  const handleFinalSubmit = (values: SenderReceiverValues) => {
+    setIsSubmitting(true);
     try {
-      const selected = courierOptions[carrierIndex];
-      // Store guest booking data in localStorage for payment flow
       const bookingData = {
-        guestInfo,
-        packageInfo,
-        category,
-        selectedCourier: selected,
+        mode,
+        rateFormData,
+        selectedCourier,
+        senderReceiver: values,
         createdAt: new Date().toISOString(),
       };
       localStorage.setItem('guestBooking', JSON.stringify(bookingData));
-
-      toast({
-        title: 'Booking Initiated',
-        description: `${selected.carrier} — ₹${selected.price.toLocaleString('en-IN')}. Redirecting to payment...`,
-      });
-
-      // For now, redirect to a confirmation page
-      // In production, this would go to Cashfree payment
+      toast({ title: 'Booking Submitted', description: 'Redirecting to confirmation...' });
       router.push('/public/book/confirm');
     } catch {
       toast({ title: 'Error', description: 'Something went wrong.', variant: 'destructive' });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
+
+  const handleBack = () => {
+    if (step === 1) router.push('/public/book');
+    else setStep(step - 1);
+  };
+
+  const stepLabels = ['Shipment Details', 'Select Rate', 'Sender & Receiver'];
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,6 +219,7 @@ export default function PublicBookingFlow({ category }: PublicBookingFlowProps) 
             <img alt="CourierX" src="/lovable-uploads/19a008e8-fa55-402b-94a0-f1a05b4d70b4.png" className="h-9 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/auth')} className="rounded-xl text-sm">Sign In</Button>
             <Button variant="outline" size="sm" onClick={() => router.push('/open-account')} className="rounded-xl text-sm gap-1.5">
               <UserPlus className="h-3.5 w-3.5" />
               Open Account — Save 52%
@@ -162,228 +231,439 @@ export default function PublicBookingFlow({ category }: PublicBookingFlowProps) 
       <main className="container max-w-2xl py-8 space-y-6">
         {/* Back + Title */}
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => step > 1 ? setStep(step - 1) : router.push('/public/book')}>
+          <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <config.icon className="h-6 w-6 text-coke-red" weight="duotone" />
-              {config.title}
+              {isInternational ? <Globe className="h-6 w-6 text-blue-600" weight="duotone" /> : <Truck className="h-6 w-6 text-green-600" weight="duotone" />}
+              {isInternational ? 'International Shipping' : 'Domestic Shipping'}
             </h1>
-            <p className="text-muted-foreground text-sm">{config.description} — Guest booking (standard rates)</p>
+            <p className="text-muted-foreground text-sm">Guest booking — standard rates apply</p>
           </div>
         </div>
 
         {/* Progress */}
-        <div className="flex gap-2">
-          {[1, 2, 3].map(s => (
-            <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? 'bg-coke-red' : 'bg-muted'}`} />
+        <div className="flex gap-1">
+          {stepLabels.map((label, i) => (
+            <div key={label} className="flex-1">
+              <div className={`h-1.5 rounded-full transition-colors mb-1 ${i + 1 <= step ? 'bg-coke-red' : 'bg-muted'}`} />
+              <p className={`text-xs ${i + 1 <= step ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{label}</p>
+            </div>
           ))}
         </div>
 
-        {/* Step 1: Guest Info */}
+        {/* ═══════════════ STEP 1: Rate Calculator Form ═══════════════ */}
         {step === 1 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="bg-card rounded-xl border border-border p-6 space-y-4">
-            <h2 className="font-semibold text-lg">Your Details</h2>
-            <p className="text-sm text-muted-foreground">We need your contact info for shipment updates and customs documentation.</p>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+            <div className="bg-card rounded-xl border border-border p-6 space-y-5">
+              <h2 className="font-semibold text-lg">Enter shipment details to get rates</h2>
 
-            <Form {...guestForm}>
-              <form onSubmit={guestForm.handleSubmit(handleGuestSubmit)} className="space-y-4">
-                <FormField control={guestForm.control} name="fullName" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input {...field} placeholder="Your full name" className="pl-10" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={guestForm.control} name="email" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Envelope className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input {...field} type="email" placeholder="you@example.com" className="pl-10" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={guestForm.control} name="phone" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input {...field} placeholder="+91 98765 43210" className="pl-10" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2">
-                  Continue <ArrowRight className="h-4 w-4" />
-                </Button>
-              </form>
-            </Form>
-          </motion.div>
-        )}
-
-        {/* Step 2: Package Details */}
-        {step === 2 && (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="bg-card rounded-xl border border-border p-6 space-y-4">
-            <h2 className="font-semibold text-lg">Package Details</h2>
-
-            <Form {...packageForm}>
-              <form onSubmit={packageForm.handleSubmit(handlePackageSubmit)} className="space-y-4">
-                {!isDomestic && (
-                  <FormField control={packageForm.control} name="destinationCountry" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Destination Country</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select country" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {countries.map(c => (
-                            <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+              {isInternational ? (
+                <Form {...intlForm}>
+                  <form onSubmit={intlForm.handleSubmit(handleIntlRateSubmit)} className="space-y-4">
+                    {/* Shipment Type */}
+                    <FormField control={intlForm.control} name="shipmentType" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>What are you shipping?</FormLabel>
+                        <div className="grid grid-cols-3 gap-2">
+                          {shipmentTypeOptions.international.map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => field.onChange(opt.value)}
+                              className={`p-3 rounded-lg border text-left transition-all ${
+                                field.value === opt.value
+                                  ? 'border-coke-red bg-coke-red/5 ring-1 ring-coke-red/20'
+                                  : 'border-border hover:border-muted-foreground/30'
+                              }`}
+                            >
+                              <opt.icon className={`h-5 w-5 mb-1 ${field.value === opt.value ? 'text-coke-red' : 'text-muted-foreground'}`} weight="duotone" />
+                              <p className="text-sm font-medium">{opt.label}</p>
+                              <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                            </button>
                           ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField control={packageForm.control} name="weightGrams" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Weight (grams)</FormLabel>
-                      <FormControl><Input {...field} type="number" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={packageForm.control} name="declaredValue" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Declared Value (₹)</FormLabel>
-                      <FormControl><Input {...field} type="number" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
+                    {/* Destination */}
+                    <FormField control={intlForm.control} name="destinationCountry" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Destination Country</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {countries.map(c => <SelectItem key={c.code} value={c.code}>{c.flag} {c.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
 
-                <div className="grid grid-cols-3 gap-3">
-                  <FormField control={packageForm.control} name="lengthCm" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Length (cm)</FormLabel>
-                      <FormControl><Input {...field} type="number" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={packageForm.control} name="widthCm" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Width (cm)</FormLabel>
-                      <FormControl><Input {...field} type="number" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={packageForm.control} name="heightCm" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Height (cm)</FormLabel>
-                      <FormControl><Input {...field} type="number" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
+                    {/* Weight + Value */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={intlForm.control} name="weightGrams" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Weight (grams)</FormLabel>
+                          <FormControl><Input {...field} type="number" placeholder="500" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={intlForm.control} name="declaredValue" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Declared Value (₹)</FormLabel>
+                          <FormControl><Input {...field} type="number" placeholder="1000" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
 
-                <FormField control={packageForm.control} name="contentDescription" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Content Description</FormLabel>
-                    <FormControl><Textarea {...field} placeholder="Describe the contents of your shipment" rows={2} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+                    {/* Dimensions */}
+                    <div>
+                      <p className="text-sm font-medium mb-2">Package Dimensions (cm)</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <FormField control={intlForm.control} name="lengthCm" render={({ field }) => (
+                          <FormItem>
+                            <FormControl><Input {...field} type="number" placeholder="Length" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={intlForm.control} name="widthCm" render={({ field }) => (
+                          <FormItem>
+                            <FormControl><Input {...field} type="number" placeholder="Width" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={intlForm.control} name="heightCm" render={({ field }) => (
+                          <FormItem>
+                            <FormControl><Input {...field} type="number" placeholder="Height" /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
+                    </div>
 
-                <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2">
-                  Get Rates <ArrowRight className="h-4 w-4" />
-                </Button>
-              </form>
-            </Form>
+                    <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5">
+                      Calculate Rates <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </form>
+                </Form>
+              ) : (
+                /* ── Domestic form ── */
+                <Form {...domForm}>
+                  <form onSubmit={domForm.handleSubmit(handleDomRateSubmit)} className="space-y-4">
+                    {/* Shipment Type */}
+                    <FormField control={domForm.control} name="shipmentType" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>What are you shipping?</FormLabel>
+                        <div className="grid grid-cols-2 gap-2">
+                          {shipmentTypeOptions.domestic.map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => field.onChange(opt.value)}
+                              className={`p-3 rounded-lg border text-left transition-all ${
+                                field.value === opt.value
+                                  ? 'border-coke-red bg-coke-red/5 ring-1 ring-coke-red/20'
+                                  : 'border-border hover:border-muted-foreground/30'
+                              }`}
+                            >
+                              <opt.icon className={`h-5 w-5 mb-1 ${field.value === opt.value ? 'text-coke-red' : 'text-muted-foreground'}`} weight="duotone" />
+                              <p className="text-sm font-medium">{opt.label}</p>
+                              <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                            </button>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+
+                    {/* Pincodes */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={domForm.control} name="pickupPincode" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pickup Pincode</FormLabel>
+                          <FormControl><Input {...field} placeholder="110001" maxLength={6} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={domForm.control} name="deliveryPincode" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Delivery Pincode</FormLabel>
+                          <FormControl><Input {...field} placeholder="400001" maxLength={6} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+
+                    {/* Weight + Value */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={domForm.control} name="weightKg" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Weight (kg)</FormLabel>
+                          <FormControl><Input {...field} type="number" step="0.1" placeholder="1" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={domForm.control} name="declaredValue" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Declared Value (₹)</FormLabel>
+                          <FormControl><Input {...field} type="number" placeholder="500" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+
+                    {/* Dimensions */}
+                    <div>
+                      <p className="text-sm font-medium mb-2">Package Dimensions (cm)</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <FormField control={domForm.control} name="lengthCm" render={({ field }) => (
+                          <FormItem><FormControl><Input {...field} type="number" placeholder="Length" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={domForm.control} name="widthCm" render={({ field }) => (
+                          <FormItem><FormControl><Input {...field} type="number" placeholder="Width" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={domForm.control} name="heightCm" render={({ field }) => (
+                          <FormItem><FormControl><Input {...field} type="number" placeholder="Height" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                    </div>
+
+                    <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5" disabled={isDomesticLoading}>
+                      {isDomesticLoading ? <><CircleNotch className="h-4 w-4 animate-spin" /> Fetching Rates...</> : <>Calculate Rates <ArrowRight className="h-4 w-4" /></>}
+                    </Button>
+                  </form>
+                </Form>
+              )}
+            </div>
           </motion.div>
         )}
 
-        {/* Step 3: Courier Selection */}
-        {step === 3 && (
+        {/* ═══════════════ STEP 2: Rate Results ═══════════════ */}
+        {step === 2 && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
             {/* Account savings banner */}
             <div className="rounded-xl border border-candlestick-green/30 bg-candlestick-green/5 p-4">
-              <p className="text-sm font-medium">
-                💡 Account holders pay up to 52% less.{' '}
-                <button onClick={() => router.push('/open-account')} className="text-coke-red hover:underline font-medium">
-                  Open a free account →
-                </button>
+              <p className="text-sm">
+                💡 <span className="font-medium">Account holders pay up to 52% less</span> on these same routes.{' '}
+                <button onClick={() => router.push('/open-account')} className="text-coke-red hover:underline font-semibold">Open a free account →</button>
               </p>
             </div>
 
-            <h2 className="font-semibold text-lg">Select Courier</h2>
+            <h2 className="font-semibold text-lg">Available Rates</h2>
+            <p className="text-sm text-muted-foreground">Select a courier to proceed with booking. Prices include GST.</p>
 
-            {courierOptions.length === 0 ? (
-              <div className="bg-card rounded-xl border border-border p-6 text-center text-muted-foreground">
-                No courier options available for this route. Try a different destination.
-              </div>
+            {isInternational ? (
+              guestCouriers.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-6 text-center text-muted-foreground">
+                  No courier options available for this route. Try a different destination or weight.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {guestCouriers.map((option, idx) => {
+                    const accountPrice = accountCouriers[idx]?.price ?? option.price;
+                    const savings = option.price - accountPrice;
+                    const rateBreakdown = rateFormData ? calculateRate({
+                      destinationCountryCode: (rateFormData as InternationalRateValues).destinationCountry,
+                      shipmentType: (rateFormData as InternationalRateValues).shipmentType,
+                      weightGrams: (rateFormData as InternationalRateValues).weightGrams,
+                      dimensions: { length: (rateFormData as InternationalRateValues).lengthCm, width: (rateFormData as InternationalRateValues).widthCm, height: (rateFormData as InternationalRateValues).heightCm },
+                      declaredValue: (rateFormData as InternationalRateValues).declaredValue,
+                    }, true) : null;
+
+                    return (
+                      <div key={option.carrier} className="bg-card rounded-xl border border-border overflow-hidden hover:border-coke-red/30 transition-colors">
+                        <div className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-base">{option.carrier}</h3>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{option.serviceName}</span>
+                                {option.isRecommended && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-candlestick-green/10 text-candlestick-green font-medium">Best Value</span>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-1">{option.transitDays.min}–{option.transitDays.max} days delivery</p>
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {option.features.slice(0, 3).map(f => (
+                                  <span key={f} className="text-xs px-2 py-0.5 rounded bg-muted/50 text-muted-foreground">{f}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 ml-4">
+                              <p className="text-2xl font-bold">₹{option.price.toLocaleString('en-IN')}</p>
+                              {savings > 0 && (
+                                <p className="text-xs text-candlestick-green mt-0.5">
+                                  With account: <span className="font-semibold">₹{accountPrice.toLocaleString('en-IN')}</span>
+                                </p>
+                              )}
+                              <Button size="sm" className="mt-2 bg-coke-red hover:bg-red-600 text-white" onClick={() => handleSelectCourier(option)}>
+                                Book Now
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Rate breakdown (show for first/recommended) */}
+                        {rateBreakdown && idx === 0 && (
+                          <div className="border-t border-border bg-muted/30 px-4 py-3">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Rate Breakdown</p>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                              {rateBreakdown.breakdown.map(item => (
+                                <div key={item.label} className="flex justify-between text-xs">
+                                  <span className="text-muted-foreground">{item.label}</span>
+                                  <span className="font-medium">₹{item.amount.toLocaleString('en-IN')}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex justify-between text-sm font-semibold mt-2 pt-2 border-t border-border">
+                              <span>Total</span>
+                              <span>₹{rateBreakdown.total.toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             ) : (
-              <div className="space-y-3">
-                {courierOptions.map((option, idx) => {
-                  const accountPrice = accountOptions[idx]?.price ?? option.price;
-                  const savings = option.price - accountPrice;
-                  return (
-                    <div key={option.carrier} className="bg-card rounded-xl border border-border p-4 hover:border-coke-red/30 transition-colors">
+              /* ── Domestic rate results ── */
+              domesticCouriers.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-6 text-center text-muted-foreground">
+                  No couriers available for this route. Try different pincodes.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {domesticCouriers.map((c: any) => (
+                    <div key={c.courier_company_id} className="bg-card rounded-xl border border-border p-4 hover:border-coke-red/30 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{option.carrier}</h3>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{option.serviceName}</span>
-                            {option.isRecommended && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-candlestick-green/10 text-candlestick-green font-medium">Recommended</span>
+                            <h3 className="font-semibold">{c.courier_name}</h3>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">{c.mode}</span>
+                            {c.is_recommended && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-candlestick-green/10 text-candlestick-green font-medium">Cheapest</span>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {option.transitDays.min}–{option.transitDays.max} days delivery
-                          </p>
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {option.features.slice(0, 3).map(f => (
-                              <span key={f} className="text-xs px-2 py-0.5 rounded bg-muted/50 text-muted-foreground">{f}</span>
-                            ))}
-                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">{c.estimated_delivery_days} days delivery</p>
                         </div>
                         <div className="text-right shrink-0 ml-4">
-                          <p className="text-xl font-bold">₹{option.price.toLocaleString('en-IN')}</p>
-                          {savings > 0 && (
-                            <p className="text-xs text-candlestick-green">
-                              Account price: ₹{accountPrice.toLocaleString('en-IN')}
-                            </p>
-                          )}
-                          <Button
-                            size="sm"
-                            className="mt-2 bg-coke-red hover:bg-red-600 text-white"
-                            onClick={() => handleSelectCourier(idx)}
-                            disabled={isLoading}
-                          >
-                            {isLoading ? <CircleNotch className="h-4 w-4 animate-spin" /> : 'Select'}
+                          <p className="text-2xl font-bold">₹{c.customer_price?.toLocaleString('en-IN')}</p>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Base: ₹{c.shipping_charge?.toLocaleString('en-IN')} + GST: ₹{c.gst_amount?.toLocaleString('en-IN')}
+                          </div>
+                          <Button size="sm" className="mt-2 bg-coke-red hover:bg-red-600 text-white" onClick={() => handleSelectCourier(c)}>
+                            Book Now
                           </Button>
                         </div>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              )
+            )}
+          </motion.div>
+        )}
+
+        {/* ═══════════════ STEP 3: Sender & Receiver Details ═══════════════ */}
+        {step === 3 && (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+            {/* Selected courier summary */}
+            {selectedCourier && (
+              <div className="bg-muted/50 rounded-xl border border-border p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Selected Courier</p>
+                  <p className="font-semibold">{(selectedCourier as any).carrier || (selectedCourier as any).courier_name}</p>
+                </div>
+                <p className="text-xl font-bold">₹{((selectedCourier as any).price || (selectedCourier as any).customer_price)?.toLocaleString('en-IN')}</p>
               </div>
             )}
+
+            <div className="bg-card rounded-xl border border-border p-6 space-y-6">
+              <Form {...detailsForm}>
+                <form onSubmit={detailsForm.handleSubmit(handleFinalSubmit)} className="space-y-6">
+                  {/* Sender */}
+                  <div>
+                    <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-coke-red" /> Sender Details (India)
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField control={detailsForm.control} name="senderName" render={({ field }) => (
+                          <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Sender name" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={detailsForm.control} name="senderPhone" render={({ field }) => (
+                          <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="+91 98765 43210" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                      <FormField control={detailsForm.control} name="senderEmail" render={({ field }) => (
+                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="sender@email.com" /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={detailsForm.control} name="senderAddress" render={({ field }) => (
+                        <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField control={detailsForm.control} name="senderCity" render={({ field }) => (
+                          <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} placeholder="City" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={detailsForm.control} name="senderPincode" render={({ field }) => (
+                          <FormItem><FormLabel>Pincode</FormLabel><FormControl><Input {...field} placeholder="110001" maxLength={6} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Receiver */}
+                  <div>
+                    <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-blue-600" /> Receiver Details
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField control={detailsForm.control} name="receiverName" render={({ field }) => (
+                          <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Receiver name" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={detailsForm.control} name="receiverPhone" render={({ field }) => (
+                          <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} placeholder="Phone number" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                      <FormField control={detailsForm.control} name="receiverEmail" render={({ field }) => (
+                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input {...field} type="email" placeholder="receiver@email.com" /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={detailsForm.control} name="receiverAddress" render={({ field }) => (
+                        <FormItem><FormLabel>Address</FormLabel><FormControl><Input {...field} placeholder="Full address" /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField control={detailsForm.control} name="receiverCity" render={({ field }) => (
+                          <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} placeholder="City" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={detailsForm.control} name="receiverZipcode" render={({ field }) => (
+                          <FormItem><FormLabel>Zip / Postal Code</FormLabel><FormControl><Input {...field} placeholder="Zipcode" /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Content description */}
+                  <FormField control={detailsForm.control} name="contentDescription" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Content Description</FormLabel>
+                      <FormControl><Textarea {...field} placeholder="Describe the contents of your shipment for customs" rows={2} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <Button type="submit" className="w-full bg-coke-red hover:bg-red-600 text-white gap-2 py-5" disabled={isSubmitting}>
+                    {isSubmitting ? <><CircleNotch className="h-4 w-4 animate-spin" /> Submitting...</> : <>Confirm Booking <ArrowRight className="h-4 w-4" /></>}
+                  </Button>
+                </form>
+              </Form>
+            </div>
           </motion.div>
         )}
       </main>
